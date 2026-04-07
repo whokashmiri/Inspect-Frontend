@@ -83,6 +83,8 @@ export interface User {
   id: string;
   email: string;
   companyName: string;
+  fullName: string; // ✅ add this
+  role: "Manager" | "Inspector" | "Valuator"; // ✅ add this
 }
 
 export interface AuthResponse {
@@ -91,7 +93,12 @@ export interface AuthResponse {
 }
 
 export const authApi = {
-  signup: (payload: { email: string; password: string; companyName: string }) =>
+  signup: (payload: { 
+    fullName: string;
+    role: "Manager" | "Inspector" | "Valuator";
+     email: string;
+      password: string;
+      companyName: string }) =>
     request<AuthResponse>("/auth/signup", {
       method: "POST",
       body: payload,
@@ -129,11 +136,13 @@ export async function loginAndSave(email: string, password: string) {
 }
 
 export async function signupAndSave(
+  fullName: string,
+  role: "Manager" | "Inspector" | "Valuator",
   email: string,
   password: string,
   companyName: string,
 ) {
-  const res = await authApi.signup({ email, password, companyName });
+  const res = await authApi.signup({ fullName ,role , email, password, companyName });
   await tokenStore.setToken(res.tokens.accessToken);
   await tokenStore.setRefresh(res.tokens.refreshToken);
   return res;

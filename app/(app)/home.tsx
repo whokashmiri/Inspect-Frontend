@@ -1,45 +1,116 @@
-import { Text, View, StyleSheet } from "react-native";
+import { Text, View, StyleSheet, Pressable } from "react-native";
 import { useAuth } from "../../api/AuthContext";
 
 export default function HomeScreen() {
   const { user } = useAuth();
+
+  const handleCompanyPress = () => {
+    console.log("Company pressed");
+    // navigate or open modal here
+  };
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.greeting}>Welcome back</Text>
-      <Text style={styles.company}>
-        {user?.companyName ?? "Your company"}
-      </Text>
-      <Text style={styles.message}>
-        We’ll keep this space clean until new features arrive.
-      </Text>
+    <View style={styles.flex}>
+      <View style={styles.scroll}>
+        
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.logoMark}>
+            <View style={styles.logoInner} />
+          </View>
+
+          <Text style={styles.title}>Welcome back</Text>
+          <Text style={styles.subtitle}>
+            Manage your workspace seamlessly
+          </Text>
+        </View>
+
+        {/* Company Button */}
+        <Pressable style={styles.companyBtn} onPress={handleCompanyPress}>
+          <Text style={styles.companyBtnText}>
+            {user?.companyName ?? "Your Company"}
+          </Text>
+        </Pressable>
+
+        {/* Message */}
+        <Text style={styles.message}>
+          We’ll keep this space clean until new features arrive.
+        </Text>
+
+      </View>
     </View>
   );
 }
 
+// ─── Styles ─────────────────────────────────────────────────────────────────
+const ACC = "#C8F135";
+const SURFACE = "#111";
+const BORDER = "#222";
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#000",
+  flex: { flex: 1, backgroundColor: "#000" },
+
+  scroll: {
+    flexGrow: 1,
     justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
+    padding: 28,
   },
-  greeting: {
-    fontSize: 28,
+
+  header: { alignItems: "center", marginBottom: 44 },
+
+  logoMark: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: ACC,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 24,
+  },
+
+  logoInner: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    backgroundColor: "#000",
+  },
+
+  title: {
+    fontSize: 30,
     fontWeight: "800",
     color: "#fff",
+    letterSpacing: -0.5,
+    marginBottom: 6,
   },
-  company: {
+
+  subtitle: {
+    fontSize: 15,
+    color: "#666",
+  },
+
+  // 🔥 Company Button (New)
+  companyBtn: {
+    backgroundColor: SURFACE,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 14,
+    paddingVertical: 18,
+    alignItems: "center",
+    marginBottom: 18,
+  },
+
+  companyBtnText: {
     fontSize: 16,
-    letterSpacing: 2,
-    color: "rgba(255,255,255,0.72)",
-    marginTop: 12,
+    fontWeight: "700",
+    color: ACC,
+    letterSpacing: 1,
     textTransform: "uppercase",
   },
+
   message: {
     fontSize: 14,
-    color: "rgba(255,255,255,0.5)",
+    color: "#555",
     textAlign: "center",
-    marginTop: 8,
+    marginTop: 10,
   },
 });

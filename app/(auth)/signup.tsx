@@ -11,15 +11,16 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
+import { Picker } from "@react-native-picker/picker";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../api/AuthContext";
 import { ApiError } from "../../api/api";
 
-// Derive default company name from email prefix
+type UserRole = "Manager" | "Inspector" | "Valuator";
+
 function defaultCompanyName(email: string): string {
   const prefix = email.split("@")[0];
   if (!prefix) return "";
-  // Capitalize first letter + add possessive
   return prefix.charAt(0).toUpperCase() + prefix.slice(1) + "'s company";
 }
 
@@ -27,6 +28,8 @@ export default function SignupScreen() {
   const router = useRouter();
   const { signup } = useAuth();
 
+  const [fullName, setFullName] = useState("");
+  const [role, setRole] = useState<UserRole>("Inspector");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -36,41 +39,52 @@ export default function SignupScreen() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{
+    fullName?: string;
+    role?: string;
     email?: string;
     password?: string;
     confirmPassword?: string;
   }>({});
 
-  // Computed placeholder for company name
   const companyPlaceholder = email.includes("@")
     ? defaultCompanyName(email)
     : "e.g. Acme Corp";
 
-  // Resolve what company name will actually be sent
   const resolvedCompany = companyTouched
     ? companyName.trim()
     : defaultCompanyName(email);
 
-  // ── Validation ────────────────────────────────────────────────────────────
   function validate() {
     const e: typeof errors = {};
+
+    if (!fullName.trim()) e.fullName = "Full name is required.";
+    if (!role) e.role = "Role is required.";
     if (!email.trim()) e.email = "Email is required.";
     else if (!/\S+@\S+\.\S+/.test(email)) e.email = "Enter a valid email.";
     if (!password) e.password = "Password is required.";
     else if (password.length < 8) e.password = "At least 8 characters.";
     if (!confirmPassword) e.confirmPassword = "Please confirm your password.";
-    else if (confirmPassword !== password)
+    else if (confirmPassword !== password) {
       e.confirmPassword = "Passwords don't match.";
+    }
+
     setErrors(e);
     return Object.keys(e).length === 0;
   }
 
-  // ── Submit ────────────────────────────────────────────────────────────────
   async function handleSignup() {
     if (!validate()) return;
     setLoading(true);
+
     try {
-      await signup(email.trim().toLowerCase(), password, resolvedCompany);
+      await signup({
+        fullName: fullName.trim(),
+        role,
+        email: email.trim().toLowerCase(),
+        password,
+        companyName: resolvedCompany,
+      });
+
       Alert.alert("Account created", "Please sign in to continue.");
       router.replace("/login");
     } catch (err) {
@@ -92,7 +106,6 @@ export default function SignupScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Back button ── */}
         <TouchableOpacity
           style={styles.backBtn}
           onPress={() => router.back()}
@@ -101,7 +114,6 @@ export default function SignupScreen() {
           <Text style={styles.backIcon}>←</Text>
         </TouchableOpacity>
 
-        {/* ── Header ── */}
         <View style={styles.header}>
           <View style={styles.logoMark}>
             <View style={styles.logoInner} />
@@ -110,9 +122,49 @@ export default function SignupScreen() {
           <Text style={styles.subtitle}>Get started in seconds</Text>
         </View>
 
-        {/* ── Form ── */}
         <View style={styles.form}>
-          {/* Email */}
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Full Name</Text>
+            <TextInput
+              style={[styles.input, errors.fullName && styles.inputError]}
+              placeholder="Enter your full name"
+              placeholderTextColor="#555"
+              value={fullName}
+              onChangeText={(t) => {
+                setFullName(t);
+                if (errors.fullName) {
+                  setErrors((e) => ({ ...e, fullName: undefined }));
+                }
+              }}
+              autoCapitalize="words"
+            />
+            {errors.fullName && (
+              <Text style={styles.errorText}>{errors.fullName}</Text>
+            )}
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Role</Text>
+            <View style={[styles.pickerWrap, errors.role && styles.inputError]}>
+              <Picker
+                selectedValue={role}
+                onValueChange={(itemValue) => {
+                  setRole(itemValue as UserRole);
+                  if (errors.role) {
+                    setErrors((e) => ({ ...e, role: undefined }));
+                  }
+                }}
+                dropdownIconColor="#fff"
+                style={styles.picker}
+              >
+                <Picker.Item label="Manager" value="Manager" />
+                <Picker.Item label="Inspector" value="Inspector" />
+                <Picker.Item label="Valuator" value="Valuator" />
+              </Picker>
+            </View>
+            {errors.role && <Text style={styles.errorText}>{errors.role}</Text>}
+          </View>
+
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>Email</Text>
             <TextInput
@@ -122,8 +174,9 @@ export default function SignupScreen() {
               value={email}
               onChangeText={(t) => {
                 setEmail(t);
-                if (errors.email)
+                if (errors.email) {
                   setErrors((e) => ({ ...e, email: undefined }));
+                }
               }}
               keyboardType="email-address"
               autoCapitalize="none"
@@ -134,7 +187,6 @@ export default function SignupScreen() {
             )}
           </View>
 
-          {/* Password */}
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>Password</Text>
             <View
@@ -147,8 +199,9 @@ export default function SignupScreen() {
                 value={password}
                 onChangeText={(t) => {
                   setPassword(t);
-                  if (errors.password)
+                  if (errors.password) {
                     setErrors((e) => ({ ...e, password: undefined }));
+                  }
                 }}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
@@ -156,7 +209,6 @@ export default function SignupScreen() {
               <TouchableOpacity
                 onPress={() => setShowPassword((v) => !v)}
                 style={styles.eyeBtn}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
                 <Text style={styles.eyeIcon}>{showPassword ? "🙈" : "👁️"}</Text>
               </TouchableOpacity>
@@ -166,7 +218,6 @@ export default function SignupScreen() {
             )}
           </View>
 
-          {/* Confirm password */}
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>Confirm Password</Text>
             <View
@@ -182,8 +233,9 @@ export default function SignupScreen() {
                 value={confirmPassword}
                 onChangeText={(t) => {
                   setConfirmPassword(t);
-                  if (errors.confirmPassword)
+                  if (errors.confirmPassword) {
                     setErrors((e) => ({ ...e, confirmPassword: undefined }));
+                  }
                 }}
                 secureTextEntry={!showConfirm}
                 autoCapitalize="none"
@@ -191,7 +243,6 @@ export default function SignupScreen() {
               <TouchableOpacity
                 onPress={() => setShowConfirm((v) => !v)}
                 style={styles.eyeBtn}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
                 <Text style={styles.eyeIcon}>{showConfirm ? "🙈" : "👁️"}</Text>
               </TouchableOpacity>
@@ -201,7 +252,6 @@ export default function SignupScreen() {
             )}
           </View>
 
-          {/* Company name — optional */}
           <View style={styles.fieldGroup}>
             <View style={styles.labelRow}>
               <Text style={styles.label}>Company Name</Text>
@@ -219,7 +269,6 @@ export default function SignupScreen() {
                 setCompanyTouched(true);
               }}
               onBlur={() => {
-                // If user cleared the field, reset to auto-derived
                 if (!companyName.trim()) setCompanyTouched(false);
               }}
               autoCapitalize="words"
@@ -231,7 +280,6 @@ export default function SignupScreen() {
             )}
           </View>
 
-          {/* CTA */}
           <TouchableOpacity
             style={[styles.btn, loading && styles.btnDisabled]}
             onPress={handleSignup}
@@ -244,27 +292,12 @@ export default function SignupScreen() {
               <Text style={styles.btnText}>Create account</Text>
             )}
           </TouchableOpacity>
-
-          <Text style={styles.terms}>
-            By signing up, you agree to our{" "}
-            <Text style={styles.termsLink}>Terms of Service</Text> and{" "}
-            <Text style={styles.termsLink}>Privacy Policy</Text>.
-          </Text>
-        </View>
-
-        {/* ── Footer ── */}
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Already have an account? </Text>
-          <TouchableOpacity onPress={() => router.push("/login")}>
-            <Text style={styles.footerLink}>Sign in</Text>
-          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-// ─── Styles ─────────────────────────────────────────────────────────────────
 const ACC = "#C8F135";
 const SURFACE = "#111";
 const BORDER = "#222";
@@ -272,10 +305,8 @@ const BORDER = "#222";
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: "#000" },
   scroll: { flexGrow: 1, padding: 28, paddingTop: 60 },
-
   backBtn: { marginBottom: 24 },
   backIcon: { fontSize: 22, color: "#fff" },
-
   header: { alignItems: "center", marginBottom: 36 },
   logoMark: {
     width: 56,
@@ -300,7 +331,6 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   subtitle: { fontSize: 15, color: "#666" },
-
   form: { gap: 4 },
   fieldGroup: { marginBottom: 14 },
   labelRow: {
@@ -315,6 +345,7 @@ const styles = StyleSheet.create({
     color: "#888",
     letterSpacing: 0.8,
     textTransform: "uppercase",
+    marginBottom: 8,
   },
   optionalBadge: {
     backgroundColor: "#1a1a1a",
@@ -350,12 +381,19 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#fff",
   },
+  pickerWrap: {
+    backgroundColor: SURFACE,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  picker: { color: "#fff" },
   eyeBtn: { paddingRight: 14 },
   eyeIcon: { fontSize: 18 },
   inputError: { borderColor: "#FF453A" },
   errorText: { fontSize: 12, color: "#FF453A", marginTop: 5, marginLeft: 2 },
   hintText: { fontSize: 12, color: "#444", marginTop: 5, marginLeft: 2 },
-
   btn: {
     backgroundColor: ACC,
     borderRadius: 14,
@@ -370,22 +408,4 @@ const styles = StyleSheet.create({
     color: "#000",
     letterSpacing: 0.2,
   },
-
-  terms: {
-    fontSize: 12,
-    color: "#444",
-    textAlign: "center",
-    marginTop: 16,
-    lineHeight: 18,
-  },
-  termsLink: { color: "#666", textDecorationLine: "underline" },
-
-  footer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginTop: 32,
-    paddingBottom: 24,
-  },
-  footerText: { fontSize: 14, color: "#555" },
-  footerLink: { fontSize: 14, color: ACC, fontWeight: "600" },
 });

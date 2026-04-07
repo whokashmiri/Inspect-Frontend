@@ -7,6 +7,14 @@ import React, {
 } from "react";
 import { tokenStore, authApi, loginAndSave, User } from "./api";
 
+type SignupPayload = {
+  fullName: string;
+  role: "Manager" | "Inspector" | "Valuator";
+  email: string;
+  password: string;
+  companyName: string;
+};
+
 interface AuthState {
   user: User | null;
   isLoading: boolean;
@@ -15,11 +23,7 @@ interface AuthState {
 
 interface AuthContextValue extends AuthState {
   login: (email: string, password: string) => Promise<void>;
-  signup: (
-    email: string,
-    password: string,
-    companyName: string,
-  ) => Promise<void>;
+  signup: (data: SignupPayload) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -32,7 +36,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isAuthenticated: false,
   });
 
-  // On mount — check if a token exists and fetch the current user
   useEffect(() => {
     (async () => {
       try {
@@ -44,7 +47,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setState((s) => ({ ...s, isLoading: false }));
         }
       } catch {
-        // Token is stale / expired — clear it
         await tokenStore.clear();
         setState({ user: null, isLoading: false, isAuthenticated: false });
       }
@@ -56,14 +58,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setState({ user: res.user, isLoading: false, isAuthenticated: true });
   }, []);
 
-  const signup = useCallback(
-    async (email: string, password: string, companyName: string) => {
-      await authApi.signup({ email, password, companyName });
-      await tokenStore.clear();
-      setState({ user: null, isLoading: false, isAuthenticated: false });
-    },
-    [],
-  );
+ const signup = useCallback(async (data: SignupPayload) => {
+  await authApi.signup(data);
+
+  await tokenStore.clear();
+  setState({ user: null, isLoading: false, isAuthenticated: false });
+}, []);
 
   const logout = useCallback(async () => {
     await authApi.logout();
