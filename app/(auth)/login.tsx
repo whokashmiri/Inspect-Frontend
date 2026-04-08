@@ -11,11 +11,18 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
+import { useFonts } from 'expo-font';
+import  fonts  from '../fonts/fonts';
 import { useRouter } from "expo-router";
 import { useAuth } from "../../api/AuthContext";
 import { ApiError } from "../../api/api";
 
 export default function LoginScreen() {
+      const [loaded] = useFonts({
+    ...fonts.poppins,
+    ...fonts.inter,
+  });
+
   const router = useRouter();
   const { login } = useAuth();
 
@@ -185,8 +192,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#000",
   },
   title: {
-    fontSize: 30,
-    fontWeight: "800",
+    fontFamily: fonts.inter.semiBold as unknown as string,
+    fontSize: 22,
+    fontWeight: "400",
     color: "#fff",
     letterSpacing: -0.5,
     marginBottom: 6,
@@ -258,3 +266,6 @@ const styles = StyleSheet.create({
   footerText: { fontSize: 14, color: "#555" },
   footerLink: { fontSize: 14, color: ACC, fontWeight: "600" },
 });
+
+
+

@@ -9,11 +9,14 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@expo-google-fonts/inter": "^0.4.2",
+    "@expo-google-fonts/poppins": "^0.4.1",
     "@react-native-picker/picker": "2.11.4",
     "babel-preset-expo": "~55.0.8",
     "expo": "~55.0.6",
     "expo-camera": "~55.0.14",
     "expo-dev-client": "~55.0.18",
+    "expo-font": "~55.0.6",
     "expo-media-library": "~55.0.13",
     "expo-router": "~55.0.5",
     "expo-secure-store": "~55.0.11",

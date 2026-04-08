@@ -1,3 +1,6 @@
+
+
+//signup.tsx
 import React, { useState } from "react";
 import {
   View,
@@ -15,6 +18,8 @@ import { Picker } from "@react-native-picker/picker";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../api/AuthContext";
 import { ApiError } from "../../api/api";
+import { useFonts } from 'expo-font';
+import  fonts  from '../fonts/fonts';
 
 type UserRole = "Manager" | "Inspector" | "Valuator";
 
@@ -25,6 +30,11 @@ function defaultCompanyName(email: string): string {
 }
 
 export default function SignupScreen() {
+      
+        const [loaded] = useFonts({
+      ...fonts.poppins,
+      ...fonts.inter,
+    });
   const router = useRouter();
   const { signup } = useAuth();
 
@@ -118,8 +128,8 @@ export default function SignupScreen() {
           <View style={styles.logoMark}>
             <View style={styles.logoInner} />
           </View>
-          <Text style={styles.title}>Create account</Text>
-          <Text style={styles.subtitle}>Get started in seconds</Text>
+          <Text style={styles.title}>Create Account</Text>
+          
         </View>
 
         <View style={styles.form}>
@@ -289,7 +299,7 @@ export default function SignupScreen() {
             {loading ? (
               <ActivityIndicator color="#000" />
             ) : (
-              <Text style={styles.btnText}>Create account</Text>
+              <Text style={styles.btnText}>Create Account</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -315,7 +325,7 @@ const styles = StyleSheet.create({
     backgroundColor: ACC,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 24,
+    marginBottom: 15,
   },
   logoInner: {
     width: 24,
@@ -324,8 +334,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#000",
   },
   title: {
-    fontSize: 30,
-    fontWeight: "800",
+    fontFamily: fonts.inter.semiBold as unknown as string,
+    fontSize: 22,
+    // fontWeight: "800",
     color: "#fff",
     letterSpacing: -0.5,
     marginBottom: 6,
@@ -403,8 +414,9 @@ const styles = StyleSheet.create({
   },
   btnDisabled: { opacity: 0.6 },
   btnText: {
+    fontFamily: fonts.inter.semiBold as unknown as string,
     fontSize: 16,
-    fontWeight: "700",
+    // fontWeight: "700",
     color: "#000",
     letterSpacing: 0.2,
   },

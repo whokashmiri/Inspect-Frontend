@@ -1,3 +1,5 @@
+// api.ts
+
 import * as SecureStore from "expo-secure-store";
 
 // ─── Config ────────────────────────────────────────────────────────────────
@@ -41,6 +43,7 @@ export class ApiError extends Error {
 async function request<T>(
   path: string,
   { method = "GET", body, auth = true }: RequestOptions = {},
+  retry = true // 👈 important
 ): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -57,16 +60,35 @@ async function request<T>(
     body: body ? JSON.stringify(body) : undefined,
   });
 
-  let data: unknown;
+  let data: any;
   try {
     data = await res.json();
   } catch {
     data = null;
   }
 
+  // 🔴 HANDLE TOKEN EXPIRY HERE
+  if (res.status === 401 && auth && retry) {
+    try {
+      const refreshToken = await tokenStore.getRefresh();
+      if (!refreshToken) throw new Error("No refresh token");
+
+      const newTokens = await authApi.refreshToken(refreshToken);
+
+      // save new tokens
+      await tokenStore.setToken(newTokens.accessToken);
+      await tokenStore.setRefresh(newTokens.refreshToken);
+
+      // 🔁 retry original request ONCE
+      return request<T>(path, { method, body, auth }, false);
+    } catch (err) {
+      await tokenStore.clear();
+      throw new ApiError(401, "Session expired. Please login again.");
+    }
+  }
+
   if (!res.ok) {
-    const message =
-      (data as { message?: string })?.message ?? `HTTP ${res.status}`;
+    const message = data?.message ?? `HTTP ${res.status}`;
     throw new ApiError(res.status, message, data);
   }
 

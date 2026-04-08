@@ -52,7 +52,8 @@
         }
       ],
       "react-native-vision-camera",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-font"
     ]
   }
 }
