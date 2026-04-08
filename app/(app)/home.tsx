@@ -26,9 +26,9 @@ export default function HomeScreen() {
             <View style={styles.logoInner} />
           </View>
 
-          <Text style={styles.title}>Welcome Back</Text>
+          <Text style={styles.title}>Your Companies</Text>
           <Text style={styles.subtitle}>
-            Manage your workspace seamlessly
+            Select A Company..
           </Text>
         </View>
 
@@ -63,7 +63,7 @@ const styles = StyleSheet.create({
     padding: 28,
   },
 
-  header: { alignItems: "center", marginBottom: 44 },
+  header: { alignItems: "center", marginBottom: 20 },
 
   logoMark: {
     width: 56,
@@ -99,17 +99,17 @@ const styles = StyleSheet.create({
   // 🔥 Company Button (New)
   companyBtn: {
     backgroundColor: SURFACE,
-    borderWidth: 1,
+    borderWidth: 0.6,
     borderColor: BORDER,
     borderRadius: 14,
-    paddingVertical: 18,
+    paddingVertical: 15,
     alignItems: "center",
-    marginBottom: 18,
+    marginBottom: 8,
   },
 
   companyBtnText: {
-    fontSize: 16,
-    fontWeight: "700",
+    fontSize: 13,
+    fontWeight: "500",
     color: ACC,
     letterSpacing: 1,
     textTransform: "uppercase",

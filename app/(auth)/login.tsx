@@ -85,7 +85,7 @@ export default function LoginScreen() {
             <Text style={styles.label}>Email</Text>
             <TextInput
               style={[styles.input, errors.email && styles.inputError]}
-              placeholder="you@example.com"
+              placeholder="E-mail address"
               placeholderTextColor="#555"
               value={email}
               onChangeText={(t) => {
@@ -110,7 +110,7 @@ export default function LoginScreen() {
             >
               <TextInput
                 style={styles.inputInner}
-                placeholder="••••••••"
+                placeholder="Your password"
                 placeholderTextColor="#555"
                 value={password}
                 onChangeText={(t) => {
@@ -158,7 +158,7 @@ export default function LoginScreen() {
         <View style={styles.footer}>
           <Text style={styles.footerText}>Don't have an account? </Text>
           <TouchableOpacity onPress={() => router.push("/signup")}>
-            <Text style={styles.footerLink}>Create one</Text>
+            <Text style={styles.footerLink}>Create One</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
   form: { gap: 6 },
   fieldGroup: { marginBottom: 14 },
   label: {
-    fontSize: 12,
+    fontSize: 8,
     fontWeight: "600",
     color: "#888",
     letterSpacing: 0.8,
@@ -216,8 +216,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER,
     borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     fontSize: 15,
     color: "#fff",
   },
@@ -231,8 +231,8 @@ const styles = StyleSheet.create({
   },
   inputInner: {
     flex: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     fontSize: 15,
     color: "#fff",
   },
@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
   btn: {
     backgroundColor: ACC,
     borderRadius: 14,
-    paddingVertical: 16,
+    paddingVertical: 14,
     alignItems: "center",
   },
   btnDisabled: { opacity: 0.6 },

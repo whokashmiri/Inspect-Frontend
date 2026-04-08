@@ -137,7 +137,7 @@ export default function SignupScreen() {
             <Text style={styles.label}>Full Name</Text>
             <TextInput
               style={[styles.input, errors.fullName && styles.inputError]}
-              placeholder="Enter your full name"
+              placeholder="Enter Your Full Name"
               placeholderTextColor="#555"
               value={fullName}
               onChangeText={(t) => {
@@ -158,6 +158,7 @@ export default function SignupScreen() {
             <View style={[styles.pickerWrap, errors.role && styles.inputError]}>
               <Picker
                 selectedValue={role}
+                mode="dropdown"
                 onValueChange={(itemValue) => {
                   setRole(itemValue as UserRole);
                   if (errors.role) {
@@ -314,7 +315,7 @@ const BORDER = "#222";
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: "#000" },
-  scroll: { flexGrow: 1, padding: 28, paddingTop: 60 },
+  scroll: { flexGrow: 1, padding: 28, paddingTop: 40 },
   backBtn: { marginBottom: 24 },
   backIcon: { fontSize: 22, color: "#fff" },
   header: { alignItems: "center", marginBottom: 36 },
@@ -351,7 +352,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   label: {
-    fontSize: 12,
+    fontSize: 8,
     fontWeight: "600",
     color: "#888",
     letterSpacing: 0.8,
@@ -366,14 +367,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
-  optionalText: { fontSize: 10, color: "#555", fontWeight: "600" },
+  optionalText: { fontSize: 7, color: "#555", fontWeight: "600" },
   input: {
     backgroundColor: SURFACE,
     borderWidth: 1,
     borderColor: BORDER,
     borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     fontSize: 15,
     color: "#fff",
   },
@@ -387,19 +388,29 @@ const styles = StyleSheet.create({
   },
   inputInner: {
     flex: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+   paddingHorizontal: 14,
+    paddingVertical: 12,
     fontSize: 15,
     color: "#fff",
   },
   pickerWrap: {
+    
     backgroundColor: SURFACE,
     borderWidth: 1,
     borderColor: BORDER,
+    height: 48,
     borderRadius: 12,
-    overflow: "hidden",
+    // overflow: "hidden",
+    // paddingHorizontal: 14
   },
-  picker: { color: "#fff" },
+  picker: { 
+    color: "#fff",
+  height: 58,
+  width: "100%",
+  overflow: "hidden",
+  marginLeft: 0,         // 👈 VERY IMPORTANT (align text properly)
+  marginTop: Platform.OS === "android" ? -4 : 0,
+   },
   eyeBtn: { paddingRight: 14 },
   eyeIcon: { fontSize: 18 },
   inputError: { borderColor: "#FF453A" },
@@ -408,14 +419,14 @@ const styles = StyleSheet.create({
   btn: {
     backgroundColor: ACC,
     borderRadius: 14,
-    paddingVertical: 16,
+    paddingVertical: 14,
     alignItems: "center",
     marginTop: 8,
   },
   btnDisabled: { opacity: 0.6 },
   btnText: {
     fontFamily: fonts.inter.semiBold as unknown as string,
-    fontSize: 16,
+    fontSize: 14,
     // fontWeight: "700",
     color: "#000",
     letterSpacing: 0.2,
