@@ -74,7 +74,7 @@ export default function LoginScreen() {
           <View style={styles.logoMark}>
             <View style={styles.logoInner} />
           </View>
-          <Text style={styles.title}>Welcome back</Text>
+          <Text style={styles.title}>Welcome Back</Text>
           <Text style={styles.subtitle}>Sign in to continue</Text>
         </View>
 

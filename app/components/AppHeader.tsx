@@ -201,7 +201,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: BORDER,
     paddingHorizontal: 20,
-    paddingTop: 18,
+    paddingTop: 28,
     paddingBottom: 14,
     flexDirection: "row",
     alignItems: "center",
@@ -229,7 +229,7 @@ const styles = StyleSheet.create({
   },
   companyName: {
     fontSize: 22,
-    fontWeight: "800",
+    fontWeight: "400",
     color: "#fff",
     letterSpacing: -0.5,
   },

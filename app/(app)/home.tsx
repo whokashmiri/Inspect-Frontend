@@ -1,7 +1,14 @@
 import { Text, View, StyleSheet, Pressable } from "react-native";
 import { useAuth } from "../../api/AuthContext";
+import { useFonts } from 'expo-font';
+import  fonts  from '../fonts/fonts';
 
 export default function HomeScreen() {
+
+       const [loaded] = useFonts({
+    ...fonts.poppins,
+    ...fonts.inter,
+  });
   const { user } = useAuth();
 
   const handleCompanyPress = () => {
@@ -19,7 +26,7 @@ export default function HomeScreen() {
             <View style={styles.logoInner} />
           </View>
 
-          <Text style={styles.title}>Welcome back</Text>
+          <Text style={styles.title}>Welcome Back</Text>
           <Text style={styles.subtitle}>
             Manage your workspace seamlessly
           </Text>
@@ -76,8 +83,9 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontSize: 30,
-    fontWeight: "800",
+    fontFamily: fonts.inter.semiBold as unknown as string,
+    fontSize: 22,
+    fontWeight: "400",
     color: "#fff",
     letterSpacing: -0.5,
     marginBottom: 6,
