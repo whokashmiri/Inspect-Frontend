@@ -176,3 +176,43 @@ export async function signupAndSave(
   await tokenStore.setRefresh(res.tokens.refreshToken);
   return res;
 }
+
+
+export interface Project {
+  id: string;
+  name: string;
+  status: "New" | "Favorite" | "Done";
+  isFavorite: boolean;
+  createdAt: string;
+  company: {
+    id: string;
+    name: string;
+  };
+  createdBy: {
+    id: string;
+    fullName: string;
+    email: string;
+  };
+}
+
+export interface CreateProjectResponse {
+  project: Project;
+}
+
+export interface ListProjectsResponse {
+  projects: Project[];
+}
+
+
+export const projectApi = {
+  create: (payload: { name: string }) =>
+    request<CreateProjectResponse>("/projects", {
+      method: "POST",
+      body: payload,
+    }),
+
+  list: () =>
+    request<ListProjectsResponse>("/projects", {
+      method: "GET",
+    }),
+};

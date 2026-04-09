@@ -1,70 +1,62 @@
 import { Text, View, StyleSheet, Pressable } from "react-native";
+import { useRouter } from "expo-router";
 import { useAuth } from "../../api/AuthContext";
-import { useFonts } from 'expo-font';
-import  fonts  from '../fonts/fonts';
+import { useFonts } from "expo-font";
+import fonts from "../fonts/fonts";
 
 export default function HomeScreen() {
-
-       const [loaded] = useFonts({
+  const [loaded] = useFonts({
     ...fonts.poppins,
     ...fonts.inter,
   });
+
+  const router = useRouter();
   const { user } = useAuth();
 
+  if (!loaded) return null;
+
   const handleCompanyPress = () => {
-    console.log("Company pressed");
-    // navigate or open modal here
+    router.push("/project");
   };
 
   return (
     <View style={styles.flex}>
       <View style={styles.scroll}>
-        
-        {/* Header */}
         <View style={styles.header}>
           <View style={styles.logoMark}>
             <View style={styles.logoInner} />
           </View>
 
           <Text style={styles.title}>Your Companies</Text>
-          <Text style={styles.subtitle}>
-            Select A Company..
-          </Text>
+          <Text style={styles.subtitle}>Select A Company..</Text>
         </View>
 
-        {/* Company Button */}
         <Pressable style={styles.companyBtn} onPress={handleCompanyPress}>
           <Text style={styles.companyBtnText}>
             {user?.companyName ?? "Your Company"}
           </Text>
         </Pressable>
 
-        {/* Message */}
         <Text style={styles.message}>
           We’ll keep this space clean until new features arrive.
         </Text>
-
       </View>
     </View>
   );
 }
 
-// ─── Styles ─────────────────────────────────────────────────────────────────
 const ACC = "#C8F135";
 const SURFACE = "#111";
 const BORDER = "#222";
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: "#000" },
-
   scroll: {
     flexGrow: 1,
     justifyContent: "center",
     padding: 28,
   },
-
   header: { alignItems: "center", marginBottom: 20 },
-
   logoMark: {
     width: 56,
     height: 56,
@@ -74,14 +66,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 24,
   },
-
   logoInner: {
     width: 24,
     height: 24,
     borderRadius: 6,
     backgroundColor: "#000",
   },
-
   title: {
     fontFamily: fonts.inter.semiBold as unknown as string,
     fontSize: 22,
@@ -90,13 +80,10 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
     marginBottom: 6,
   },
-
   subtitle: {
     fontSize: 15,
     color: "#666",
   },
-
-  // 🔥 Company Button (New)
   companyBtn: {
     backgroundColor: SURFACE,
     borderWidth: 0.6,
@@ -106,7 +93,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 8,
   },
-
   companyBtnText: {
     fontSize: 13,
     fontWeight: "500",
@@ -114,7 +100,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     textTransform: "uppercase",
   },
-
   message: {
     fontSize: 14,
     color: "#555",
