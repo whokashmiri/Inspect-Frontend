@@ -164,7 +164,14 @@ export async function signupAndSave(
   password: string,
   companyName: string,
 ) {
-  const res = await authApi.signup({ fullName ,role , email, password, companyName });
+  const res = await authApi.signup({
+    fullName: fullName.trim(),
+    role,
+    email: email.trim().toLowerCase(),
+    password,
+    companyName: companyName.trim(),
+  });
+
   await tokenStore.setToken(res.tokens.accessToken);
   await tokenStore.setRefresh(res.tokens.refreshToken);
   return res;

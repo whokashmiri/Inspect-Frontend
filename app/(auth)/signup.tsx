@@ -1,6 +1,4 @@
-
-
-//signup.tsx
+// signup.tsx
 import React, { useState } from "react";
 import {
   View,
@@ -12,14 +10,13 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
-  Alert,
 } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../api/AuthContext";
 import { ApiError } from "../../api/api";
-import { useFonts } from 'expo-font';
-import  fonts  from '../fonts/fonts';
+import { useFonts } from "expo-font";
+import fonts from "../fonts/fonts";
 
 type UserRole = "Manager" | "Inspector" | "Valuator";
 
@@ -30,13 +27,16 @@ function defaultCompanyName(email: string): string {
 }
 
 export default function SignupScreen() {
-      
-        const [loaded] = useFonts({
-      ...fonts.poppins,
-      ...fonts.inter,
-    });
+  const [loaded] = useFonts({
+    ...fonts.poppins,
+    ...fonts.inter,
+  });
+
   const router = useRouter();
   const { signup } = useAuth();
+
+  const [globalError, setGlobalError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const [fullName, setFullName] = useState("");
   const [role, setRole] = useState<UserRole>("Inspector");
@@ -48,12 +48,14 @@ export default function SignupScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
+
   const [errors, setErrors] = useState<{
     fullName?: string;
     role?: string;
     email?: string;
     password?: string;
     confirmPassword?: string;
+    companyName?: string;
   }>({});
 
   const companyPlaceholder = email.includes("@")
@@ -64,15 +66,25 @@ export default function SignupScreen() {
     ? companyName.trim()
     : defaultCompanyName(email);
 
+  if (!loaded) return null;
+
+  function clearGlobalMessages() {
+    if (globalError) setGlobalError(null);
+    if (successMessage) setSuccessMessage(null);
+  }
+
   function validate() {
     const e: typeof errors = {};
 
     if (!fullName.trim()) e.fullName = "Full name is required.";
     if (!role) e.role = "Role is required.";
+
     if (!email.trim()) e.email = "Email is required.";
     else if (!/\S+@\S+\.\S+/.test(email)) e.email = "Enter a valid email.";
+
     if (!password) e.password = "Password is required.";
     else if (password.length < 8) e.password = "At least 8 characters.";
+
     if (!confirmPassword) e.confirmPassword = "Please confirm your password.";
     else if (confirmPassword !== password) {
       e.confirmPassword = "Passwords don't match.";
@@ -83,7 +95,10 @@ export default function SignupScreen() {
   }
 
   async function handleSignup() {
+    clearGlobalMessages();
+
     if (!validate()) return;
+
     setLoading(true);
 
     try {
@@ -95,12 +110,40 @@ export default function SignupScreen() {
         companyName: resolvedCompany,
       });
 
-      Alert.alert("Account created", "Please sign in to continue.");
-      router.replace("/login");
+      setSuccessMessage("Account created successfully. Redirecting to login...");
+      setTimeout(() => {
+        router.replace("/login");
+      }, 700);
     } catch (err) {
-      const msg =
-        err instanceof ApiError ? err.message : "Something went wrong.";
-      Alert.alert("Sign up failed", msg);
+      if (err instanceof ApiError) {
+        const message = err.message || "Something went wrong.";
+        const lower = message.toLowerCase();
+
+        if (lower.includes("email")) {
+          setErrors((prev) => ({
+            ...prev,
+            email: message,
+          }));
+        } else if (lower.includes("password")) {
+          setErrors((prev) => ({
+            ...prev,
+            password: message,
+          }));
+        } else if (lower.includes("full name")) {
+          setErrors((prev) => ({
+            ...prev,
+            fullName: message,
+          }));
+        } else if (lower.includes("company")) {
+          setGlobalError(message);
+        } else if (lower.includes("manager")) {
+          setGlobalError(message);
+        } else {
+          setGlobalError(message);
+        }
+      } else {
+        setGlobalError("Something went wrong. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -129,10 +172,21 @@ export default function SignupScreen() {
             <View style={styles.logoInner} />
           </View>
           <Text style={styles.title}>Create Account</Text>
-          
         </View>
 
         <View style={styles.form}>
+          {globalError && (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorBannerText}>{globalError}</Text>
+            </View>
+          )}
+
+          {successMessage && (
+            <View style={styles.successBanner}>
+              <Text style={styles.successBannerText}>{successMessage}</Text>
+            </View>
+          )}
+
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>Full Name</Text>
             <TextInput
@@ -142,6 +196,7 @@ export default function SignupScreen() {
               value={fullName}
               onChangeText={(t) => {
                 setFullName(t);
+                clearGlobalMessages();
                 if (errors.fullName) {
                   setErrors((e) => ({ ...e, fullName: undefined }));
                 }
@@ -161,6 +216,7 @@ export default function SignupScreen() {
                 mode="dropdown"
                 onValueChange={(itemValue) => {
                   setRole(itemValue as UserRole);
+                  clearGlobalMessages();
                   if (errors.role) {
                     setErrors((e) => ({ ...e, role: undefined }));
                   }
@@ -185,6 +241,7 @@ export default function SignupScreen() {
               value={email}
               onChangeText={(t) => {
                 setEmail(t);
+                clearGlobalMessages();
                 if (errors.email) {
                   setErrors((e) => ({ ...e, email: undefined }));
                 }
@@ -200,9 +257,7 @@ export default function SignupScreen() {
 
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>Password</Text>
-            <View
-              style={[styles.inputRow, errors.password && styles.inputError]}
-            >
+            <View style={[styles.inputRow, errors.password && styles.inputError]}>
               <TextInput
                 style={styles.inputInner}
                 placeholder="Min. 8 characters"
@@ -210,6 +265,7 @@ export default function SignupScreen() {
                 value={password}
                 onChangeText={(t) => {
                   setPassword(t);
+                  clearGlobalMessages();
                   if (errors.password) {
                     setErrors((e) => ({ ...e, password: undefined }));
                   }
@@ -244,6 +300,7 @@ export default function SignupScreen() {
                 value={confirmPassword}
                 onChangeText={(t) => {
                   setConfirmPassword(t);
+                  clearGlobalMessages();
                   if (errors.confirmPassword) {
                     setErrors((e) => ({ ...e, confirmPassword: undefined }));
                   }
@@ -278,6 +335,7 @@ export default function SignupScreen() {
               onChangeText={(t) => {
                 setCompanyName(t);
                 setCompanyTouched(true);
+                clearGlobalMessages();
               }}
               onBlur={() => {
                 if (!companyName.trim()) setCompanyTouched(false);
@@ -337,7 +395,6 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: fonts.inter.semiBold as unknown as string,
     fontSize: 22,
-    // fontWeight: "800",
     color: "#fff",
     letterSpacing: -0.5,
     marginBottom: 6,
@@ -388,34 +445,64 @@ const styles = StyleSheet.create({
   },
   inputInner: {
     flex: 1,
-   paddingHorizontal: 14,
+    paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
     color: "#fff",
   },
   pickerWrap: {
-    
     backgroundColor: SURFACE,
     borderWidth: 1,
     borderColor: BORDER,
     height: 48,
     borderRadius: 12,
-    // overflow: "hidden",
-    // paddingHorizontal: 14
   },
-  picker: { 
+  picker: {
     color: "#fff",
-  height: 58,
-  width: "100%",
-  overflow: "hidden",
-  marginLeft: 0,         // 👈 VERY IMPORTANT (align text properly)
-  marginTop: Platform.OS === "android" ? -4 : 0,
-   },
+    height: 58,
+    width: "100%",
+    overflow: "hidden",
+    marginLeft: 0,
+    marginTop: Platform.OS === "android" ? -4 : 0,
+  },
   eyeBtn: { paddingRight: 14 },
   eyeIcon: { fontSize: 18 },
   inputError: { borderColor: "#FF453A" },
   errorText: { fontSize: 12, color: "#FF453A", marginTop: 5, marginLeft: 2 },
   hintText: { fontSize: 12, color: "#444", marginTop: 5, marginLeft: 2 },
+
+  errorBanner: {
+    backgroundColor: "rgba(255, 69, 58, 0.12)",
+    borderColor: "#FF453A",
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 16,
+  },
+  errorBannerText: {
+    color: "#FF7B72",
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: "center",
+  },
+
+  successBanner: {
+    backgroundColor: "rgba(200, 241, 53, 0.12)",
+    borderColor: ACC,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 16,
+  },
+  successBannerText: {
+    color: ACC,
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: "center",
+  },
+
   btn: {
     backgroundColor: ACC,
     borderRadius: 14,
@@ -427,7 +514,6 @@ const styles = StyleSheet.create({
   btnText: {
     fontFamily: fonts.inter.semiBold as unknown as string,
     fontSize: 14,
-    // fontWeight: "700",
     color: "#000",
     letterSpacing: 0.2,
   },
