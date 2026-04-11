@@ -1,3 +1,5 @@
+
+//(app)/project.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
@@ -105,8 +107,14 @@ export default function ProjectScreen() {
     return projects;
   }, [projects, filter]);
 
-  function openProject(projectId: string) {
-    router.push(`/project/${projectId}`);
+  function openProject(project: Project) {
+    router.push({
+      pathname: "/(app)/FolderAndAssetScreen",
+      params: {
+        projectId: project.id,
+        projectName: project.name,
+      },
+    });
   }
 
   if (!loaded) return null;
@@ -175,7 +183,7 @@ export default function ProjectScreen() {
               <Pressable
                 key={project.id}
                 style={styles.projectCard}
-                onPress={() => openProject(project.id)}
+                onPress={() => openProject(project)}
               >
                 <View style={styles.projectCardTop}>
                   <Text style={styles.projectName}>{project.name}</Text>
@@ -250,15 +258,15 @@ const BORDER = "#222";
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: "#000" },
-  scroll: { padding: 24, paddingTop: 50, paddingBottom: 40 },
+  scroll: { padding: 24, paddingTop: 20, paddingBottom: 40 },
   header: { marginBottom: 18 },
   title: {
     color: "#fff",
-    fontSize: 22,
+    fontSize: 15,
     fontFamily: fonts.inter.semiBold as unknown as string,
   },
   companyName: { color: ACC },
-  subtitle: { color: "#666", marginTop: 6, fontSize: 14 },
+  subtitle: { color: "#666", marginTop: 6, fontSize: 10 },
 
   actionRow: {
     flexDirection: "row",
@@ -270,25 +278,25 @@ const styles = StyleSheet.create({
     backgroundColor: SURFACE,
     borderWidth: 1,
     borderColor: BORDER,
-    borderRadius: 12,
-    paddingVertical: 14,
+    borderRadius: 10,
+    paddingVertical: 10,
     alignItems: "center",
   },
   switchBtnText: {
     color: "#fff",
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: fonts.inter.medium as unknown as string,
   },
   createBtn: {
     flex: 1,
     backgroundColor: ACC,
-    borderRadius: 12,
-    paddingVertical: 14,
+    borderRadius: 10,
+    paddingVertical: 10,
     alignItems: "center",
   },
   createBtnText: {
     color: "#000",
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: fonts.inter.semiBold as unknown as string,
   },
 
@@ -360,7 +368,7 @@ const styles = StyleSheet.create({
   },
   projectName: {
     color: "#fff",
-    fontSize: 16,
+    fontSize: 13,
     fontFamily: fonts.inter.semiBold as unknown as string,
     flex: 1,
     marginRight: 10,
@@ -373,12 +381,12 @@ const styles = StyleSheet.create({
   },
   statusPillText: {
     color: ACC,
-    fontSize: 11,
+    fontSize: 9,
     fontFamily: fonts.inter.medium as unknown as string,
   },
   projectMeta: {
     color: "#777",
-    fontSize: 12,
+    fontSize: 8,
     marginTop: 8,
   },
 

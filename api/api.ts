@@ -1,9 +1,7 @@
-// api.ts
-
 import * as SecureStore from "expo-secure-store";
 
 // ─── Config ────────────────────────────────────────────────────────────────
-export const BASE_URL = "http://192.168.0.198:3000/api/v1"; // 🔧 change this
+export const BASE_URL = "http://192.168.0.198:3000/api/v1";
 
 const TOKEN_KEY = "auth_token";
 const REFRESH_KEY = "refresh_token";
@@ -20,13 +18,18 @@ export const tokenStore = {
   },
 };
 
-// ─── Core fetcher ───────────────────────────────────────────────────────────
 type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
-interface RequestOptions {
+interface JsonRequestOptions {
   method?: Method;
   body?: Record<string, unknown>;
-  auth?: boolean; // attach Bearer token?
+  auth?: boolean;
+}
+
+interface FormRequestOptions {
+  method?: Method;
+  body?: FormData;
+  auth?: boolean;
 }
 
 export class ApiError extends Error {
@@ -42,8 +45,8 @@ export class ApiError extends Error {
 
 async function request<T>(
   path: string,
-  { method = "GET", body, auth = true }: RequestOptions = {},
-  retry = true // 👈 important
+  { method = "GET", body, auth = true }: JsonRequestOptions = {},
+  retry = true,
 ): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -51,7 +54,7 @@ async function request<T>(
 
   if (auth) {
     const token = await tokenStore.getToken();
-    if (token) headers["Authorization"] = `Bearer ${token}`;
+    if (token) headers.Authorization = `Bearer ${token}`;
   }
 
   const res = await fetch(`${BASE_URL}${path}`, {
@@ -67,7 +70,6 @@ async function request<T>(
     data = null;
   }
 
-  // 🔴 HANDLE TOKEN EXPIRY HERE
   if (res.status === 401 && auth && retry) {
     try {
       const refreshToken = await tokenStore.getRefresh();
@@ -75,13 +77,61 @@ async function request<T>(
 
       const newTokens = await authApi.refreshToken(refreshToken);
 
-      // save new tokens
       await tokenStore.setToken(newTokens.accessToken);
       await tokenStore.setRefresh(newTokens.refreshToken);
 
-      // 🔁 retry original request ONCE
       return request<T>(path, { method, body, auth }, false);
-    } catch (err) {
+    } catch {
+      await tokenStore.clear();
+      throw new ApiError(401, "Session expired. Please login again.");
+    }
+  }
+
+  if (!res.ok) {
+    const message = data?.message ?? `HTTP ${res.status}`;
+    throw new ApiError(res.status, message, data);
+  }
+
+  return data as T;
+}
+
+async function requestForm<T>(
+  path: string,
+  { method = "POST", body, auth = true }: FormRequestOptions = {},
+  retry = true,
+): Promise<T> {
+  const headers: Record<string, string> = {};
+
+  if (auth) {
+    const token = await tokenStore.getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method,
+    headers,
+    body,
+  });
+
+  let data: any;
+  try {
+    data = await res.json();
+  } catch {
+    data = null;
+  }
+
+  if (res.status === 401 && auth && retry) {
+    try {
+      const refreshToken = await tokenStore.getRefresh();
+      if (!refreshToken) throw new Error("No refresh token");
+
+      const newTokens = await authApi.refreshToken(refreshToken);
+
+      await tokenStore.setToken(newTokens.accessToken);
+      await tokenStore.setRefresh(newTokens.refreshToken);
+
+      return requestForm<T>(path, { method, body, auth }, false);
+    } catch {
       await tokenStore.clear();
       throw new ApiError(401, "Session expired. Please login again.");
     }
@@ -105,8 +155,8 @@ export interface User {
   id: string;
   email: string;
   companyName: string;
-  fullName: string; // ✅ add this
-  role: "Manager" | "Inspector" | "Valuator"; // ✅ add this
+  fullName: string;
+  role: "Manager" | "Inspector" | "Valuator";
 }
 
 export interface AuthResponse {
@@ -115,12 +165,13 @@ export interface AuthResponse {
 }
 
 export const authApi = {
-  signup: (payload: { 
+  signup: (payload: {
     fullName: string;
     role: "Manager" | "Inspector" | "Valuator";
-     email: string;
-      password: string;
-      companyName: string }) =>
+    email: string;
+    password: string;
+    companyName: string;
+  }) =>
     request<AuthResponse>("/auth/signup", {
       method: "POST",
       body: payload,
@@ -149,7 +200,7 @@ export const authApi = {
     ),
 };
 
-// ─── Convenience wrapper (auto-saves tokens) ────────────────────────────────
+// ─── Convenience wrapper ────────────────────────────────────────────────────
 export async function loginAndSave(email: string, password: string) {
   const res = await authApi.login({ email, password });
   await tokenStore.setToken(res.tokens.accessToken);
@@ -177,7 +228,7 @@ export async function signupAndSave(
   return res;
 }
 
-
+// ─── Projects ───────────────────────────────────────────────────────────────
 export interface Project {
   id: string;
   name: string;
@@ -203,7 +254,6 @@ export interface ListProjectsResponse {
   projects: Project[];
 }
 
-
 export const projectApi = {
   create: (payload: { name: string }) =>
     request<CreateProjectResponse>("/projects", {
@@ -215,4 +265,149 @@ export const projectApi = {
     request<ListProjectsResponse>("/projects", {
       method: "GET",
     }),
+};
+
+// ─── Folders & Assets ───────────────────────────────────────────────────────
+export interface FolderItem {
+  id: string;
+  name: string;
+  parentId: string | null;
+  projectId: string;
+  createdAt: string;
+  createdBy: {
+    id: string;
+    fullName: string;
+    email: string;
+  };
+}
+
+export interface AssetImageItem {
+  id: string;
+  url: string;
+  publicId: string | null;
+  createdAt: string;
+}
+
+export interface AssetVoiceNoteItem {
+  id: string;
+  url: string;
+  publicId: string | null;
+  duration: number | null;
+  createdAt: string;
+}
+
+export interface AssetItem {
+  id: string;
+  name: string;
+  serialNumber: string;
+  writtenDescription: string | null;
+  folderId: string | null;
+  projectId: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: {
+    id: string;
+    fullName: string;
+    email: string;
+  };
+  images: AssetImageItem[];
+  voiceNotes: AssetVoiceNoteItem[];
+}
+
+export interface ProjectContentsResponse {
+  parentId: string | null;
+  folders: FolderItem[];
+  assets: AssetItem[];
+}
+
+export interface CreateFolderResponse {
+  folder: FolderItem;
+}
+
+export interface CreateAssetResponse {
+  asset: AssetItem;
+}
+
+export interface UploadFileInput {
+  uri: string;
+  name: string;
+  type: string;
+}
+
+export const projectContentApi = {
+  listContents: (projectId: string, parentId?: string | null) => {
+    const qs = parentId ? `?parentId=${encodeURIComponent(parentId)}` : "";
+    return request<ProjectContentsResponse>(
+      `/projects/${projectId}/contents${qs}`,
+      {
+        method: "GET",
+      },
+    );
+  },
+
+  createFolder: (payload: {
+    projectId: string;
+    name: string;
+    parentId?: string | null;
+  }) =>
+    request<CreateFolderResponse>(`/projects/${payload.projectId}/folders`, {
+      method: "POST",
+      body: {
+        name: payload.name,
+        parentId: payload.parentId ?? null,
+      },
+    }),
+
+  createAsset: async (payload: {
+    projectId: string;
+    name: string;
+    serialNumber: string;
+    writtenDescription?: string | null;
+    folderId?: string | null;
+    images?: UploadFileInput[];
+    voiceNotes?: UploadFileInput[];
+  }) => {
+    const form = new FormData();
+
+    form.append("name", payload.name);
+    form.append("serialNumber", payload.serialNumber);
+
+    if (payload.writtenDescription?.trim()) {
+      form.append("writtenDescription", payload.writtenDescription.trim());
+    }
+
+    if (payload.folderId) {
+      form.append("folderId", payload.folderId);
+    }
+
+    for (const image of payload.images ?? []) {
+      form.append(
+        "images",
+        {
+          uri: image.uri,
+          name: image.name,
+          type: image.type,
+        } as any,
+      );
+    }
+
+    for (const voice of payload.voiceNotes ?? []) {
+      form.append(
+        "voiceNotes",
+        {
+          uri: voice.uri,
+          name: voice.name,
+          type: voice.type,
+        } as any,
+      );
+    }
+
+    return requestForm<CreateAssetResponse>(
+      `/projects/${payload.projectId}/assets`,
+      {
+        method: "POST",
+        body: form,
+      },
+    );
+  },
 };
