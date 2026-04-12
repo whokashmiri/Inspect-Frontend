@@ -241,16 +241,17 @@ const styles = StyleSheet.create({
   },
 
   primaryBtn: {
+    // width: "100%",
     backgroundColor: ACC,
-    paddingVertical: 14,
-    borderRadius: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
 
   primaryText: {
     color: "#000",
-    fontWeight: "800",
+    // fontWeight: "800",
     fontSize: 15,
   },
 
