@@ -149,6 +149,7 @@ async function requestForm<T>(
 export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
+  refreshExpiresAt?: string;
 }
 
 export interface User {

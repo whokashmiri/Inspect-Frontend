@@ -53,7 +53,8 @@
       ],
       "react-native-vision-camera",
       "expo-secure-store",
-      "expo-font"
+      "expo-font",
+      "expo-sqlite"
     ]
   }
 }

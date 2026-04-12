@@ -1,7 +1,8 @@
 
 //(app)/project.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Alert,
   View,
   Text,
   StyleSheet,
@@ -14,6 +15,8 @@ import {
 import { useRouter } from "expo-router";
 import { useAuth } from "../../api/AuthContext";
 import { projectApi, Project, ApiError } from "../../api/api";
+import { PendingItem } from "../offline/types";
+import { safeApiCall, getPending } from "../offline";
 import { useFonts } from "expo-font";
 import fonts from "../fonts/fonts";
 
@@ -36,10 +39,22 @@ export default function ProjectScreen() {
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [projectName, setProjectName] = useState("");
+  const [pendingProjects, setPendingProjects] = useState<PendingItem[]>([]);
 
   useEffect(() => {
     fetchProjects();
   }, []);
+
+  const refreshPendingProjects = useCallback(async () => {
+    const pending = await getPending("pending");
+    setPendingProjects(pending.filter((item) => item.type === "createProject"));
+  }, []);
+
+  useEffect(() => {
+    refreshPendingProjects();
+    const interval = setInterval(refreshPendingProjects, 5000);
+    return () => clearInterval(interval);
+  }, [refreshPendingProjects]);
 
   async function fetchProjects() {
     setLoading(true);
@@ -67,11 +82,19 @@ export default function ProjectScreen() {
     setGlobalError(null);
 
     try {
-      const res = await projectApi.create({
-        name: projectName.trim(),
-      });
+      const payload = { name: projectName.trim() };
+      const result = await safeApiCall(
+        () => projectApi.create(payload),
+        payload,
+        { type: "createProject" },
+      );
 
-      setProjects((prev) => [res.project, ...prev]);
+      if ("offline" in result) {
+        Alert.alert("Offline", result.message);
+      } else {
+        setProjects((prev) => [result.project, ...prev]);
+      }
+
       setProjectName("");
       setShowCreateModal(false);
       setFilter("New");
@@ -84,28 +107,54 @@ export default function ProjectScreen() {
     }
   }
 
+  const offlineProjectEntries = useMemo(() => {
+    return pendingProjects.map((item) => {
+      const payload = item.payload as { name?: string };
+      return {
+        id: item.id,
+        name: payload.name ?? "Offline project",
+        status: "New",
+        isFavorite: false,
+        createdAt: new Date(item.createdAt).toISOString(),
+        company: {
+          id: user?.companyName ?? "offline",
+          name: user?.companyName ?? "Offline project",
+        },
+        createdBy: {
+          id: user?.id ?? "offline",
+          fullName: user?.fullName ?? "You",
+          email: user?.email ?? "",
+        },
+      } as Project;
+    });
+  }, [pendingProjects, user]);
+
+  const combinedProjects = useMemo(() => {
+    return [...offlineProjectEntries, ...projects];
+  }, [offlineProjectEntries, projects]);
+
   const filteredProjects = useMemo(() => {
     if (filter === "Recent") {
-      return [...projects].sort(
+      return [...combinedProjects].sort(
         (a, b) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
     }
 
     if (filter === "New") {
-      return projects.filter((p) => p.status === "New");
+      return combinedProjects.filter((p) => p.status === "New");
     }
 
     if (filter === "Favorite") {
-      return projects.filter((p) => p.isFavorite);
+      return combinedProjects.filter((p) => p.isFavorite);
     }
 
     if (filter === "Done") {
-      return projects.filter((p) => p.status === "Done");
+      return combinedProjects.filter((p) => p.status === "Done");
     }
 
-    return projects;
-  }, [projects, filter]);
+    return combinedProjects;
+  }, [combinedProjects, filter]);
 
   function openProject(project: Project) {
     router.push({
