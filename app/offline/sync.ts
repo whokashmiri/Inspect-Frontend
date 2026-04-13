@@ -6,30 +6,80 @@ import NetInfo from '@react-native-community/netinfo';
 
 let isSyncing = false;
 
-async function patchPendingProjectRefs(localId: string, remoteId: string) {
-  const pendingItems = await getPending('pending');
+async function patchPendingProjectRefs(
+  localId: string,
+  remoteId: string,
+  pendingItems?: PendingItem[],
+) {
+  const queue = pendingItems ?? (await getPending('pending'));
   const updatePromises: Promise<void>[] = [];
 
-  for (const item of pendingItems) {
+  for (const item of queue) {
     const payload = item.payload as Record<string, unknown>;
     if (payload?.projectId === localId) {
-      updatePromises.push(updatePayload(item.id, { ...payload, projectId: remoteId }));
+      const updatedPayload = { ...payload, projectId: remoteId };
+      updatePromises.push(updatePayload(item.id, updatedPayload));
+      item.payload = updatedPayload;
     }
   }
 
   await Promise.all(updatePromises);
 }
 
-async function processQueueItem(item: PendingItem): Promise<boolean> {
+async function patchPendingFolderRefs(
+  localId: string,
+  remoteId: string,
+  pendingItems?: PendingItem[],
+) {
+  const queue = pendingItems ?? (await getPending('pending'));
+  const updatePromises: Promise<void>[] = [];
+
+  for (const item of queue) {
+    const payload = item.payload as Record<string, unknown>;
+    let updatedPayload = payload;
+    let changed = false;
+
+    if (payload?.parentId === localId) {
+      updatedPayload = { ...updatedPayload, parentId: remoteId };
+      changed = true;
+    }
+
+    if (payload?.folderId === localId) {
+      updatedPayload = { ...updatedPayload, folderId: remoteId };
+      changed = true;
+    }
+
+    if (changed) {
+      updatePromises.push(updatePayload(item.id, updatedPayload));
+      item.payload = updatedPayload;
+    }
+  }
+
+  await Promise.all(updatePromises);
+}
+
+async function processQueueItem(
+  item: PendingItem,
+  pendingItems?: PendingItem[],
+): Promise<boolean> {
   try {
     switch (item.type) {
       case 'createProject':
         const projectResult = await projectApi.create(item.payload);
-        await patchPendingProjectRefs(item.id, projectResult.project.id);
+        await patchPendingProjectRefs(
+          item.id,
+          projectResult.project.id,
+          pendingItems,
+        );
         break;
       
       case 'createFolder':
-        await projectContentApi.createFolder(item.payload);
+        const folderResult = await projectContentApi.createFolder(item.payload);
+        await patchPendingFolderRefs(
+          item.id,
+          folderResult.folder.id,
+          pendingItems,
+        );
         break;
       
       case 'createAsset': {
@@ -76,7 +126,7 @@ export async function syncQueue(): Promise<{ synced: number; failed: number; pen
     let synced = 0, failed = 0;
 
     for (const item of pending) {
-      const success = await processQueueItem(item);
+      const success = await processQueueItem(item, pending);
       if (success) synced++;
       else failed++;
       
