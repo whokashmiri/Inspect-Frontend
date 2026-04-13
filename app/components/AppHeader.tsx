@@ -159,11 +159,11 @@ function AppHeaderComponent({
                 value={user?.role}
                 icon="shield-checkmark-outline"
               />
-              <InfoRow
+              {/* <InfoRow
                 label="Status"
                 value="Authenticated"
                 icon="checkmark-circle-outline"
-              />
+              /> */}
             </View>
 
             {onLogout ? (
@@ -213,8 +213,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   logoMark: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     borderRadius: 14,
     backgroundColor: ACC,
     alignItems: "center",
@@ -222,8 +222,8 @@ const styles = StyleSheet.create({
     marginRight: 14,
   },
   logoInner: {
-    width: 18,
-    height: 18,
+    width: 15,
+    height: 15,
     borderRadius: 5,
     backgroundColor: "#000",
   },
@@ -302,21 +302,21 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   profileName: {
-    fontSize: 22,
-    fontWeight: "800",
+    fontSize: 15,
+    fontWeight: "500",
     color: "#fff",
     letterSpacing: -0.4,
   },
   profileRole: {
-    fontSize: 13,
+    fontSize: 8,
     color: "#777",
     marginTop: 4,
     textTransform: "uppercase",
     letterSpacing: 0.8,
   },
   closeBtn: {
-    width: 36,
-    height: 36,
+    width: 30,
+    height: 30,
     borderRadius: 12,
     backgroundColor: SURFACE,
     borderWidth: 1,
@@ -325,7 +325,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   infoGrid: {
-    gap: 12,
+    gap: 10,
   },
   infoCard: {
     backgroundColor: SURFACE,
@@ -342,14 +342,14 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   infoLabel: {
-    fontSize: 11,
+    fontSize: 8,
     fontWeight: "700",
     color: "#888",
     letterSpacing: 0.8,
     textTransform: "uppercase",
   },
   infoValue: {
-    fontSize: 15,
+    fontSize: 13,
     color: "#fff",
     fontWeight: "600",
   },
@@ -368,7 +368,7 @@ const styles = StyleSheet.create({
   },
   logoutButtonText: {
     fontSize: 16,
-    fontWeight: "800",
+    fontWeight: "600",
     color: "#000",
     letterSpacing: 0.2,
   },

@@ -1,7 +1,8 @@
-import CreateAssetWizardModal from "./asset/CreateAssetWizardModal";
+import CreateAssetWizardModal from "./utils/CreateAssetWizardModal";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useFonts } from "expo-font";
 import fonts from "../fonts/fonts";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   Alert,
@@ -14,6 +15,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  ActivityIndicator,
 } from "react-native";
 import {
   projectContentApi,
@@ -22,10 +24,9 @@ import {
 } from "../../api/api";
 import * as MediaLibrary from "expo-media-library";
 import { File, Directory, Paths } from "expo-file-system";
-import { safeApiCall, OfflineResult, getPendingCount, syncQueue } from "../offline";
+import { safeApiCall, getPendingCount, syncQueue } from "../offline";
 import { Ionicons } from "@expo/vector-icons";
-import { Entypo } from '@expo/vector-icons';
-
+import { Entypo } from "@expo/vector-icons";
 
 type RouteParams = {
   projectId: string;
@@ -51,6 +52,8 @@ export default function FolderAndAssetScreen({ route }: Props) {
     ...fonts.poppins,
     ...fonts.inter,
   });
+  const insets = useSafeAreaInsets();
+
   const { projectId, projectName } = route.params;
 
   const [folders, setFolders] = useState<FolderItem[]>([]);
@@ -59,7 +62,9 @@ export default function FolderAndAssetScreen({ route }: Props) {
   const [path, setPath] = useState<FolderPathItem[]>([
     { id: null, name: projectName },
   ]);
+
   const [loading, setLoading] = useState(true);
+  const [contentLoading, setContentLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
 
@@ -67,98 +72,85 @@ export default function FolderAndAssetScreen({ route }: Props) {
   const [assetModalVisible, setAssetModalVisible] = useState(false);
   const [downloadingAssetId, setDownloadingAssetId] = useState<string | null>(null);
   const [folderName, setFolderName] = useState("");
+  const [navigatingFolderId, setNavigatingFolderId] = useState<string | null>(null);
 
-  // Update pending count periodically
   useEffect(() => {
     const interval = setInterval(async () => {
       const count = await getPendingCount();
       setPendingCount(count);
     }, 5000);
+
     return () => clearInterval(interval);
   }, []);
 
-    const loadContents = useCallback(
-    async (folderId?: string | null) => {
-      const resolvedFolderId =
-        typeof folderId === "undefined" ? currentFolderId : folderId;
+ const loadContents = useCallback(
+  async (
+    folderId: string | null,
+    options?: { showSkeleton?: boolean }
+  ) => {
+    if (projectId.startsWith("offline_")) {
+      setFolders([]);
+      setAssets([]);
+      setLoading(false);
+      setRefreshing(false);
+      setContentLoading(false);
+      return;
+    }
 
-      if (projectId.startsWith("offline_")) {
+    try {
+      if (options?.showSkeleton) {
+        setContentLoading(true);
         setFolders([]);
         setAssets([]);
-        setLoading(false);
-        setRefreshing(false);
-        return;
       }
 
-      try {
-        const data = await projectContentApi.listContents(projectId, resolvedFolderId);
-        setFolders(data.folders || []);
-        setAssets(data.assets || []);
-      } catch (error: any) {
-        Alert.alert("Error", error.message || "Failed to load contents");
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
-      }
-    },
-    [projectId, currentFolderId]
-  );
+      const data = await projectContentApi.listContents(projectId, folderId);
+      setFolders(data.folders || []);
+      setAssets(data.assets || []);
+    } catch (error: any) {
+      Alert.alert("Error", error.message || "Failed to load contents");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+      setContentLoading(false);
+      setNavigatingFolderId(null);
+    }
+  },
+  [projectId]
+);
 
-useEffect(() => {
+  useEffect(() => {
     loadContents(null);
   }, [loadContents]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await syncQueue();  // Sync first
-    loadContents();
+    await syncQueue();
+    await loadContents(currentFolderId);
   };
 
   const openFolder = async (folder: FolderItem) => {
+    if (navigatingFolderId) return;
+
+    setNavigatingFolderId(folder.id);
     setCurrentFolderId(folder.id);
     setPath((prev) => [...prev, { id: folder.id, name: folder.name }]);
-    setLoading(true);
 
-    if (projectId.startsWith("offline_")) {
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const data = await projectContentApi.listContents(projectId, folder.id);
-      setFolders(data.folders || []);
-      setAssets(data.assets || []);
-    } catch (error: any) {
-      Alert.alert("Error", error.message || "Failed to open folder");
-      setLoading(false);
-    } finally {
-      setLoading(false);
-    }
+    await loadContents(folder.id, { showSkeleton: true });
   };
 
   const goToPathIndex = async (index: number) => {
+    if (navigatingFolderId) return;
+
     const nextPath = path.slice(0, index + 1);
     const selected = nextPath[nextPath.length - 1];
     const folderId = selected.id;
 
     setPath(nextPath);
     setCurrentFolderId(folderId);
-    setLoading(true);
+    setNavigatingFolderId(folderId ?? "root");
 
-    if (projectId.startsWith("offline_")) {
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const data = await projectContentApi.listContents(projectId, folderId);
-      setFolders(data.folders || []);
-      setAssets(data.assets || []);
-    } catch (error: any) {
-      Alert.alert("Error", error.message || "Failed to navigate");
-    } finally {
-      setLoading(false);
-    }
+    await loadContents(folderId, { showSkeleton: true });
   };
 
   const handleCreateFolder = async () => {
@@ -177,7 +169,7 @@ useEffect(() => {
       const result = await safeApiCall(
         () => projectContentApi.createFolder(payload),
         payload,
-        { type: "createFolder", projectId },
+        { type: "createFolder", projectId }
       );
 
       if ("offline" in result) {
@@ -188,13 +180,7 @@ useEffect(() => {
 
       setFolderName("");
       setFolderModalVisible(false);
-      setLoading(true);
-
-      if (!("offline" in result)) {
-        await loadContents(currentFolderId);
-      } else {
-        setLoading(false);
-      }
+      await loadContents(currentFolderId, { showSkeleton: true });
     } catch (error: any) {
       Alert.alert("Error", error.message || "Failed to create folder");
     }
@@ -215,7 +201,7 @@ useEffect(() => {
       const result = await safeApiCall(
         () => projectContentApi.createAsset(payload),
         payload,
-        { type: "createAsset", projectId },
+        { type: "createAsset", projectId }
       );
 
       if ("offline" in result) {
@@ -225,20 +211,13 @@ useEffect(() => {
       }
 
       setAssetModalVisible(false);
-      setLoading(true);
-
-      if (!("offline" in result)) {
-        await loadContents(currentFolderId);
-      } else {
-        setLoading(false);
-      }
+      await loadContents(currentFolderId, { showSkeleton: true });
     } catch (error: any) {
       Alert.alert("Error", error.message || "Failed to create asset");
     }
   };
 
   const downloadAssetImages = useCallback(async (asset: AssetItem) => {
-    // ... existing download logic unchanged ...
     if (!asset.images?.length) {
       Alert.alert("No images", "This asset has no images to download.");
       return;
@@ -248,7 +227,7 @@ useEffect(() => {
     if (permissions.status !== "granted") {
       Alert.alert(
         "Permission denied",
-        "Allow storage access so we can save the images to your gallery.",
+        "Allow storage access so we can save the images to your gallery."
       );
       return;
     }
@@ -286,13 +265,13 @@ useEffect(() => {
           album = await MediaLibrary.createAlbumAsync(
             GALLERY_ALBUM_NAME,
             savedAssets[0],
-            false,
+            false
           );
           if (savedAssets.length > 1) {
             await MediaLibrary.addAssetsToAlbumAsync(
               savedAssets.slice(1),
               album,
-              false,
+              false
             );
           }
         } else {
@@ -302,12 +281,12 @@ useEffect(() => {
 
       Alert.alert(
         "Downloaded",
-        `Saved ${savedAssets.length} image(s) to the ${GALLERY_ALBUM_NAME} album.`,
+        `Saved ${savedAssets.length} image(s) to the ${GALLERY_ALBUM_NAME} album.`
       );
     } catch (error: any) {
       Alert.alert(
         "Download failed",
-        error?.message || "Unable to save the asset images.",
+        error?.message || "Unable to save the asset images."
       );
     } finally {
       setDownloadingAssetId(null);
@@ -321,12 +300,26 @@ useEffect(() => {
     ];
   }, [folders, assets]);
 
+  const renderSkeletons = () => {
+    return Array.from({ length: 6 }).map((_, index) => (
+      <View key={index} style={styles.card}>
+        <View style={styles.skeletonIcon} />
+        <View style={styles.cardBody}>
+          <View style={styles.skeletonTitle} />
+          <View style={styles.skeletonMeta} />
+        </View>
+      </View>
+    ));
+  };
+
+  if (!loaded) return null;
+
   return (
     <SafeAreaView style={styles.flex}>
       <View style={styles.container}>
         <Text style={styles.title}>{projectName}</Text>
         <Text style={styles.subtitle}>Folders & Assets</Text>
-        
+
         {pendingCount > 0 && (
           <View style={styles.pendingBadge}>
             <Text style={styles.pendingText}>⏳ {pendingCount} offline items</Text>
@@ -350,10 +343,98 @@ useEffect(() => {
           ))}
         </View>
 
-        <View style={styles.actionsRow}>
+        {loading || contentLoading ? (
+          <View style={[styles.listContent, { paddingBottom: 120 + insets.bottom }]}>
+          {renderSkeletons()}
+          </View>
+        ) : (
+          <FlatList
+            data={items}
+            keyExtractor={(item) => `${item.itemType}-${item.id}`}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+            contentContainerStyle={[
+              styles.listContentWithBottomBar,
+              { paddingBottom: 120 + insets.bottom },
+              ]}
+            ListEmptyComponent={
+              <View style={styles.emptyWrap}>
+                <Text style={styles.emptyTitle}>No contents yet</Text>
+                <Text style={styles.emptyText}>
+                  Create a folder or add a new asset.
+                </Text>
+              </View>
+            }
+            renderItem={({ item }) => {
+              if (item.itemType === "folder") {
+                const isOpening = navigatingFolderId === item.id;
+
+                return (
+                  <TouchableOpacity
+                    style={styles.card}
+                    onPress={() => openFolder(item)}
+                    disabled={!!navigatingFolderId}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons
+                      name="folder-outline"
+                      size={22}
+                      color="#b5b0b0"
+                      style={styles.cardIcon}
+                    />
+
+                    <View style={styles.cardBody}>
+                      <Text style={styles.cardTitle}>{item.name}</Text>
+                      <Text style={styles.cardMeta}>Folder</Text>
+                    </View>
+
+                    {isOpening ? (
+                      <ActivityIndicator color={ACC} />
+                    ) : (
+                      <Ionicons name="chevron-forward" size={18} color="#777" />
+                    )}
+                  </TouchableOpacity>
+                );
+              }
+
+              return (
+                <View style={styles.card}>
+                  <View style={styles.cardBody}>
+                    <Text style={styles.cardTitle}>{item.name}</Text>
+                    <Text style={styles.cardMeta}>SN: {item.serialNumber}</Text>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.downloadBtn,
+                      downloadingAssetId === item.id && styles.downloadBtnDisabled,
+                    ]}
+                    onPress={() => downloadAssetImages(item)}
+                    disabled={downloadingAssetId === item.id}
+                  >
+                    {downloadingAssetId === item.id ? (
+                      <Entypo name="hour-glass" size={18} color="white" />
+                    ) : (
+                      <Entypo name="download" size={18} color="white" />
+                    )}
+                  </TouchableOpacity>
+                </View>
+              );
+            }}
+          />
+        )}
+
+        <View
+            style={[
+            styles.bottomActionBar,
+            { bottom: Math.max(insets.bottom, 12) + 8 },
+            ]}
+            >
           <TouchableOpacity
             style={styles.primaryBtn}
             onPress={() => setFolderModalVisible(true)}
+            activeOpacity={0.85}
           >
             <Text style={styles.primaryBtnText}>New Folder</Text>
           </TouchableOpacity>
@@ -361,72 +442,11 @@ useEffect(() => {
           <TouchableOpacity
             style={styles.secondaryBtn}
             onPress={() => setAssetModalVisible(true)}
+            activeOpacity={0.85}
           >
             <Text style={styles.secondaryBtnText}>New Asset</Text>
           </TouchableOpacity>
         </View>
-
-        <FlatList
-          data={items}
-          keyExtractor={(item) => `${item.itemType}-${item.id}`}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-          contentContainerStyle={styles.listContent}
-          ListEmptyComponent={
-            !loading ? (
-              <View style={styles.emptyWrap}>
-                <Text style={styles.emptyTitle}>No contents yet</Text>
-                <Text style={styles.emptyText}>
-                  Create a folder or add a new asset.
-                </Text>
-              </View>
-            ) : null
-          }
-          renderItem={({ item }) => {
-            if (item.itemType === "folder") {
-              return (
-                <TouchableOpacity
-                  style={styles.card}
-                  onPress={() => openFolder(item)}
-                >
-                  <Ionicons name="folder-outline" size={22} color="#b5b0b0" style={styles.cardIcon} />
-                  
-                  <View style={styles.cardBody}>
-                    <Text style={styles.cardTitle}>{item.name}</Text>
-                    <Text style={styles.cardMeta}>Folder</Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            }
-
-            return (
-              <View style={styles.card}>
-                {/* <Text style={styles.cardIcon}>📦</Text> */}
-                {/* <Ionicons name="log-out-outline" size={18} color="#b5b0b0" /> */}
-                <View style={styles.cardBody}>
-                  <Text style={styles.cardTitle}>{item.name}</Text>
-                  <Text style={styles.cardMeta}>SN: {item.serialNumber}</Text>
-                </View>
-                <TouchableOpacity
-                  style={[
-                    styles.downloadBtn,
-                    downloadingAssetId === item.id && styles.downloadBtnDisabled,
-                  ]}
-                  onPress={() => downloadAssetImages(item)}
-                  disabled={downloadingAssetId === item.id}
-                >
-                  {downloadingAssetId === item.id ? (
-                  <Entypo name="hour-glass" size={18} color="white" />
-                  ) : (
-                  <Entypo name="download" size={18} color="white" />
-                )}
-
-                </TouchableOpacity>
-              </View>
-            );
-          }}
-        />
 
         <Modal
           visible={folderModalVisible}
@@ -494,71 +514,44 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   pendingBadge: {
-    flexDirection: 'row',
-    backgroundColor: '#444',
+    flexDirection: "row",
+    backgroundColor: "#444",
     padding: 8,
     borderRadius: 8,
     marginBottom: 10,
-    alignItems: 'center',
+    alignItems: "center",
   },
   pendingText: {
-    color: '#D4FF00',
+    color: "#D4FF00",
     fontSize: 12,
     flex: 1,
   },
   syncBtn: {
-    backgroundColor: '#D4FF00',
+    backgroundColor: "#D4FF00",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6,
   },
   syncBtnText: {
-    color: '#000',
+    color: "#000",
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   breadcrumbRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    marginBottom: 18,
+    marginBottom: 12,
   },
   breadcrumbText: {
     color: ACC,
     fontSize: 10,
     fontWeight: "600",
   },
-  actionsRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginBottom: 10,
-  },
-  primaryBtn: {
-    flex: 1,
-    backgroundColor: ACC,
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  primaryBtnText: {
-    color: "#000",
-    fontSize: 12,
-    fontFamily: fonts.inter.semiBold as unknown as string,
-  },
-  secondaryBtn: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: ACC,
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  secondaryBtnText: {
-    color: ACC,
-    fontSize: 10,
-    fontFamily: fonts.inter.semiBold as unknown as string,
-  },
   listContent: {
-    paddingBottom: 30,
+    paddingBottom: 120,
+  },
+  listContentWithBottomBar: {
+    paddingBottom: 120,
   },
   card: {
     backgroundColor: "#111",
@@ -571,7 +564,6 @@ const styles = StyleSheet.create({
     borderColor: "#1f1f1f",
   },
   cardIcon: {
-    fontSize: 24,
     marginRight: 14,
   },
   cardBody: {
@@ -581,6 +573,11 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 13,
     fontWeight: "400",
+  },
+  cardMeta: {
+    color: "#888",
+    marginTop: 4,
+    fontSize: 13,
   },
   downloadBtn: {
     padding: 6,
@@ -592,15 +589,6 @@ const styles = StyleSheet.create({
   },
   downloadBtnDisabled: {
     opacity: 0.4,
-  },
-  downloadIcon: {
-    color: ACC,
-    fontSize: 20,
-  },
-  cardMeta: {
-    color: "#888",
-    marginTop: 4,
-    fontSize: 13,
   },
   emptyWrap: {
     paddingTop: 60,
@@ -614,13 +602,70 @@ const styles = StyleSheet.create({
   emptyText: {
     color: "#888",
     marginTop: 8,
-    fontSize: 8,
+    fontSize: 10,
+  },
+  bottomActionBar: {
+     position: "absolute",
+    left: 20,
+    right: 20,
+    flexDirection: "row",
+    gap: 10,
+    backgroundColor: "#0b0b0b",
+    borderWidth: 1,
+    borderColor: "#1f1f1f",
+    borderRadius: 18,
+    padding: 10,
+  },
+  primaryBtn: {
+    flex: 1,
+    backgroundColor: ACC,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  primaryBtnText: {
+    color: "#000",
+    fontSize: 13,
+    fontFamily: fonts.inter.semiBold as unknown as string,
+  },
+  secondaryBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: ACC,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    backgroundColor: "#111",
+  },
+  secondaryBtnText: {
+    color: ACC,
+    fontSize: 13,
+    fontFamily: fonts.inter.semiBold as unknown as string,
+  },
+  skeletonIcon: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    backgroundColor: "#222",
+    marginRight: 14,
+  },
+  skeletonTitle: {
+    width: "60%",
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: "#222",
+    marginBottom: 8,
+  },
+  skeletonMeta: {
+    width: "35%",
+    height: 10,
+    borderRadius: 6,
+    backgroundColor: "#1b1b1b",
   },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.7)",
-    justifyContent: "center",
-    marginBottom: 50,
+    justifyContent: "flex-end",
   },
   modalCard: {
     backgroundColor: "#111",
