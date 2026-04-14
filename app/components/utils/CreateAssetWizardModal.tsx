@@ -9,6 +9,7 @@ import {
   Alert,
   Image,
   ScrollView,
+   Platform,
   useWindowDimensions,
 } from "react-native";
 import { Picker } from "@react-native-picker/picker";
@@ -24,6 +25,7 @@ type ExtendedAssetDraft = AssetDraft & {
   condition?: AssetCondition;
   assetType?: AssetType;
   brand?: string;
+  model?: string;
   manufactureYear?: string;
   kilometersDriven?: string;
 };
@@ -52,6 +54,7 @@ export default function CreateAssetWizardModal({
     condition: "",
     assetType: "Other",
     brand: "",
+    model: "",
     manufactureYear: "",
     kilometersDriven: "",
   });
@@ -279,7 +282,7 @@ const stopRecording = async () => {
                       dropdownIconColor="#fff"
                       style={styles.picker}
                     >
-                      <Picker.Item label="Condition (Optional)" value="" />
+                      <Picker.Item label="Condition" value="" />
                       <Picker.Item label="New" value="New" />
                       <Picker.Item label="Used" value="Used" />
                       <Picker.Item label="Damaged" value="Damaged" />
@@ -311,6 +314,15 @@ const stopRecording = async () => {
                         value={draft.brand}
                         onChangeText={(t) =>
                           setDraft({ ...draft, brand: t })
+                        }
+                        style={styles.input}
+                      />
+                        <TextInput
+                        placeholder="Model"
+                        placeholderTextColor="#666"
+                        value={draft.model}
+                        onChangeText={(t) =>
+                          setDraft({ ...draft, model: t })
                         }
                         style={styles.input}
                       />
@@ -552,11 +564,17 @@ const styles = StyleSheet.create({
     borderColor: BORDER,
     borderRadius: 14,
     marginBottom: 12,
-    overflow: "hidden",
+    height: 48,
+    // overflow: "hidden",
   },
 
   picker: {
     color: "#fff",
+        height: 58,
+        width: "100%",
+        overflow: "hidden",
+        marginLeft: 0,
+        marginTop: Platform.OS === "android" ? -4 : 0,
   },
 
   imageActionRow: {

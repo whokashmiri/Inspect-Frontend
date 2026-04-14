@@ -286,6 +286,7 @@ export interface AssetItem {
   condition: "" | "New" | "Used" | "Damaged" | null;
   assetType: "Vehicle" | "Other";
   brand: string | null;
+  model: string | null;
   manufactureYear: string | null;
   kilometersDriven: string | null;
 
@@ -353,6 +354,7 @@ export const projectContentApi = {
     condition?: "" | "New" | "Used" | "Damaged" | null;
     assetType?: "Vehicle" | "Other";
     brand?: string | null;
+    model?: string | null;
     manufactureYear?: string | null;
     kilometersDriven?: string | null;
   }) => {
@@ -378,6 +380,9 @@ export const projectContentApi = {
 
     if (payload.brand?.trim()) {
       form.append("brand", payload.brand.trim());
+    }
+    if (payload.model?.trim()) {
+      form.append("model", payload.model.trim());
     }
 
     if (payload.manufactureYear?.trim()) {
