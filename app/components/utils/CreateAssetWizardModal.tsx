@@ -502,13 +502,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 4,
+    marginBottom: 2,
   },
 
   title: {
     color: "#fff",
-    fontSize: 20,
-    fontWeight: "700",
+    fontSize: 15,
+    fontWeight: "500",
   },
 
   closeBtn: {
@@ -524,22 +524,22 @@ const styles = StyleSheet.create({
 
   closeText: {
     color: "#fff",
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "700",
   },
 
   step: {
     color: "#777",
-    fontSize: 12,
+    fontSize: 10,
     marginTop: 2,
-    marginBottom: 16,
+    marginBottom: 10,
   },
 
   label: {
     color: "#fff",
-    fontSize: 14,
+    fontSize: 12,
     marginBottom: 10,
-    fontWeight: "600",
+    fontWeight: "500",
   },
 
   input: {
@@ -579,7 +579,7 @@ const styles = StyleSheet.create({
 
   imageActionRow: {
     flexDirection: "row",
-    gap: 10,
+    gap: 8,
     marginBottom: 4,
   },
 
@@ -639,8 +639,8 @@ const styles = StyleSheet.create({
 
   primaryText: {
     color: "#000",
-    fontSize: 15,
-    fontWeight: "700",
+    fontSize: 13,
+    fontWeight: "500",
   },
 
   darkBtn: {
@@ -656,8 +656,8 @@ const styles = StyleSheet.create({
 
   darkBtnText: {
     color: "#fff",
-    fontSize: 14,
-    fontWeight: "600",
+    fontSize: 13,
+    fontWeight: "500",
   },
 
   secondaryBtn: {
