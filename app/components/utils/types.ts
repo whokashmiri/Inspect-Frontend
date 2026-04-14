@@ -4,10 +4,25 @@ export type UploadFileInput = {
   type: string;
 };
 
+export type AssetCondition = "" | "New" | "Used" | "Damaged";
+export type AssetType = "Vehicle" | "Other";
+
 export type AssetDraft = {
-  images: UploadFileInput[];
-  serialNumber: string;
+  images: Array<{
+    uri: string;
+    name: string;
+    type: string;
+  }>;
   name: string;
   writtenDescription: string;
-  voiceNotes: UploadFileInput[];
+  voiceNotes: Array<{
+    uri: string;
+    name: string;
+    type: string;
+  }>;
+  condition?: AssetCondition;
+  assetType?: AssetType;
+  brand?: string;
+  manufactureYear?: string;
+  kilometersDriven?: string;
 };

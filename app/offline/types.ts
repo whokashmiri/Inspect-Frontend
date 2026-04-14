@@ -1,16 +1,16 @@
-export type OfflineAction = 
-  | 'createProject' 
-  | 'createFolder' 
-  | 'createAsset';
+export type OfflineAction =
+  | "createProject"
+  | "createFolder"
+  | "createAsset";
 
 export interface PendingItem {
   id: string;
   type: OfflineAction;
-  payload: any;  // Exact input to API function (CreateProjectPayload | CreateFolderPayload | CreateAssetPayload)
-  projectId?: string;  // For UI grouping/context
-  localImageUris?: string[];  // Local file paths for images/voice (pre-upload)
-  createdAt: number;  // timestamp
-  status: 'pending' | 'synced' | 'failed';
+  payload: Record<string, any>;
+  projectId?: string;
+  localMediaUris?: string[];
+  createdAt: number;
+  status: "pending" | "synced" | "failed";
   retryCount?: number;
   lastAttempt?: number | null;
 }

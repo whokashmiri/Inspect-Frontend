@@ -95,54 +95,31 @@ async function request<T>(
   return data as T;
 }
 
-async function requestForm<T>(
-  path: string,
-  { method = "POST", body, auth = true }: FormRequestOptions = {},
-  retry = true,
-): Promise<T> {
-  const headers: Record<string, string> = {};
+export async function requestForm<T>(url: string, options: {
+  method?: string;
+  body: FormData;
+}): Promise<T> {
+  const token = await tokenStore.getToken();
 
-  if (auth) {
-    const token = await tokenStore.getToken();
-    if (token) headers.Authorization = `Bearer ${token}`;
-  }
-
-  const res = await fetch(`${BASE_URL}${path}`, {
-    method,
-    headers,
-    body,
+  const response = await fetch(`${BASE_URL}${url}`, {
+    method: options.method || "POST",
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: options.body,
   });
 
-  let data: any;
-  try {
-    data = await res.json();
-  } catch {
-    data = null;
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const message =
+      typeof data?.message === "string"
+        ? data.message
+        : data?.message?.toString() ?? "Invalid request";
+    throw new ApiError(response.status, message, data);
   }
 
-  if (res.status === 401 && auth && retry) {
-    try {
-      const refreshToken = await tokenStore.getRefresh();
-      if (!refreshToken) throw new Error("No refresh token");
-
-      const newTokens = await authApi.refreshToken(refreshToken);
-
-      await tokenStore.setToken(newTokens.accessToken);
-      await tokenStore.setRefresh(newTokens.refreshToken);
-
-      return requestForm<T>(path, { method, body, auth }, false);
-    } catch {
-      await tokenStore.clear();
-      throw new ApiError(401, "Session expired. Please login again.");
-    }
-  }
-
-  if (!res.ok) {
-    const message = data?.message ?? `HTTP ${res.status}`;
-    throw new ApiError(res.status, message, data);
-  }
-
-  return data as T;
+  return data;
 }
 
 // ─── Auth endpoints ─────────────────────────────────────────────────────────
@@ -300,17 +277,24 @@ export interface AssetVoiceNoteItem {
 export interface AssetItem {
   id: string;
   name: string;
-  serialNumber: string;
   writtenDescription: string | null;
   folderId: string | null;
   projectId: string;
   createdAt: string;
   updatedAt: string;
+
+  condition: "" | "New" | "Used" | "Damaged" | null;
+  assetType: "Vehicle" | "Other";
+  brand: string | null;
+  manufactureYear: string | null;
+  kilometersDriven: string | null;
+
   createdBy: {
     id: string;
     fullName: string;
     email: string;
   };
+
   images: AssetImageItem[];
   voiceNotes: AssetVoiceNoteItem[];
 }
@@ -362,16 +346,19 @@ export const projectContentApi = {
   createAsset: async (payload: {
     projectId: string;
     name: string;
-    serialNumber: string;
     writtenDescription?: string | null;
     folderId?: string | null;
     images?: UploadFileInput[];
     voiceNotes?: UploadFileInput[];
+    condition?: "" | "New" | "Used" | "Damaged" | null;
+    assetType?: "Vehicle" | "Other";
+    brand?: string | null;
+    manufactureYear?: string | null;
+    kilometersDriven?: string | null;
   }) => {
     const form = new FormData();
 
     form.append("name", payload.name);
-    form.append("serialNumber", payload.serialNumber);
 
     if (payload.writtenDescription?.trim()) {
       form.append("writtenDescription", payload.writtenDescription.trim());
@@ -379,6 +366,26 @@ export const projectContentApi = {
 
     if (payload.folderId) {
       form.append("folderId", payload.folderId);
+    }
+
+    if (payload.condition) {
+      form.append("condition", payload.condition);
+    }
+
+    if (payload.assetType) {
+      form.append("assetType", payload.assetType);
+    }
+
+    if (payload.brand?.trim()) {
+      form.append("brand", payload.brand.trim());
+    }
+
+    if (payload.manufactureYear?.trim()) {
+      form.append("manufactureYear", payload.manufactureYear.trim());
+    }
+
+    if (payload.kilometersDriven?.trim()) {
+      form.append("kilometersDriven", payload.kilometersDriven.trim());
     }
 
     for (const image of payload.images ?? []) {

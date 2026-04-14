@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useFonts } from "expo-font";
 import fonts from "../fonts/fonts";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {AssetDraft} from "./utils/types";
 
 import {
   Alert,
@@ -186,113 +187,44 @@ export default function FolderAndAssetScreen({ route }: Props) {
     }
   };
 
-  const handleCreateAsset = async (draft: any) => {
-    const payload = {
-      projectId,
-      name: draft.name,
-      serialNumber: draft.serialNumber,
-      writtenDescription: draft.writtenDescription || null,
-      folderId: currentFolderId || undefined,
-      images: draft.images || [],
-      voiceNotes: draft.voiceNotes || [],
-    };
-
-    try {
-      const result = await safeApiCall(
-        () => projectContentApi.createAsset(payload),
-        payload,
-        { type: "createAsset", projectId }
-      );
-
-      if ("offline" in result) {
-        Alert.alert("Offline", result.message);
-      } else {
-        Alert.alert("Success", "Asset created");
-      }
-
-      setAssetModalVisible(false);
-      await loadContents(currentFolderId, { showSkeleton: true });
-    } catch (error: any) {
-      Alert.alert("Error", error.message || "Failed to create asset");
-    }
+ const handleCreateAsset = async (draft: AssetDraft) => {
+  const payload = {
+    projectId,
+    name: draft.name,
+    writtenDescription: draft.writtenDescription || null,
+    folderId: currentFolderId || undefined,
+    images: draft.images || [],
+    voiceNotes: draft.voiceNotes || [],
+    condition: draft.condition || null,
+    assetType: draft.assetType || "Other",
+    brand: draft.assetType === "Vehicle" ? draft.brand || null : null,
+    manufactureYear:
+      draft.assetType === "Vehicle" ? draft.manufactureYear || null : null,
+    kilometersDriven:
+      draft.assetType === "Vehicle" ? draft.kilometersDriven || null : null,
   };
 
-  const downloadAssetImages = useCallback(async (asset: AssetItem) => {
-    if (!asset.images?.length) {
-      Alert.alert("No images", "This asset has no images to download.");
-      return;
+  try {
+    const result = await safeApiCall(
+      () => projectContentApi.createAsset(payload),
+      payload,
+      { type: "createAsset", projectId }
+    );
+
+    if ("offline" in result) {
+      Alert.alert("Offline", result.message);
+    } else {
+      Alert.alert("Success", "Asset created");
     }
 
-    const permissions = await MediaLibrary.requestPermissionsAsync();
-    if (permissions.status !== "granted") {
-      Alert.alert(
-        "Permission denied",
-        "Allow storage access so we can save the images to your gallery."
-      );
-      return;
-    }
+    setAssetModalVisible(false);
+    await loadContents(currentFolderId, { showSkeleton: true });
+  } catch (error: any) {
+    Alert.alert("Error", error.message || "Failed to create asset");
+  }
+};
 
-    const downloadDirectory = new Directory(Paths.document, "asset-downloads");
-
-    setDownloadingAssetId(asset.id);
-    try {
-      await downloadDirectory.create({
-        intermediates: true,
-        idempotent: true,
-      });
-
-      const downloadedFiles: File[] = [];
-      for (const [index, image] of asset.images.entries()) {
-        const matched = image.url.match(/\\.([a-z0-9]+)(?:[?#]|$)/i);
-        const extension = matched ? matched[1] : "jpg";
-        const filename = `${asset.serialNumber || asset.id}_${index + 1}.${extension}`;
-        const destination = new File(downloadDirectory, filename);
-        const downloadedFile = await File.downloadFileAsync(image.url, destination, {
-          idempotent: true,
-        });
-        downloadedFiles.push(downloadedFile);
-      }
-
-      const savedAssets = [];
-      for (const downloadedFile of downloadedFiles) {
-        const mediaAsset = await MediaLibrary.createAssetAsync(downloadedFile.uri);
-        savedAssets.push(mediaAsset);
-      }
-
-      if (savedAssets.length) {
-        let album = await MediaLibrary.getAlbumAsync(GALLERY_ALBUM_NAME);
-        if (!album) {
-          album = await MediaLibrary.createAlbumAsync(
-            GALLERY_ALBUM_NAME,
-            savedAssets[0],
-            false
-          );
-          if (savedAssets.length > 1) {
-            await MediaLibrary.addAssetsToAlbumAsync(
-              savedAssets.slice(1),
-              album,
-              false
-            );
-          }
-        } else {
-          await MediaLibrary.addAssetsToAlbumAsync(savedAssets, album, false);
-        }
-      }
-
-      Alert.alert(
-        "Downloaded",
-        `Saved ${savedAssets.length} image(s) to the ${GALLERY_ALBUM_NAME} album.`
-      );
-    } catch (error: any) {
-      Alert.alert(
-        "Download failed",
-        error?.message || "Unable to save the asset images."
-      );
-    } finally {
-      setDownloadingAssetId(null);
-    }
-  }, []);
-
+ 
   const items = useMemo(() => {
     return [
       ...folders.map((folder) => ({ ...folder, itemType: "folder" as const })),
@@ -402,7 +334,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
                 <View style={styles.card}>
                   <View style={styles.cardBody}>
                     <Text style={styles.cardTitle}>{item.name}</Text>
-                    <Text style={styles.cardMeta}>SN: {item.serialNumber}</Text>
+                    {/* <Text style={styles.cardMeta}>SN: {item.serialNumber}</Text> */}
                   </View>
 
                   <TouchableOpacity
@@ -410,7 +342,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
                       styles.downloadBtn,
                       downloadingAssetId === item.id && styles.downloadBtnDisabled,
                     ]}
-                    onPress={() => downloadAssetImages(item)}
+                    // onPress={() => downloadAssetImages(item)}
                     disabled={downloadingAssetId === item.id}
                   >
                     {downloadingAssetId === item.id ? (
