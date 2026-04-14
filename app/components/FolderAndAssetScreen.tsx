@@ -1,5 +1,5 @@
 import CreateAssetWizardModal from "./utils/CreateAssetWizardModal";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFonts } from "expo-font";
 import fonts from "../fonts/fonts";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -17,14 +17,17 @@ import {
   TouchableOpacity,
   View,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from "react-native";
 import {
   projectContentApi,
   AssetItem,
   FolderItem,
 } from "../../api/api";
-import * as MediaLibrary from "expo-media-library";
-import { File, Directory, Paths } from "expo-file-system";
+
 import { safeApiCall, getPendingCount, syncQueue } from "../offline";
 import { Ionicons } from "@expo/vector-icons";
 import { Entypo } from "@expo/vector-icons";
@@ -46,9 +49,11 @@ type Props = {
 };
 
 const ACC = "#D4FF00";
-const GALLERY_ALBUM_NAME = "BatchCam Assets";
 
 export default function FolderAndAssetScreen({ route }: Props) {
+  const folderInputRef = useRef<TextInput>(null);
+
+
   const [loaded] = useFonts({
     ...fonts.poppins,
     ...fonts.inter,
@@ -74,6 +79,16 @@ export default function FolderAndAssetScreen({ route }: Props) {
   const [downloadingAssetId, setDownloadingAssetId] = useState<string | null>(null);
   const [folderName, setFolderName] = useState("");
   const [navigatingFolderId, setNavigatingFolderId] = useState<string | null>(null);
+
+    useEffect(() => {
+  if (folderModalVisible) {
+    const timer = setTimeout(() => {
+      folderInputRef.current?.focus();
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }
+}, [folderModalVisible]);
 
   useEffect(() => {
     const interval = setInterval(async () => {
@@ -380,39 +395,64 @@ export default function FolderAndAssetScreen({ route }: Props) {
           </TouchableOpacity>
         </View>
 
-        <Modal
-          visible={folderModalVisible}
-          animationType="slide"
-          transparent
-          onRequestClose={() => setFolderModalVisible(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>Create New Folder</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Folder Name"
-                placeholderTextColor="#777"
-                value={folderName}
-                onChangeText={setFolderName}
-              />
-              <View style={styles.modalActions}>
-                <TouchableOpacity
-                  style={styles.modalCancelBtn}
-                  onPress={() => setFolderModalVisible(false)}
-                >
-                  <Text style={styles.modalCancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.modalSaveBtn}
-                  onPress={handleCreateFolder}
-                >
-                  <Text style={styles.modalSaveText}>Create</Text>
-                </TouchableOpacity>
-              </View>
+
+
+            <Modal
+  visible={folderModalVisible}
+  animationType="slide"
+  transparent
+  statusBarTranslucent
+  onRequestClose={() => setFolderModalVisible(false)}
+>
+  <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+    <View style={styles.modalOverlay}>
+      <KeyboardAvoidingView
+        style={styles.modalKeyboardWrap}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
+      >
+        <TouchableWithoutFeedback>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Create New Folder</Text>
+
+            <TextInput
+              ref={folderInputRef}
+              style={styles.input}
+              placeholder="Folder Name"
+              placeholderTextColor="#777"
+              value={folderName}
+              onChangeText={setFolderName}
+              returnKeyType="done"
+              autoFocus
+              blurOnSubmit={false}
+              onSubmitEditing={handleCreateFolder}
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setFolderModalVisible(false);
+                }}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalSaveBtn}
+                onPress={handleCreateFolder}
+              >
+                <Text style={styles.modalSaveText}>Create</Text>
+              </TouchableOpacity>
             </View>
           </View>
-        </Modal>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
+    </View>
+  </TouchableWithoutFeedback>
+</Modal>
+
 
         <CreateAssetWizardModal
           visible={assetModalVisible}
@@ -594,17 +634,27 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: "#1b1b1b",
   },
+
+
   modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
-    justifyContent: "flex-end",
-  },
-  modalCard: {
-    backgroundColor: "#111",
-    padding: 15,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-  },
+  flex: 1,
+  backgroundColor: "rgba(0,0,0,0.7)",
+},
+
+modalKeyboardWrap: {
+  flex: 1,
+  justifyContent: "flex-end",
+},
+
+modalCard: {
+  backgroundColor: "#111",
+  padding: 15,
+  paddingBottom: 18,
+  borderTopLeftRadius: 20,
+  borderTopRightRadius: 20,
+  borderWidth: 1,
+  borderColor: "#1f1f1f",
+},
   modalTitle: {
     color: "#fff",
     fontSize: 15,
