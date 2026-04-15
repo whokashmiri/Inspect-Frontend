@@ -21,6 +21,7 @@ import {
   Platform,
   TouchableWithoutFeedback,
   Keyboard,
+  Dimensions,
 } from "react-native";
 import {
   projectContentApi,
@@ -48,9 +49,28 @@ type Props = {
 };
 
 const ACC = "#D4FF00";
+const NUM_COLUMNS = 4;
+const SCREEN_WIDTH = Dimensions.get("window").width;
+const HORIZONTAL_PADDING = 15 * 2; // container horizontal padding
+const GRID_GAP = 5;
+const ITEM_SIZE =
+  (SCREEN_WIDTH - HORIZONTAL_PADDING * 2 - GRID_GAP * (NUM_COLUMNS - 1)) /
+  NUM_COLUMNS;
 
 export default function FolderAndAssetScreen({ route }: Props) {
   const folderInputRef = useRef<TextInput>(null);
+
+  const openFolderModal = () => {
+  setFolderModalVisible(true);
+  setFolderName("");
+  
+
+  requestAnimationFrame(() => {
+    setTimeout(() => {
+      folderInputRef.current?.focus();
+    }, 350);
+  });
+};
 
   const [loaded] = useFonts({
     ...fonts.poppins,
@@ -79,15 +99,6 @@ export default function FolderAndAssetScreen({ route }: Props) {
   const [folderName, setFolderName] = useState("");
   const [navigatingFolderId, setNavigatingFolderId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (folderModalVisible) {
-      const timer = setTimeout(() => {
-        folderInputRef.current?.focus();
-      }, 250);
-
-      return () => clearTimeout(timer);
-    }
-  }, [folderModalVisible]);
 
   useEffect(() => {
     const interval = setInterval(async () => {
@@ -284,12 +295,11 @@ export default function FolderAndAssetScreen({ route }: Props) {
   }, [folders, assets]);
 
   const renderSkeletons = () => {
-    return Array.from({ length: 6 }).map((_, index) => (
-      <View key={index} style={styles.card}>
-        <View style={styles.skeletonIcon} />
-        <View style={styles.cardBody}>
-          <View style={styles.skeletonTitle} />
-          <View style={styles.skeletonMeta} />
+    return Array.from({ length: 10 }).map((_, index) => (
+      <View key={index} style={styles.gridItem}>
+        <View style={styles.gridCard}>
+          <View style={styles.skeletonIconGrid} />
+          <View style={styles.skeletonTitleGrid} />
         </View>
       </View>
     ));
@@ -328,12 +338,14 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
         {loading || contentLoading ? (
           <View style={[styles.listContent, { paddingBottom: 120 + insets.bottom }]}>
-            {renderSkeletons()}
+            <View style={styles.gridWrap}>{renderSkeletons()}</View>
           </View>
         ) : (
           <FlatList
             data={items}
             keyExtractor={(item) => `${item.itemType}-${item.id}`}
+            numColumns={NUM_COLUMNS}
+            columnWrapperStyle={styles.columnWrapper}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
             }
@@ -354,46 +366,52 @@ export default function FolderAndAssetScreen({ route }: Props) {
                 const isOpening = navigatingFolderId === item.id;
 
                 return (
-                  <TouchableOpacity
-                    style={styles.card}
-                    onPress={() => openFolder(item)}
-                    disabled={!!navigatingFolderId}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons
-                      name="folder-outline"
-                      size={22}
-                      color="#b5b0b0"
-                      style={styles.cardIcon}
-                    />
+                  <View style={styles.gridItem}>
+                    <TouchableOpacity
+                      style={styles.gridCard}
+                      onPress={() => openFolder(item)}
+                      disabled={!!navigatingFolderId}
+                      activeOpacity={0.85}
+                    >
+                      <View style={styles.iconWrap}>
+                        {isOpening ? (
+                          <ActivityIndicator size="small" color={ACC} />
+                        ) : (
+                          <Ionicons name="folder" size={26} color={ACC} />
+                        )}
+                      </View>
 
-                    <View style={styles.cardBody}>
-                      <Text style={styles.cardTitle}>{item.name}</Text>
-                      <Text style={styles.cardMeta}>Folder</Text>
-                    </View>
-
-                    {isOpening ? (
-                      <ActivityIndicator color={ACC} />
-                    ) : (
-                      <Ionicons name="chevron-forward" size={18} color="#777" />
-                    )}
-                  </TouchableOpacity>
+                      <Text style={styles.gridTitle} numberOfLines={2}>
+                        {item.name}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 );
               }
 
               return (
-                <TouchableOpacity
-                  style={styles.card}
-                  onPress={() => openEditAsset(item)}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.cardBody}>
-                    <Text style={styles.cardTitle}>{item.name}</Text>
-                    <Text style={styles.cardMeta}>Tap to edit asset</Text>
-                  </View>
+                <View style={styles.gridItem}>
+                  <TouchableOpacity
+                    style={styles.gridCard}
+                    onPress={() => openEditAsset(item)}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.iconWrap}>
+                      <Ionicons name="cube-outline" size={24} color="#fff" />
+                    </View>
 
-                  <Ionicons name="create-outline" size={18} color={ACC} />
-                </TouchableOpacity>
+                    <Text style={styles.gridTitle} numberOfLines={2}>
+                      {item.name}
+                    </Text>
+
+                    <Ionicons
+                      name="create-outline"
+                      size={14}
+                      color={ACC}
+                      style={styles.editBadge}
+                    />
+                  </TouchableOpacity>
+                </View>
               );
             }}
           />
@@ -401,13 +419,13 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
         <View
           style={[
-            styles.bottomActionBar,
-            { bottom: Math.max(insets.bottom, 12) + 8 },
+          styles.bottomActionBar,
+          {bottom: Math.max(insets.bottom, 0) - 30 },
           ]}
-        >
+          >
           <TouchableOpacity
             style={styles.primaryBtn}
-            onPress={() => setFolderModalVisible(true)}
+           onPress={openFolderModal}
             activeOpacity={0.85}
           >
             <Text style={styles.primaryBtnText}>New Folder</Text>
@@ -427,10 +445,15 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
         <Modal
           visible={folderModalVisible}
-          animationType="slide"
+          animationType="fade"
           transparent
           statusBarTranslucent
           onRequestClose={() => setFolderModalVisible(false)}
+          onShow={() => {
+          setTimeout(() => {
+          folderInputRef.current?.focus();
+          }, 80);
+          }}
         >
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <View style={styles.modalOverlay}>
@@ -443,18 +466,19 @@ export default function FolderAndAssetScreen({ route }: Props) {
                   <View style={styles.modalCard}>
                     <Text style={styles.modalTitle}>Create New Folder</Text>
 
-                    <TextInput
-                      ref={folderInputRef}
-                      style={styles.input}
-                      placeholder="Folder Name"
-                      placeholderTextColor="#777"
-                      value={folderName}
-                      onChangeText={setFolderName}
-                      returnKeyType="done"
-                      autoFocus
-                      blurOnSubmit={false}
-                      onSubmitEditing={handleCreateFolder}
-                    />
+                  <TextInput
+                    ref={folderInputRef}
+                    style={styles.input}
+                    placeholder="Folder Name"
+                    placeholderTextColor="#777"
+                    value={folderName}
+                    onChangeText={setFolderName}
+                    returnKeyType="done"
+                   
+                    blurOnSubmit={false}
+                    showSoftInputOnFocus
+                    onSubmitEditing={handleCreateFolder}
+                  />
 
                     <View style={styles.modalActions}>
                       <TouchableOpacity
@@ -482,14 +506,13 @@ export default function FolderAndAssetScreen({ route }: Props) {
         </Modal>
 
         <CreateAssetWizardModal
-        disableAssetName={!!editingAsset}
+          disableAssetName={!!editingAsset}
           visible={assetModalVisible}
           onClose={closeAssetModal}
           onSubmit={editingAsset ? handleUpdateAsset : handleCreateAsset}
           mode={editingAsset ? "edit" : "create"}
           initialData={editingAsset ? mapAssetToDraft(editingAsset) : undefined}
-/>
-
+        />
       </View>
     </SafeAreaView>
   );
@@ -557,35 +580,65 @@ const styles = StyleSheet.create({
   listContentWithBottomBar: {
     paddingBottom: 120,
   },
-  card: {
-    backgroundColor: "#111",
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 12,
+  gridWrap: {
     flexDirection: "row",
-    alignItems: "center",
+    flexWrap: "wrap",
+  },
+  columnWrapper: {
+    gap: GRID_GAP,
+    marginBottom: GRID_GAP,
+  },
+  gridItem: {
+    width: ITEM_SIZE,
+    marginBottom: GRID_GAP,
+    marginRight: GRID_GAP,
+  },
+  gridCard: {
+    width: "100%",
+    minHeight: ITEM_SIZE,
+    backgroundColor: "#111",
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: "#1f1f1f",
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
   },
-  cardIcon: {
-    marginRight: 14,
+  iconWrap: {
+    marginBottom: 10,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  cardBody: {
-    flex: 1,
-  },
-  cardTitle: {
+  gridTitle: {
     color: "#fff",
-    fontSize: 13,
-    fontWeight: "400",
+    fontSize: 11,
+    textAlign: "center",
+    lineHeight: 14,
   },
-  cardMeta: {
-    color: "#888",
-    marginTop: 4,
-    fontSize: 13,
+  editBadge: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+  },
+  skeletonIconGrid: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    backgroundColor: "#222",
+    marginBottom: 10,
+  },
+  skeletonTitleGrid: {
+    width: "80%",
+    height: 10,
+    borderRadius: 6,
+    backgroundColor: "#222",
   },
   emptyWrap: {
     paddingTop: 60,
     alignItems: "center",
+    width: "100%",
   },
   emptyTitle: {
     color: "#fff",
@@ -606,7 +659,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#0b0b0b",
     borderWidth: 1,
     borderColor: "#1f1f1f",
-    borderRadius: 18,
+    borderRadius: 15,
     padding: 10,
   },
   primaryBtn: {
@@ -634,26 +687,6 @@ const styles = StyleSheet.create({
     color: ACC,
     fontSize: 13,
     fontFamily: fonts.inter.semiBold as unknown as string,
-  },
-  skeletonIcon: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    backgroundColor: "#222",
-    marginRight: 14,
-  },
-  skeletonTitle: {
-    width: "60%",
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: "#222",
-    marginBottom: 8,
-  },
-  skeletonMeta: {
-    width: "35%",
-    height: 10,
-    borderRadius: 6,
-    backgroundColor: "#1b1b1b",
   },
   modalOverlay: {
     flex: 1,

@@ -1,3 +1,4 @@
+//offline/index.ts
 import { initStorage } from './storage';
 import { initSync } from './sync';
 
