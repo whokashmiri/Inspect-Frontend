@@ -2,15 +2,15 @@ import CreateAssetWizardModal from "./utils/CreateAssetWizardModal";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFonts } from "expo-font";
 import fonts from "../fonts/fonts";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import {AssetDraft} from "./utils/types";
+import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
+import { AssetDraft } from "./utils/types";
+import { mapAssetToDraft } from "./utils/assetMapper";
 
 import {
   Alert,
   FlatList,
   Modal,
   RefreshControl,
-  SafeAreaView,
   StyleSheet,
   Text,
   TextInput,
@@ -30,7 +30,6 @@ import {
 
 import { safeApiCall, getPendingCount, syncQueue } from "../offline";
 import { Ionicons } from "@expo/vector-icons";
-import { Entypo } from "@expo/vector-icons";
 
 type RouteParams = {
   projectId: string;
@@ -52,7 +51,6 @@ const ACC = "#D4FF00";
 
 export default function FolderAndAssetScreen({ route }: Props) {
   const folderInputRef = useRef<TextInput>(null);
-
 
   const [loaded] = useFonts({
     ...fonts.poppins,
@@ -76,19 +74,20 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
   const [folderModalVisible, setFolderModalVisible] = useState(false);
   const [assetModalVisible, setAssetModalVisible] = useState(false);
-  const [downloadingAssetId, setDownloadingAssetId] = useState<string | null>(null);
+  const [editingAsset, setEditingAsset] = useState<AssetItem | null>(null);
+
   const [folderName, setFolderName] = useState("");
   const [navigatingFolderId, setNavigatingFolderId] = useState<string | null>(null);
 
-    useEffect(() => {
-  if (folderModalVisible) {
-    const timer = setTimeout(() => {
-      folderInputRef.current?.focus();
-    }, 250);
+  useEffect(() => {
+    if (folderModalVisible) {
+      const timer = setTimeout(() => {
+        folderInputRef.current?.focus();
+      }, 250);
 
-    return () => clearTimeout(timer);
-  }
-}, [folderModalVisible]);
+      return () => clearTimeout(timer);
+    }
+  }, [folderModalVisible]);
 
   useEffect(() => {
     const interval = setInterval(async () => {
@@ -99,41 +98,41 @@ export default function FolderAndAssetScreen({ route }: Props) {
     return () => clearInterval(interval);
   }, []);
 
- const loadContents = useCallback(
-  async (
-    folderId: string | null,
-    options?: { showSkeleton?: boolean }
-  ) => {
-    if (projectId.startsWith("offline_")) {
-      setFolders([]);
-      setAssets([]);
-      setLoading(false);
-      setRefreshing(false);
-      setContentLoading(false);
-      return;
-    }
-
-    try {
-      if (options?.showSkeleton) {
-        setContentLoading(true);
+  const loadContents = useCallback(
+    async (
+      folderId: string | null,
+      options?: { showSkeleton?: boolean }
+    ) => {
+      if (projectId.startsWith("offline_")) {
         setFolders([]);
         setAssets([]);
+        setLoading(false);
+        setRefreshing(false);
+        setContentLoading(false);
+        return;
       }
 
-      const data = await projectContentApi.listContents(projectId, folderId);
-      setFolders(data.folders || []);
-      setAssets(data.assets || []);
-    } catch (error: any) {
-      Alert.alert("Error", error.message || "Failed to load contents");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-      setContentLoading(false);
-      setNavigatingFolderId(null);
-    }
-  },
-  [projectId]
-);
+      try {
+        if (options?.showSkeleton) {
+          setContentLoading(true);
+          setFolders([]);
+          setAssets([]);
+        }
+
+        const data = await projectContentApi.listContents(projectId, folderId);
+        setFolders(data.folders || []);
+        setAssets(data.assets || []);
+      } catch (error: any) {
+        Alert.alert("Error", error.message || "Failed to load contents");
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+        setContentLoading(false);
+        setNavigatingFolderId(null);
+      }
+    },
+    [projectId]
+  );
 
   useEffect(() => {
     loadContents(null);
@@ -202,44 +201,81 @@ export default function FolderAndAssetScreen({ route }: Props) {
     }
   };
 
- const handleCreateAsset = async (draft: AssetDraft) => {
-  const payload = {
-    projectId,
-    name: draft.name,
-    writtenDescription: draft.writtenDescription || null,
-    folderId: currentFolderId || undefined,
-    images: draft.images || [],
-    voiceNotes: draft.voiceNotes || [],
-    condition: draft.condition || null,
-    assetType: draft.assetType || "Other",
-    brand: draft.assetType === "Vehicle" ? draft.brand || null : null,
-    manufactureYear:
-      draft.assetType === "Vehicle" ? draft.manufactureYear || null : null,
-    kilometersDriven:
-      draft.assetType === "Vehicle" ? draft.kilometersDriven || null : null,
+  const handleCreateAsset = async (draft: AssetDraft) => {
+    const payload = {
+      projectId,
+      name: draft.name,
+      writtenDescription: draft.writtenDescription || null,
+      folderId: currentFolderId || undefined,
+      images: draft.images || [],
+      voiceNotes: draft.voiceNotes || [],
+      condition: draft.condition || null,
+      assetType: draft.assetType || "Other",
+      brand: draft.assetType === "Vehicle" ? draft.brand || null : null,
+      manufactureYear:
+        draft.assetType === "Vehicle" ? draft.manufactureYear || null : null,
+      kilometersDriven:
+        draft.assetType === "Vehicle" ? draft.kilometersDriven || null : null,
+    };
+
+    try {
+      const result = await safeApiCall(
+        () => projectContentApi.createAsset(payload),
+        payload,
+        { type: "createAsset", projectId }
+      );
+
+      if ("offline" in result) {
+        Alert.alert("Offline", result.message);
+      } else {
+        Alert.alert("Success", "Asset created");
+      }
+
+      setAssetModalVisible(false);
+      await loadContents(currentFolderId, { showSkeleton: true });
+    } catch (error: any) {
+      Alert.alert("Error", error.message || "Failed to create asset");
+    }
   };
 
-  try {
-    const result = await safeApiCall(
-      () => projectContentApi.createAsset(payload),
-      payload,
-      { type: "createAsset", projectId }
-    );
+  const handleUpdateAsset = async (draft: AssetDraft) => {
+    if (!editingAsset) return;
 
-    if ("offline" in result) {
-      Alert.alert("Offline", result.message);
-    } else {
-      Alert.alert("Success", "Asset created");
+    const payload = {
+      assetId: editingAsset.id,
+      writtenDescription: draft.writtenDescription || null,
+      images: draft.images || [],
+      voiceNotes: draft.voiceNotes || [],
+      condition: draft.condition || null,
+      assetType: draft.assetType || "Other",
+      brand: draft.assetType === "Vehicle" ? draft.brand || null : null,
+      manufactureYear:
+        draft.assetType === "Vehicle" ? draft.manufactureYear || null : null,
+      kilometersDriven:
+        draft.assetType === "Vehicle" ? draft.kilometersDriven || null : null,
+    };
+
+    try {
+      await projectContentApi.updateAsset(payload);
+      Alert.alert("Success", "Asset updated");
+      setEditingAsset(null);
+      setAssetModalVisible(false);
+      await loadContents(currentFolderId, { showSkeleton: true });
+    } catch (error: any) {
+      Alert.alert("Error", error.message || "Failed to update asset");
     }
+  };
 
+  const openEditAsset = (asset: AssetItem) => {
+    setEditingAsset(asset);
+    setAssetModalVisible(true);
+  };
+
+  const closeAssetModal = () => {
+    setEditingAsset(null);
     setAssetModalVisible(false);
-    await loadContents(currentFolderId, { showSkeleton: true });
-  } catch (error: any) {
-    Alert.alert("Error", error.message || "Failed to create asset");
-  }
-};
+  };
 
- 
   const items = useMemo(() => {
     return [
       ...folders.map((folder) => ({ ...folder, itemType: "folder" as const })),
@@ -262,7 +298,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
   if (!loaded) return null;
 
   return (
-    <SafeAreaView style={styles.flex}>
+    <SafeAreaView style={styles.flex} edges={["left", "right", "bottom"]}>
       <View style={styles.container}>
         <Text style={styles.title}>{projectName}</Text>
         <Text style={styles.subtitle}>Folders & Assets</Text>
@@ -292,7 +328,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
         {loading || contentLoading ? (
           <View style={[styles.listContent, { paddingBottom: 120 + insets.bottom }]}>
-          {renderSkeletons()}
+            {renderSkeletons()}
           </View>
         ) : (
           <FlatList
@@ -304,7 +340,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
             contentContainerStyle={[
               styles.listContentWithBottomBar,
               { paddingBottom: 120 + insets.bottom },
-              ]}
+            ]}
             ListEmptyComponent={
               <View style={styles.emptyWrap}>
                 <Text style={styles.emptyTitle}>No contents yet</Text>
@@ -346,38 +382,29 @@ export default function FolderAndAssetScreen({ route }: Props) {
               }
 
               return (
-                <View style={styles.card}>
+                <TouchableOpacity
+                  style={styles.card}
+                  onPress={() => openEditAsset(item)}
+                  activeOpacity={0.8}
+                >
                   <View style={styles.cardBody}>
                     <Text style={styles.cardTitle}>{item.name}</Text>
-                    {/* <Text style={styles.cardMeta}>SN: {item.serialNumber}</Text> */}
+                    <Text style={styles.cardMeta}>Tap to edit asset</Text>
                   </View>
 
-                  <TouchableOpacity
-                    style={[
-                      styles.downloadBtn,
-                      downloadingAssetId === item.id && styles.downloadBtnDisabled,
-                    ]}
-                    // onPress={() => downloadAssetImages(item)}
-                    disabled={downloadingAssetId === item.id}
-                  >
-                    {downloadingAssetId === item.id ? (
-                      <Entypo name="hour-glass" size={18} color="white" />
-                    ) : (
-                      <Entypo name="download" size={18} color="white" />
-                    )}
-                  </TouchableOpacity>
-                </View>
+                  <Ionicons name="create-outline" size={18} color={ACC} />
+                </TouchableOpacity>
               );
             }}
           />
         )}
 
         <View
-            style={[
+          style={[
             styles.bottomActionBar,
             { bottom: Math.max(insets.bottom, 12) + 8 },
-            ]}
-            >
+          ]}
+        >
           <TouchableOpacity
             style={styles.primaryBtn}
             onPress={() => setFolderModalVisible(true)}
@@ -388,77 +415,81 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
           <TouchableOpacity
             style={styles.secondaryBtn}
-            onPress={() => setAssetModalVisible(true)}
+            onPress={() => {
+              setEditingAsset(null);
+              setAssetModalVisible(true);
+            }}
             activeOpacity={0.85}
           >
             <Text style={styles.secondaryBtnText}>New Asset</Text>
           </TouchableOpacity>
         </View>
 
-
-
-            <Modal
-  visible={folderModalVisible}
-  animationType="slide"
-  transparent
-  statusBarTranslucent
-  onRequestClose={() => setFolderModalVisible(false)}
->
-  <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-    <View style={styles.modalOverlay}>
-      <KeyboardAvoidingView
-        style={styles.modalKeyboardWrap}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
-      >
-        <TouchableWithoutFeedback>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Create New Folder</Text>
-
-            <TextInput
-              ref={folderInputRef}
-              style={styles.input}
-              placeholder="Folder Name"
-              placeholderTextColor="#777"
-              value={folderName}
-              onChangeText={setFolderName}
-              returnKeyType="done"
-              autoFocus
-              blurOnSubmit={false}
-              onSubmitEditing={handleCreateFolder}
-            />
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => {
-                  Keyboard.dismiss();
-                  setFolderModalVisible(false);
-                }}
+        <Modal
+          visible={folderModalVisible}
+          animationType="slide"
+          transparent
+          statusBarTranslucent
+          onRequestClose={() => setFolderModalVisible(false)}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={styles.modalOverlay}>
+              <KeyboardAvoidingView
+                style={styles.modalKeyboardWrap}
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
               >
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
+                <TouchableWithoutFeedback>
+                  <View style={styles.modalCard}>
+                    <Text style={styles.modalTitle}>Create New Folder</Text>
 
-              <TouchableOpacity
-                style={styles.modalSaveBtn}
-                onPress={handleCreateFolder}
-              >
-                <Text style={styles.modalSaveText}>Create</Text>
-              </TouchableOpacity>
+                    <TextInput
+                      ref={folderInputRef}
+                      style={styles.input}
+                      placeholder="Folder Name"
+                      placeholderTextColor="#777"
+                      value={folderName}
+                      onChangeText={setFolderName}
+                      returnKeyType="done"
+                      autoFocus
+                      blurOnSubmit={false}
+                      onSubmitEditing={handleCreateFolder}
+                    />
+
+                    <View style={styles.modalActions}>
+                      <TouchableOpacity
+                        style={styles.modalCancelBtn}
+                        onPress={() => {
+                          Keyboard.dismiss();
+                          setFolderModalVisible(false);
+                        }}
+                      >
+                        <Text style={styles.modalCancelText}>Cancel</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.modalSaveBtn}
+                        onPress={handleCreateFolder}
+                      >
+                        <Text style={styles.modalSaveText}>Create</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </TouchableWithoutFeedback>
+              </KeyboardAvoidingView>
             </View>
-          </View>
-        </TouchableWithoutFeedback>
-      </KeyboardAvoidingView>
-    </View>
-  </TouchableWithoutFeedback>
-</Modal>
-
+          </TouchableWithoutFeedback>
+        </Modal>
 
         <CreateAssetWizardModal
+        disableAssetName={!!editingAsset}
           visible={assetModalVisible}
-          onClose={() => setAssetModalVisible(false)}
-          onSubmit={handleCreateAsset}
-        />
+          onClose={closeAssetModal}
+          onSubmit={editingAsset ? handleUpdateAsset : handleCreateAsset}
+          mode={editingAsset ? "edit" : "create"}
+          initialData={editingAsset ? mapAssetToDraft(editingAsset) : undefined}
+/>
+
       </View>
     </SafeAreaView>
   );
@@ -472,16 +503,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 20,
-    paddingTop: 15,
+    paddingTop: 0,
   },
   title: {
-    fontSize: 20,
+    fontSize: 15,
     fontWeight: "400",
     color: "#fff",
+    marginTop: 4,
   },
   subtitle: {
     color: "#999",
-    marginTop: 4,
+    marginTop: 0,
     marginBottom: 10,
     fontSize: 15,
   },
@@ -551,17 +583,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 13,
   },
-  downloadBtn: {
-    padding: 6,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#333",
-    backgroundColor: "#1c1c1c",
-    marginLeft: 8,
-  },
-  downloadBtnDisabled: {
-    opacity: 0.4,
-  },
   emptyWrap: {
     paddingTop: 60,
     alignItems: "center",
@@ -577,7 +598,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
   },
   bottomActionBar: {
-     position: "absolute",
+    position: "absolute",
     left: 20,
     right: 20,
     flexDirection: "row",
@@ -634,27 +655,23 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: "#1b1b1b",
   },
-
-
   modalOverlay: {
-  flex: 1,
-  backgroundColor: "rgba(0,0,0,0.7)",
-},
-
-modalKeyboardWrap: {
-  flex: 1,
-  justifyContent: "flex-end",
-},
-
-modalCard: {
-  backgroundColor: "#111",
-  padding: 15,
-  paddingBottom: 18,
-  borderTopLeftRadius: 20,
-  borderTopRightRadius: 20,
-  borderWidth: 1,
-  borderColor: "#1f1f1f",
-},
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.7)",
+  },
+  modalKeyboardWrap: {
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  modalCard: {
+    backgroundColor: "#111",
+    padding: 15,
+    paddingBottom: 18,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderWidth: 1,
+    borderColor: "#1f1f1f",
+  },
   modalTitle: {
     color: "#fff",
     fontSize: 15,

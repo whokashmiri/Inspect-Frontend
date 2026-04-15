@@ -1,3 +1,7 @@
+
+
+//api/api.ts
+
 import * as SecureStore from "expo-secure-store";
 
 // ─── Config ────────────────────────────────────────────────────────────────
@@ -258,7 +262,6 @@ export interface FolderItem {
     email: string;
   };
 }
-
 export interface AssetImageItem {
   id: string;
   url: string;
@@ -273,7 +276,6 @@ export interface AssetVoiceNoteItem {
   duration: number | null;
   createdAt: string;
 }
-
 export interface AssetItem {
   id: string;
   name: string;
@@ -311,6 +313,10 @@ export interface CreateFolderResponse {
 }
 
 export interface CreateAssetResponse {
+  asset: AssetItem;
+}
+
+export interface UpdateAssetResponse {
   asset: AssetItem;
 }
 
@@ -423,4 +429,79 @@ export const projectContentApi = {
       },
     );
   },
+
+
+  updateAsset: async (payload: {
+  assetId: string;
+  writtenDescription?: string | null;
+  images?: UploadFileInput[];
+  voiceNotes?: UploadFileInput[];
+  condition?: "" | "New" | "Used" | "Damaged" | null;
+  assetType?: "Vehicle" | "Other";
+  brand?: string | null;
+  model?: string | null;
+  manufactureYear?: string | null;
+  kilometersDriven?: string | null;
+}) => {
+  const form = new FormData();
+
+  if (payload.writtenDescription !== undefined) {
+    form.append("writtenDescription", payload.writtenDescription ?? "");
+  }
+
+  if (payload.condition !== undefined) {
+    form.append("condition", payload.condition ?? "");
+  }
+
+  if (payload.assetType) {
+    form.append("assetType", payload.assetType);
+  }
+
+  if (payload.brand !== undefined) {
+    form.append("brand", payload.brand ?? "");
+  }
+
+  if (payload.model !== undefined) {
+    form.append("model", payload.model ?? "");
+  }
+
+  if (payload.manufactureYear !== undefined) {
+    form.append("manufactureYear", payload.manufactureYear ?? "");
+  }
+
+  if (payload.kilometersDriven !== undefined) {
+    form.append("kilometersDriven", payload.kilometersDriven ?? "");
+  }
+
+  for (const image of payload.images ?? []) {
+    form.append(
+      "images",
+      {
+        uri: image.uri,
+        name: image.name,
+        type: image.type,
+      } as any
+    );
+  }
+
+  for (const voice of payload.voiceNotes ?? []) {
+    form.append(
+      "voiceNotes",
+      {
+        uri: voice.uri,
+        name: voice.name,
+        type: voice.type,
+      } as any
+    );
+  }
+
+  return requestForm<UpdateAssetResponse>(
+    
+    `/projects/assets/${payload.assetId}`,
+    {
+      method: "PATCH",
+      body: form,
+    }
+  );
+},
 };

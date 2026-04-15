@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from "react";
+// CreateAssetWizardModal.tsx
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Modal,
   View,
@@ -9,8 +10,12 @@ import {
   Alert,
   Image,
   ScrollView,
-   Platform,
+  Platform,
   useWindowDimensions,
+  KeyboardAvoidingView,
+  TouchableWithoutFeedback,
+  Keyboard,
+  LayoutChangeEvent,
 } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import * as ImagePicker from "expo-image-picker";
@@ -30,15 +35,38 @@ type ExtendedAssetDraft = AssetDraft & {
   kilometersDriven?: string;
 };
 
+type Props = {
+  visible: boolean;
+  onClose: () => void;
+  onSubmit: (draft: ExtendedAssetDraft) => Promise<void> | void;
+  mode?: "create" | "edit";
+  initialData?: Partial<ExtendedAssetDraft>;
+  disableAssetName?: boolean;
+};
+
+const getInitialDraft = (
+  initialData?: Partial<ExtendedAssetDraft>
+): ExtendedAssetDraft => ({
+  images: initialData?.images || [],
+  name: initialData?.name || "",
+  writtenDescription: initialData?.writtenDescription || "",
+  voiceNotes: initialData?.voiceNotes || [],
+  condition: initialData?.condition || "",
+  assetType: initialData?.assetType || "Other",
+  brand: initialData?.brand || "",
+  model: initialData?.model || "",
+  manufactureYear: initialData?.manufactureYear || "",
+  kilometersDriven: initialData?.kilometersDriven || "",
+});
+
 export default function CreateAssetWizardModal({
   visible,
   onClose,
   onSubmit,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  onSubmit: (draft: ExtendedAssetDraft) => Promise<void>;
-}) {
+  mode = "create",
+  initialData,
+  disableAssetName = false,
+}: Props) {
   const [step, setStep] = useState(1);
   const [cameraOpen, setCameraOpen] = useState(false);
 
@@ -46,18 +74,20 @@ export default function CreateAssetWizardModal({
   const isSmallScreen = width < 380;
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
-  const [draft, setDraft] = useState<ExtendedAssetDraft>({
-    images: [],
-    name: "",
-    writtenDescription: "",
-    voiceNotes: [],
-    condition: "",
-    assetType: "Other",
-    brand: "",
-    model: "",
-    manufactureYear: "",
-    kilometersDriven: "",
-  });
+
+  const scrollRef = useRef<ScrollView>(null);
+
+  const [draft, setDraft] = useState<ExtendedAssetDraft>(
+    getInitialDraft(initialData)
+  );
+
+  useEffect(() => {
+    if (visible) {
+      setStep(1);
+      setDraft(getInitialDraft(initialData));
+      setIsRecording(false);
+    }
+  }, [visible, initialData]);
 
   const next = () => setStep((s) => Math.min(s + 1, 3));
   const back = () => setStep((s) => Math.max(s - 1, 1));
@@ -68,6 +98,24 @@ export default function CreateAssetWizardModal({
     const available = width - horizontalPadding - gridGapTotal;
     return Math.max(48, Math.floor(available / 5));
   }, [width]);
+
+  const fieldPositions = useRef<Record<string, number>>({});
+  const setFieldPosition =
+  (key: string) => (e: LayoutChangeEvent) => {
+    fieldPositions.current[key] = e.nativeEvent.layout.y;
+  };
+
+const scrollToField = (key: string) => {
+  const y = fieldPositions.current[key] ?? 0;
+
+  setTimeout(() => {
+    scrollRef.current?.scrollTo({
+      y: Math.max(0, y - 24),
+      animated: true,
+    });
+  }, 120);
+};
+
 
   const pickImagesFromLibrary = async () => {
     try {
@@ -98,56 +146,54 @@ export default function CreateAssetWizardModal({
         ...prev,
         images: [...prev.images, ...mapped],
       }));
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "Unable to pick images from phone.");
     }
   };
 
+  const startRecording = async () => {
+    try {
+      const status = await AudioModule.requestRecordingPermissionsAsync();
 
+      if (!status.granted) {
+        Alert.alert("Permission required", "Microphone permission is required.");
+        return;
+      }
 
-const startRecording = async () => {
-  try {
-    const status = await AudioModule.requestRecordingPermissionsAsync();
-
-    if (!status.granted) {
-      Alert.alert("Permission required", "Microphone permission is required.");
-      return;
+      await recorder.prepareToRecordAsync();
+      recorder.record();
+      setIsRecording(true);
+    } catch (error) {
+      console.error("Start recording failed:", error);
+      Alert.alert("Error", "Could not start recording.");
     }
+  };
 
-    await recorder.prepareToRecordAsync();
-    recorder.record();
-    setIsRecording(true);
-  } catch (error) {
-    console.error("Start recording failed:", error);
-    Alert.alert("Error", "Could not start recording.");
-  }
-};
+  const stopRecording = async () => {
+    try {
+      await recorder.stop();
+      setIsRecording(false);
 
-const stopRecording = async () => {
-  try {
-    await recorder.stop();
-    setIsRecording(false);
+      const uri = recorder.uri;
 
-    const uri = recorder.uri;
-
-    if (uri) {
-      setDraft((prev) => ({
-        ...prev,
-        voiceNotes: [
-          ...(prev.voiceNotes || []),
-          {
-            uri,
-            name: `voice_note_${Date.now()}.m4a`,
-            type: "audio/m4a",
-          },
-        ],
-      }));
+      if (uri) {
+        setDraft((prev) => ({
+          ...prev,
+          voiceNotes: [
+            ...(prev.voiceNotes || []),
+            {
+              uri,
+              name: `voice_note_${Date.now()}.m4a`,
+              type: "audio/m4a",
+            },
+          ],
+        }));
+      }
+    } catch (error) {
+      console.error("Stop recording failed:", error);
+      Alert.alert("Error", "Could not stop recording.");
     }
-  } catch (error) {
-    console.error("Stop recording failed:", error);
-    Alert.alert("Error", "Could not stop recording.");
-  }
-};
+  };
 
   const removeImage = (index: number) => {
     setDraft((prev) => ({
@@ -163,6 +209,13 @@ const stopRecording = async () => {
     }));
   };
 
+  const handleClose = () => {
+    setStep(1);
+    setIsRecording(false);
+    Keyboard.dismiss();
+    onClose();
+  };
+
   const handleFinish = async () => {
     if (!draft.name?.trim()) {
       Alert.alert("Validation", "Asset Name is required");
@@ -170,278 +223,337 @@ const stopRecording = async () => {
     }
 
     await onSubmit(draft);
-    onClose();
-    setStep(1);
+    handleClose();
   };
 
   return (
     <>
-      <Modal visible={visible} transparent animationType="fade">
-        <View style={styles.overlay}>
-          <View
-            style={[
-              styles.modalCard,
-              isSmallScreen && styles.modalCardSmall,
-            ]}
-          >
-            <View style={styles.header}>
-              <Text style={styles.title}>Create Asset</Text>
-              <TouchableOpacity
-                onPress={onClose}
-                style={styles.closeBtn}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.closeText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.step}>Step {step} of 3</Text>
-
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.scrollContent}
+      <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.overlay}>
+            <KeyboardAvoidingView
+              style={styles.keyboardWrap}
+              behavior={Platform.OS === "ios" ? "padding" : "height"}
+              keyboardVerticalOffset={Platform.OS === "ios" ? 24 : 20}
             >
-              {step === 1 && (
-                <>
-                  <Text style={styles.label}>Upload Images</Text>
-
-                  <View style={styles.imageActionRow}>
+              <TouchableWithoutFeedback>
+                <View
+                  style={[
+                    styles.modalCard,
+                    isSmallScreen && styles.modalCardSmall,
+                  ]}
+                >
+                  <View style={styles.header}>
+                    <Text style={styles.title}>
+                      {mode === "edit" ? "Edit Asset" : "Create Asset"}
+                    </Text>
                     <TouchableOpacity
-                      style={[styles.primaryBtn, styles.flexBtn]}
-                      onPress={() => setCameraOpen(true)}
-                      activeOpacity={0.85}
+                      onPress={handleClose}
+                      style={styles.closeBtn}
+                      activeOpacity={0.8}
                     >
-                      <Text style={styles.primaryText}>Open Camera</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[styles.darkBtn, styles.flexBtn]}
-                      onPress={pickImagesFromLibrary}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={styles.darkBtnText}>Upload from Phone</Text>
+                      <Text style={styles.closeText}>✕</Text>
                     </TouchableOpacity>
                   </View>
 
-                  <Text style={styles.helper}>
-                    {draft.images.length} image
-                    {draft.images.length === 1 ? "" : "s"} selected
-                  </Text>
+                  <Text style={styles.step}>Step {step} of 3</Text>
 
-                  {draft.images.length > 0 && (
-                    <View style={styles.previewGrid}>
-                      {draft.images.map((img, index) => (
-                        <View
-                          key={`${img.uri}-${index}`}
-                          style={[
-                            styles.previewItem,
-                            {
-                              width: previewSize,
-                              height: previewSize,
-                            },
-                          ]}
-                        >
-                          <Image
-                            source={{ uri: img.uri }}
-                            style={styles.previewImage}
-                          />
+                  <ScrollView
+                    ref={scrollRef}
+                    style={styles.scrollView}
+                    contentContainerStyle={styles.scrollContent}
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                    keyboardDismissMode={
+                      Platform.OS === "ios" ? "interactive" : "on-drag"
+                    }
+                    automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+                  >
+                    {step === 1 && (
+                      <>
+                        <Text style={styles.label}>Upload Images</Text>
+
+                        <View style={styles.imageActionRow}>
                           <TouchableOpacity
-                            style={styles.removeBadge}
-                            onPress={() => removeImage(index)}
+                            style={[styles.primaryBtn, styles.flexBtn]}
+                            onPress={() => setCameraOpen(true)}
+                            activeOpacity={0.85}
                           >
-                            <Text style={styles.removeBadgeText}>✕</Text>
+                            <Text style={styles.primaryText}>Open Camera</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={[styles.darkBtn, styles.flexBtn]}
+                            onPress={pickImagesFromLibrary}
+                            activeOpacity={0.85}
+                          >
+                            <Text style={styles.darkBtnText}>
+                              Upload from Phone
+                            </Text>
                           </TouchableOpacity>
                         </View>
-                      ))}
+
+                        <Text style={styles.helper}>
+                          {draft.images.length} image
+                          {draft.images.length === 1 ? "" : "s"} selected
+                        </Text>
+
+                        {draft.images.length > 0 && (
+                          <View style={styles.previewGrid}>
+                            {draft.images.map((img, index) => (
+                              <View
+                                key={`${img.uri}-${index}`}
+                                style={[
+                                  styles.previewItem,
+                                  {
+                                    width: previewSize,
+                                    height: previewSize,
+                                  },
+                                ]}
+                              >
+                                <Image
+                                  source={{ uri: img.uri }}
+                                  style={styles.previewImage}
+                                />
+                                <TouchableOpacity
+                                  style={styles.removeBadge}
+                                  onPress={() => removeImage(index)}
+                                >
+                                  <Text style={styles.removeBadgeText}>✕</Text>
+                                </TouchableOpacity>
+                              </View>
+                            ))}
+                          </View>
+                        )}
+                      </>
+                    )}
+
+                    {step === 2 && (
+                      <>
+                        <Text style={styles.label}>Asset Details</Text>
+
+                       <View onLayout={setFieldPosition("name")}>
+  <TextInput
+    placeholder="Asset Name"
+    placeholderTextColor="#666"
+    value={draft.name}
+    onChangeText={(t) => {
+      if (!disableAssetName) {
+        setDraft((prev) => ({ ...prev, name: t }));
+      }
+    }}
+    editable={!disableAssetName}
+    selectTextOnFocus={!disableAssetName}
+    style={[
+      styles.input,
+      disableAssetName && styles.inputDisabled,
+    ]}
+    returnKeyType="next"
+    blurOnSubmit={false}
+    onFocus={() => scrollToField("name")}
+  />
+</View>
+
+                        <View style={styles.pickerWrap}>
+                          <Picker
+                            selectedValue={draft.condition}
+                            onValueChange={(value) =>
+                              setDraft({
+                                ...draft,
+                                condition: value,
+                              })
+                            }
+                            dropdownIconColor="#fff"
+                            style={styles.picker}
+                          >
+                            <Picker.Item label="Condition" value="" />
+                            <Picker.Item label="New" value="New" />
+                            <Picker.Item label="Used" value="Used" />
+                            <Picker.Item label="Damaged" value="Damaged" />
+                          </Picker>
+                        </View>
+
+                        <View style={styles.pickerWrap}>
+                          <Picker
+                            selectedValue={draft.assetType}
+                            onValueChange={(value) =>
+                              setDraft({
+                                ...draft,
+                                assetType: value,
+                              })
+                            }
+                            dropdownIconColor="#fff"
+                            style={styles.picker}
+                          >
+                            <Picker.Item label="Other" value="Other" />
+                            <Picker.Item label="Vehicle" value="Vehicle" />
+                          </Picker>
+                        </View>
+
+                        {draft.assetType === "Vehicle" && (
+                          <>
+                           <View onLayout={setFieldPosition("brand")}>
+  <TextInput
+    placeholder="Brand"
+    placeholderTextColor="#666"
+    value={draft.brand}
+    onChangeText={(t) =>
+      setDraft({ ...draft, brand: t })
+    }
+    style={styles.input}
+    returnKeyType="next"
+    blurOnSubmit={false}
+    onFocus={() => scrollToField("brand")}
+  />
+</View>
+
+                            <View onLayout={setFieldPosition("model")}>
+  <TextInput
+    placeholder="Model"
+    placeholderTextColor="#666"
+    value={draft.model}
+    onChangeText={(t) =>
+      setDraft({ ...draft, model: t })
+    }
+    style={styles.input}
+    returnKeyType="next"
+    blurOnSubmit={false}
+    onFocus={() => scrollToField("model")}
+  />
+</View>
+
+                            <View onLayout={setFieldPosition("manufactureYear")}>
+  <TextInput
+    placeholder="Manufacture Year"
+    placeholderTextColor="#666"
+    value={draft.manufactureYear}
+    onChangeText={(t) =>
+      setDraft({ ...draft, manufactureYear: t })
+    }
+    keyboardType="numeric"
+    style={styles.input}
+    returnKeyType="next"
+    blurOnSubmit={false}
+    onFocus={() => scrollToField("manufactureYear")}
+  />
+</View>
+
+                           <View onLayout={setFieldPosition("kilometersDriven")}>
+  <TextInput
+    placeholder="Kilometers Driven"
+    placeholderTextColor="#666"
+    value={draft.kilometersDriven}
+    onChangeText={(t) =>
+      setDraft({ ...draft, kilometersDriven: t })
+    }
+    keyboardType="numeric"
+    style={styles.input}
+    returnKeyType="done"
+    onFocus={() => scrollToField("kilometersDriven")}
+  />
+</View>
+                          </>
+                        )}
+                      </>
+                    )}
+
+                    {step === 3 && (
+                      <>
+                        <Text style={styles.label}>Description</Text>
+
+                        <View onLayout={setFieldPosition("writtenDescription")}>
+  <TextInput
+    placeholder="Write something..."
+    placeholderTextColor="#666"
+    value={draft.writtenDescription}
+    onChangeText={(t) =>
+      setDraft({
+        ...draft,
+        writtenDescription: t,
+      })
+    }
+    style={[styles.input, styles.textArea]}
+    multiline
+    textAlignVertical="top"
+    onFocus={() => scrollToField("writtenDescription")}
+  />
+</View>
+
+                        <Text style={[styles.label, { marginTop: 8 }]}>
+                          Voice Notes
+                        </Text>
+
+                        <TouchableOpacity
+                          style={styles.primaryBtn}
+                          onPress={isRecording ? stopRecording : startRecording}
+                        >
+                          <Text style={styles.primaryText}>
+                            {isRecording ? "Stop Recording" : "Record Voice Note"}
+                          </Text>
+                        </TouchableOpacity>
+
+                        <Text style={styles.helper}>
+                          {(draft.voiceNotes || []).length} voice note
+                          {(draft.voiceNotes || []).length === 1 ? "" : "s"} added
+                        </Text>
+
+                        {(draft.voiceNotes || []).map((note, index) => (
+                          <View key={`${note.uri}-${index}`} style={styles.voiceItem}>
+                            <Text style={styles.voiceText} numberOfLines={1}>
+                              {note.name || `Voice Note ${index + 1}`}
+                            </Text>
+
+                            <TouchableOpacity onPress={() => removeVoiceNote(index)}>
+                              <Text style={styles.voiceRemove}>Remove</Text>
+                            </TouchableOpacity>
+                          </View>
+                        ))}
+                      </>
+                    )}
+                  </ScrollView>
+
+                  <View style={styles.footer}>
+                    <View style={styles.footerSide}>
+                      {step > 1 ? (
+                        <TouchableOpacity
+                          style={styles.secondaryBtn}
+                          onPress={back}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.secondaryText}>Back</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <View />
+                      )}
                     </View>
-                  )}
-                </>
-              )}
 
-              {step === 2 && (
-                <>
-                  <Text style={styles.label}>Asset Details</Text>
-
-                  <TextInput
-                    placeholder="Asset Name"
-                    placeholderTextColor="#666"
-                    value={draft.name}
-                    onChangeText={(t) => setDraft({ ...draft, name: t })}
-                    style={styles.input}
-                  />
-
-                  <View style={styles.pickerWrap}>
-                    <Picker
-                      selectedValue={draft.condition}
-                      onValueChange={(value) =>
-                        setDraft({
-                          ...draft,
-                          condition: value,
-                        })
-                      }
-                      dropdownIconColor="#fff"
-                      style={styles.picker}
-                    >
-                      <Picker.Item label="Condition" value="" />
-                      <Picker.Item label="New" value="New" />
-                      <Picker.Item label="Used" value="Used" />
-                      <Picker.Item label="Damaged" value="Damaged" />
-                    </Picker>
-                  </View>
-
-                  <View style={styles.pickerWrap}>
-                    <Picker
-                      selectedValue={draft.assetType}
-                      onValueChange={(value) =>
-                        setDraft({
-                          ...draft,
-                          assetType: value,
-                        })
-                      }
-                      dropdownIconColor="#fff"
-                      style={styles.picker}
-                    >
-                      <Picker.Item label="Other" value="Other" />
-                      <Picker.Item label="Vehicle" value="Vehicle" />
-                    </Picker>
-                  </View>
-
-                  {draft.assetType === "Vehicle" && (
-                    <>
-                      <TextInput
-                        placeholder="Brand"
-                        placeholderTextColor="#666"
-                        value={draft.brand}
-                        onChangeText={(t) =>
-                          setDraft({ ...draft, brand: t })
-                        }
-                        style={styles.input}
-                      />
-                        <TextInput
-                        placeholder="Model"
-                        placeholderTextColor="#666"
-                        value={draft.model}
-                        onChangeText={(t) =>
-                          setDraft({ ...draft, model: t })
-                        }
-                        style={styles.input}
-                      />
-
-                      <TextInput
-                        placeholder="Manufacture Year"
-                        placeholderTextColor="#666"
-                        value={draft.manufactureYear}
-                        onChangeText={(t) =>
-                          setDraft({ ...draft, manufactureYear: t })
-                        }
-                        keyboardType="numeric"
-                        style={styles.input}
-                      />
-
-                      <TextInput
-                        placeholder="Kilometers Driven"
-                        placeholderTextColor="#666"
-                        value={draft.kilometersDriven}
-                        onChangeText={(t) =>
-                          setDraft({ ...draft, kilometersDriven: t })
-                        }
-                        keyboardType="numeric"
-                        style={styles.input}
-                      />
-                    </>
-                  )}
-                </>
-              )}
-
-              {step === 3 && (
-                <>
-                  <Text style={styles.label}>Description</Text>
-
-                  <TextInput
-                    placeholder="Write something..."
-                    placeholderTextColor="#666"
-                    value={draft.writtenDescription}
-                    onChangeText={(t) =>
-                      setDraft({
-                        ...draft,
-                        writtenDescription: t,
-                      })
-                    }
-                    style={[styles.input, styles.textArea]}
-                    multiline
-                    textAlignVertical="top"
-                  />
-
-                  <Text style={[styles.label, { marginTop: 8 }]}>
-                    Voice Notes
-                  </Text>
-
-              <TouchableOpacity
-              style={styles.primaryBtn}
-              onPress={isRecording ? stopRecording : startRecording}
-              >
-              <Text style={styles.primaryText}>
-                {isRecording ? "Stop Recording" : "Record Voice Note"}
-              </Text>
-              </TouchableOpacity>
-
-                  <Text style={styles.helper}>
-                    {(draft.voiceNotes || []).length} voice note
-                    {(draft.voiceNotes || []).length === 1 ? "" : "s"} added
-                  </Text>
-
-                  {(draft.voiceNotes || []).map((note, index) => (
-                    <View key={`${note.uri}-${index}`} style={styles.voiceItem}>
-                      <Text style={styles.voiceText} numberOfLines={1}>
-                        {note.name || `Voice Note ${index + 1}`}
-                      </Text>
-
-                      <TouchableOpacity onPress={() => removeVoiceNote(index)}>
-                        <Text style={styles.voiceRemove}>Remove</Text>
-                      </TouchableOpacity>
+                    <View style={styles.footerSideRight}>
+                      {step < 3 ? (
+                        <TouchableOpacity
+                          style={[styles.primaryBtn, styles.nextBtn]}
+                          onPress={next}
+                          activeOpacity={0.85}
+                        >
+                          <Text style={styles.primaryText}>Next</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <TouchableOpacity
+                          style={[styles.primaryBtn, styles.nextBtn]}
+                          onPress={handleFinish}
+                          activeOpacity={0.85}
+                        >
+                          <Text style={styles.primaryText}>
+                            {mode === "edit" ? "Save Changes" : "Finish"}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
-                  ))}
-                </>
-              )}
-            </ScrollView>
-
-            <View style={styles.footer}>
-              <View style={styles.footerSide}>
-                {step > 1 ? (
-                  <TouchableOpacity
-                    style={styles.secondaryBtn}
-                    onPress={back}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.secondaryText}>Back</Text>
-                  </TouchableOpacity>
-                ) : (
-                  <View />
-                )}
-              </View>
-
-              <View style={styles.footerSideRight}>
-                {step < 3 ? (
-                  <TouchableOpacity
-                    style={[styles.primaryBtn, styles.nextBtn]}
-                    onPress={next}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={styles.primaryText}>Next</Text>
-                  </TouchableOpacity>
-                ) : (
-                  <TouchableOpacity
-                    style={[styles.primaryBtn, styles.nextBtn]}
-                    onPress={handleFinish}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={styles.primaryText}>Finish</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
+                  </View>
+                </View>
+              </TouchableWithoutFeedback>
+            </KeyboardAvoidingView>
           </View>
-        </View>
+        </TouchableWithoutFeedback>
       </Modal>
 
       <AssetCameraModal
@@ -472,16 +584,22 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.72)",
-    justifyContent: "center",
-    alignItems: "center",
     paddingHorizontal: 14,
     paddingVertical: 20,
+  },
+
+  keyboardWrap: {
+    flex: 1,
+    width: "100%",
+    justifyContent: "center",
+    alignItems: "center",
   },
 
   modalCard: {
     width: "100%",
     maxWidth: 420,
-    maxHeight: "92%",
+    maxHeight: "94%",
+    minHeight: "60%",
     backgroundColor: "#000",
     borderWidth: 1,
     borderColor: BORDER,
@@ -494,8 +612,13 @@ const styles = StyleSheet.create({
     padding: 14,
   },
 
+  scrollView: {
+    flex: 1,
+  },
+
   scrollContent: {
-    paddingBottom: 8,
+    paddingBottom: 24,
+    flexGrow: 1,
   },
 
   header: {
@@ -554,6 +677,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 
+  inputDisabled: {
+    opacity: 0.55,
+  },
+
   textArea: {
     minHeight: 110,
   },
@@ -565,16 +692,15 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     marginBottom: 12,
     height: 48,
-    // overflow: "hidden",
   },
 
   picker: {
     color: "#fff",
-        height: 58,
-        width: "100%",
-        overflow: "hidden",
-        marginLeft: 0,
-        marginTop: Platform.OS === "android" ? -4 : 0,
+    height: 58,
+    width: "100%",
+    overflow: "hidden",
+    marginLeft: 0,
+    marginTop: Platform.OS === "android" ? -4 : 0,
   },
 
   imageActionRow: {
