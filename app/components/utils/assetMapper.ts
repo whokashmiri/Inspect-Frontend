@@ -15,11 +15,13 @@ export function mapAssetToDraft(asset: AssetItem): AssetDraft {
       uri: img.url,
       name: `asset_image_${index + 1}.jpg`,
       type: "image/jpeg",
+      existing: true,
     })),
     voiceNotes: asset.voiceNotes.map((note, index) => ({
       uri: note.url,
       name: `voice_note_${index + 1}.m4a`,
       type: "audio/m4a",
+      existing: true,
     })),
   };
 }

@@ -3,7 +3,7 @@ import { savePending, initStorage } from "./storage";
 import { PendingItem, OfflineResult, OfflineAction } from "./types";
 
 function extractLocalMediaUris(payload: any, type: OfflineAction): string[] {
-  if (type !== "createAsset" || !payload) return [];
+  if ((type !== "createAsset" && type !== "updateAsset") || !payload) return [];
 
   const imageUris =
     Array.isArray(payload.images)

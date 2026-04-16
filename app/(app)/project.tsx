@@ -1,5 +1,3 @@
-
-//(app)/project.tsx
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -16,7 +14,15 @@ import { useRouter } from "expo-router";
 import { useAuth } from "../../api/AuthContext";
 import { projectApi, Project, ApiError } from "../../api/api";
 import { PendingItem } from "../offline/types";
-import { safeApiCall, getPending } from "../offline";
+import {
+  safeApiCall,
+  getPending,
+  getAllDownloadedProjects,
+  isProjectDownloaded,
+  clearOfflineProject,
+  getPendingCountByProjectId,
+} from "../offline";
+import { downloadProjectForOffline } from "../offline/downloader";
 import { useFonts } from "expo-font";
 import fonts from "../fonts/fonts";
 
@@ -41,6 +47,11 @@ export default function ProjectScreen() {
   const [projectName, setProjectName] = useState("");
   const [pendingProjects, setPendingProjects] = useState<PendingItem[]>([]);
 
+  const [downloadedProjectIds, setDownloadedProjectIds] = useState<string[]>([]);
+  const [projectPendingMap, setProjectPendingMap] = useState<Record<string, number>>({});
+  const [downloadingProjectId, setDownloadingProjectId] = useState<string | null>(null);
+  const [removingProjectId, setRemovingProjectId] = useState<string | null>(null);
+
   useEffect(() => {
     fetchProjects();
   }, []);
@@ -50,11 +61,37 @@ export default function ProjectScreen() {
     setPendingProjects(pending.filter((item) => item.type === "createProject"));
   }, []);
 
+  const refreshDownloadedProjects = useCallback(async () => {
+    const downloaded = await getAllDownloadedProjects();
+    const ids = downloaded.map((project) => project.id);
+    setDownloadedProjectIds(ids);
+
+    const counts = await Promise.all(
+      ids.map(async (id) => {
+        const count = await getPendingCountByProjectId(id);
+        return [id, count] as const;
+      })
+    );
+
+    setProjectPendingMap(
+      counts.reduce<Record<string, number>>((acc, [id, count]) => {
+        acc[id] = count;
+        return acc;
+      }, {})
+    );
+  }, []);
+
   useEffect(() => {
     refreshPendingProjects();
-    const interval = setInterval(refreshPendingProjects, 5000);
+    refreshDownloadedProjects();
+
+    const interval = setInterval(() => {
+      refreshPendingProjects();
+      refreshDownloadedProjects();
+    }, 5000);
+
     return () => clearInterval(interval);
-  }, [refreshPendingProjects]);
+  }, [refreshPendingProjects, refreshDownloadedProjects]);
 
   async function fetchProjects() {
     setLoading(true);
@@ -86,7 +123,7 @@ export default function ProjectScreen() {
       const result = await safeApiCall(
         () => projectApi.create(payload),
         payload,
-        { type: "createProject" },
+        { type: "createProject" }
       );
 
       if ("offline" in result) {
@@ -105,6 +142,78 @@ export default function ProjectScreen() {
     } finally {
       setCreating(false);
     }
+  }
+
+  async function handleDownloadProject(project: Project, forceRefresh = false) {
+    try {
+      setDownloadingProjectId(project.id);
+
+      const alreadyDownloaded = await isProjectDownloaded(project.id);
+
+      if (alreadyDownloaded && !forceRefresh) {
+        Alert.alert(
+          "Already downloaded",
+          "This project is already available offline."
+        );
+        return;
+      }
+
+      const result = await downloadProjectForOffline(project);
+      await refreshDownloadedProjects();
+
+      Alert.alert(
+        forceRefresh ? "Offline copy refreshed" : "Download complete",
+        `${project.name} is now available offline.\n\nFolders: ${result.folderCount}\nAssets: ${result.assetCount}`
+      );
+    } catch (error: any) {
+      Alert.alert(
+        "Download failed",
+        error?.message || "Could not download this project for offline use."
+      );
+    } finally {
+      setDownloadingProjectId(null);
+    }
+  }
+
+  async function handleRemoveOfflineProject(project: Project) {
+    try {
+      setRemovingProjectId(project.id);
+
+      const pendingCount = await getPendingCountByProjectId(project.id);
+
+      if (pendingCount > 0) {
+        Alert.alert(
+          "Sync required",
+          "This project has unsynced offline changes. Sync before removing offline data."
+        );
+        return;
+      }
+
+      await clearOfflineProject(project.id);
+      await refreshDownloadedProjects();
+
+      Alert.alert(
+        "Offline copy removed",
+        `${project.name} was removed from offline storage.`
+      );
+    } catch (error: any) {
+      Alert.alert(
+        "Remove failed",
+        error?.message || "Could not remove offline project data."
+      );
+    } finally {
+      setRemovingProjectId(null);
+    }
+  }
+
+  function openProject(project: Project) {
+    router.push({
+      pathname: "/(app)/FolderAndAssetScreen",
+      params: {
+        projectId: project.id,
+        projectName: project.name,
+      },
+    });
   }
 
   const offlineProjectEntries = useMemo(() => {
@@ -155,16 +264,6 @@ export default function ProjectScreen() {
 
     return combinedProjects;
   }, [combinedProjects, filter]);
-
-  function openProject(project: Project) {
-    router.push({
-      pathname: "/(app)/FolderAndAssetScreen",
-      params: {
-        projectId: project.id,
-        projectName: project.name,
-      },
-    });
-  }
 
   if (!loaded) return null;
 
@@ -228,27 +327,118 @@ export default function ProjectScreen() {
           </View>
         ) : (
           <View style={styles.projectList}>
-            {filteredProjects.map((project) => (
-              <Pressable
-                key={project.id}
-                style={styles.projectCard}
-                onPress={() => openProject(project)}
-              >
-                <View style={styles.projectCardTop}>
-                  <Text style={styles.projectName}>{project.name}</Text>
-                  <View style={styles.statusPill}>
-                    <Text style={styles.statusPillText}>{project.status}</Text>
-                  </View>
-                </View>
+            {filteredProjects.map((project) => {
+              const isOfflineCreated = project.id.startsWith("offline_");
+              const isDownloaded = downloadedProjectIds.includes(project.id);
+              const isDownloading = downloadingProjectId === project.id;
+              const isRemoving = removingProjectId === project.id;
+              const pendingForProject = projectPendingMap[project.id] ?? 0;
 
-                <Text style={styles.projectMeta}>
-                  Created by: {project.createdBy.fullName}
-                </Text>
-                <Text style={styles.projectMeta}>
-                  Company: {project.company.name}
-                </Text>
-              </Pressable>
-            ))}
+              return (
+                <Pressable
+                  key={project.id}
+                  style={styles.projectCard}
+                  onPress={() => openProject(project)}
+                >
+                  <View style={styles.projectCardTop}>
+                    <Text style={styles.projectName}>{project.name}</Text>
+                    <View style={styles.statusPill}>
+                      <Text style={styles.statusPillText}>{project.status}</Text>
+                    </View>
+                  </View>
+
+                  <Text style={styles.projectMeta}>
+                    Created by: {project.createdBy.fullName}
+                  </Text>
+                  <Text style={styles.projectMeta}>
+                    Company: {project.company.name}
+                  </Text>
+
+                  <View style={styles.projectFooterRow}>
+                    <View style={styles.projectBadgeColumn}>
+                      {isDownloaded && (
+                        <View style={styles.offlineReadyBadge}>
+                          <Text style={styles.offlineReadyText}>Available Offline</Text>
+                        </View>
+                      )}
+
+                      {pendingForProject > 0 && (
+                        <View style={styles.pendingSyncBadge}>
+                          <Text style={styles.pendingSyncText}>
+                            Pending Sync: {pendingForProject}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+
+                    {!isOfflineCreated && (
+                      <View style={styles.projectActionsColumn}>
+                        {!isDownloaded ? (
+                          <Pressable
+                            style={[
+                              styles.downloadBtn,
+                              isDownloading && styles.downloadBtnDisabled,
+                            ]}
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              handleDownloadProject(project);
+                            }}
+                            disabled={isDownloading}
+                          >
+                            {isDownloading ? (
+                              <ActivityIndicator size="small" color="#000" />
+                            ) : (
+                              <Text style={styles.downloadBtnText}>Download</Text>
+                            )}
+                          </Pressable>
+                        ) : (
+                          <>
+                            <Pressable
+                              style={[
+                                styles.refreshBtn,
+                                isDownloading && styles.downloadBtnDisabled,
+                              ]}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                handleDownloadProject(project, true);
+                              }}
+                              disabled={isDownloading}
+                            >
+                              {isDownloading ? (
+                                <ActivityIndicator size="small" color={ACC} />
+                              ) : (
+                                <Text style={styles.refreshBtnText}>Refresh</Text>
+                              )}
+                            </Pressable>
+
+                            <Pressable
+                              style={[
+                                styles.removeOfflineBtn,
+                                (isRemoving || pendingForProject > 0) &&
+                                  styles.downloadBtnDisabled,
+                              ]}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                handleRemoveOfflineProject(project);
+                              }}
+                              disabled={isRemoving || pendingForProject > 0}
+                            >
+                              {isRemoving ? (
+                                <ActivityIndicator size="small" color="#fff" />
+                              ) : (
+                                <Text style={styles.removeOfflineBtnText}>
+                                  Remove Offline
+                                </Text>
+                              )}
+                            </Pressable>
+                          </>
+                        )}
+                      </View>
+                    )}
+                  </View>
+                </Pressable>
+              );
+            })}
           </View>
         )}
       </ScrollView>
@@ -437,6 +627,98 @@ const styles = StyleSheet.create({
     color: "#777",
     fontSize: 8,
     marginTop: 8,
+  },
+  projectFooterRow: {
+    marginTop: 14,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  projectBadgeColumn: {
+    flex: 1,
+    gap: 8,
+  },
+  projectActionsColumn: {
+    minWidth: 120,
+    gap: 8,
+  },
+  offlineReadyBadge: {
+    backgroundColor: "rgba(200, 241, 53, 0.12)",
+    borderColor: "rgba(200, 241, 53, 0.4)",
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    alignSelf: "flex-start",
+  },
+  offlineReadyText: {
+    color: ACC,
+    fontSize: 10,
+    fontFamily: fonts.inter.medium as unknown as string,
+  },
+  pendingSyncBadge: {
+    backgroundColor: "rgba(255, 193, 7, 0.12)",
+    borderColor: "rgba(255, 193, 7, 0.35)",
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    alignSelf: "flex-start",
+  },
+  pendingSyncText: {
+    color: "#FFC107",
+    fontSize: 10,
+    fontFamily: fonts.inter.medium as unknown as string,
+  },
+  downloadBtn: {
+    backgroundColor: ACC,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 110,
+  },
+  refreshBtn: {
+    backgroundColor: "#1a1a1a",
+    borderWidth: 1,
+    borderColor: ACC,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 110,
+  },
+  refreshBtnText: {
+    color: ACC,
+    fontSize: 12,
+    fontFamily: fonts.inter.semiBold as unknown as string,
+  },
+  removeOfflineBtn: {
+    backgroundColor: "#2a1111",
+    borderWidth: 1,
+    borderColor: "#ff6b6b",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 110,
+  },
+  removeOfflineBtnText: {
+    color: "#ff8b8b",
+    fontSize: 12,
+    fontFamily: fonts.inter.semiBold as unknown as string,
+  },
+  downloadBtnDisabled: {
+    opacity: 0.6,
+  },
+  downloadBtnText: {
+    color: "#000",
+    fontSize: 12,
+    fontFamily: fonts.inter.semiBold as unknown as string,
   },
 
   modalOverlay: {

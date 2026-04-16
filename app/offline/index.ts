@@ -1,29 +1,42 @@
-//offline/index.ts
-import { initStorage } from './storage';
-import { initSync } from './sync';
+import { initStorage } from "./storage";
+import { initSync } from "./sync";
 
-// Offline Support - Public API
-export * from './types';
-export * from './wrapper';
-export { 
-  initSync, 
-  syncQueue, 
-  triggerManualSync, 
-  startSyncListener 
-} from './sync';
-export { 
+export * from "./types";
+export * from "./wrapper";
+
+export {
+  initSync,
+  syncQueue,
+  triggerManualSync,
+  startSyncListener,
+} from "./sync";
+
+export {
   initStorage,
   getPending,
-  getPendingCount 
-} from './storage';
-export { 
-  useIsOnline
-} from './network';
+  getPendingCount,
+  getPendingByProjectId,
+  getPendingCountByProjectId,
+  saveProjectOffline,
+  saveFoldersOffline,
+  saveAssetsOffline,
+  clearOfflineProject,
+  isProjectDownloaded,
+  getDownloadedProject,
+  getOfflineContents,
+  getAllDownloadedProjects,
+  upsertOfflineFolder,
+  upsertOfflineAsset,
+  getOfflineAssetById,
+} from "./storage";
 
-// Init everything
+export {
+  useIsOnline
+} from "./network";
+
 export async function initOfflineSupport() {
-  console.log('🚀 Initializing offline support...');
+  console.log("🚀 Initializing offline support...");
   await initStorage();
   await initSync();
-  console.log('✅ Offline support ready');
+  console.log("✅ Offline support ready");
 }

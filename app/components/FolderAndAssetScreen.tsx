@@ -29,7 +29,17 @@ import {
   FolderItem,
 } from "../../api/api";
 
-import { safeApiCall, getPendingCount, syncQueue } from "../offline";
+import {
+  safeApiCall,
+  getPendingCount,
+  syncQueue,
+  useIsOnline,
+  isProjectDownloaded,
+  getOfflineContents,
+  upsertOfflineFolder,
+  upsertOfflineAsset,
+  getOfflineAssetById,
+} from "../offline";
 import { Ionicons } from "@expo/vector-icons";
 
 type RouteParams = {
@@ -51,7 +61,7 @@ type Props = {
 const ACC = "#D4FF00";
 const NUM_COLUMNS = 4;
 const SCREEN_WIDTH = Dimensions.get("window").width;
-const HORIZONTAL_PADDING = 15 * 2; // container horizontal padding
+const HORIZONTAL_PADDING = 15 * 2;
 const GRID_GAP = 5;
 const ITEM_SIZE =
   (SCREEN_WIDTH - HORIZONTAL_PADDING * 2 - GRID_GAP * (NUM_COLUMNS - 1)) /
@@ -59,18 +69,18 @@ const ITEM_SIZE =
 
 export default function FolderAndAssetScreen({ route }: Props) {
   const folderInputRef = useRef<TextInput>(null);
+  const isOnline = useIsOnline();
 
   const openFolderModal = () => {
-  setFolderModalVisible(true);
-  setFolderName("");
-  
+    setFolderModalVisible(true);
+    setFolderName("");
 
-  requestAnimationFrame(() => {
-    setTimeout(() => {
-      folderInputRef.current?.focus();
-    }, 350);
-  });
-};
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        folderInputRef.current?.focus();
+      }, 350);
+    });
+  };
 
   const [loaded] = useFonts({
     ...fonts.poppins,
@@ -91,6 +101,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
   const [contentLoading, setContentLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  const [downloadedOffline, setDownloadedOffline] = useState(false);
 
   const [folderModalVisible, setFolderModalVisible] = useState(false);
   const [assetModalVisible, setAssetModalVisible] = useState(false);
@@ -98,7 +109,6 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
   const [folderName, setFolderName] = useState("");
   const [navigatingFolderId, setNavigatingFolderId] = useState<string | null>(null);
-
 
   useEffect(() => {
     const interval = setInterval(async () => {
@@ -109,49 +119,99 @@ export default function FolderAndAssetScreen({ route }: Props) {
     return () => clearInterval(interval);
   }, []);
 
-  const loadContents = useCallback(
-    async (
-      folderId: string | null,
-      options?: { showSkeleton?: boolean }
-    ) => {
+  useEffect(() => {
+    const checkDownloaded = async () => {
       if (projectId.startsWith("offline_")) {
-        setFolders([]);
-        setAssets([]);
-        setLoading(false);
-        setRefreshing(false);
-        setContentLoading(false);
+        setDownloadedOffline(false);
         return;
       }
 
-      try {
-        if (options?.showSkeleton) {
-          setContentLoading(true);
-          setFolders([]);
-          setAssets([]);
-        }
+      const downloaded = await isProjectDownloaded(projectId);
+      setDownloadedOffline(downloaded);
+    };
 
-        const data = await projectContentApi.listContents(projectId, folderId);
-        setFolders(data.folders || []);
-        setAssets(data.assets || []);
-      } catch (error: any) {
-        Alert.alert("Error", error.message || "Failed to load contents");
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
-        setContentLoading(false);
-        setNavigatingFolderId(null);
+    checkDownloaded();
+  }, [projectId]);
+
+
+
+ const loadContents = useCallback(
+  async (
+    folderId: string | null,
+    options?: { showSkeleton?: boolean }
+  ) => {
+    const readOffline = async () => {
+      const offlineData = await getOfflineContents(projectId, folderId);
+      setFolders((offlineData.folders || []) as FolderItem[]);
+      setAssets((offlineData.assets || []) as AssetItem[]);
+    };
+
+    if (projectId.startsWith("offline_")) {
+      setFolders([]);
+      setAssets([]);
+      setLoading(false);
+      setRefreshing(false);
+      setContentLoading(false);
+      return;
+    }
+
+    try {
+      if (options?.showSkeleton) {
+        setContentLoading(true);
+        setFolders([]);
+        setAssets([]);
       }
-    },
-    [projectId]
-  );
+
+      const shouldUseOfflineCache =
+        downloadedOffline && (isOnline === false || isOnline === null);
+
+      if (shouldUseOfflineCache) {
+        await readOffline();
+        return;
+      }
+
+      const data = await projectContentApi.listContents(projectId, folderId);
+      setFolders(data.folders || []);
+      setAssets(data.assets || []);
+    } catch (error: any) {
+      console.log("LOAD ERROR:", error);
+
+      if (downloadedOffline) {
+        try {
+          await readOffline();
+          return;
+        } catch (offlineError: any) {
+          console.log("OFFLINE FALLBACK ERROR:", offlineError);
+          Alert.alert(
+            "Offline Error",
+            String(offlineError?.message || offlineError || "Offline fallback failed")
+          );
+          return;
+        }
+      }
+
+      Alert.alert("Error", String(error?.message || "Unable to load project"));
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+      setContentLoading(false);
+      setNavigatingFolderId(null);
+    }
+  },
+  [projectId, isOnline, downloadedOffline]
+);
 
   useEffect(() => {
-    loadContents(null);
-  }, [loadContents]);
+    loadContents(currentFolderId);
+  }, [loadContents, currentFolderId]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await syncQueue();
+
+    if (isOnline) {
+      await syncQueue();
+    }
+
     await loadContents(currentFolderId);
   };
 
@@ -179,103 +239,221 @@ export default function FolderAndAssetScreen({ route }: Props) {
     await loadContents(folderId, { showSkeleton: true });
   };
 
-  const handleCreateFolder = async () => {
-    if (!folderName.trim()) {
-      Alert.alert("Validation", "Folder name is required");
-      return;
-    }
 
-    const payload = {
-      projectId,
-      name: folderName.trim(),
-      parentId: currentFolderId,
-    };
+  const buildLocalFolder = (name: string): FolderItem => ({
+  id: `offline_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+  name,
+  parentId: currentFolderId ?? null,
+  projectId,
+  createdAt: new Date().toISOString(),
+  createdBy: {
+    id: "offline-user",
+    fullName: "You",
+    email: "",
+  },
+});
+  
 
-    try {
-      const result = await safeApiCall(
-        () => projectContentApi.createFolder(payload),
-        payload,
-        { type: "createFolder", projectId }
-      );
 
-      if ("offline" in result) {
-        Alert.alert("Offline", result.message);
-      } else {
-        Alert.alert("Success", "Folder created");
+const handleCreateFolder = async () => {
+  if (!folderName.trim()) {
+    Alert.alert("Validation", "Folder name is required");
+    return;
+  }
+
+  const payload = {
+    projectId,
+    name: folderName.trim(),
+    parentId: currentFolderId,
+  };
+
+  try {
+    const result = await safeApiCall(
+      () => projectContentApi.createFolder(payload),
+      payload,
+      { type: "createFolder", projectId }
+    );
+
+    if ("offline" in result) {
+      if (downloadedOffline) {
+        const localFolder = buildLocalFolder(folderName.trim());
+        localFolder.id = result.localId;
+
+        await upsertOfflineFolder(localFolder);
       }
 
-      setFolderName("");
-      setFolderModalVisible(false);
-      await loadContents(currentFolderId, { showSkeleton: true });
-    } catch (error: any) {
-      Alert.alert("Error", error.message || "Failed to create folder");
+      Alert.alert("Offline", result.message);
+    } else {
+      if (downloadedOffline) {
+        await upsertOfflineFolder(result.folder);
+      }
+
+      Alert.alert("Success", "Folder created");
     }
-  };
+
+    setFolderName("");
+    setFolderModalVisible(false);
+    await loadContents(currentFolderId, { showSkeleton: true });
+  } catch (error: any) {
+    Alert.alert("Error", error.message || "Failed to create folder");
+  }
+}; 
+
+
+
+  const buildLocalAsset = (draft: AssetDraft): AssetItem => ({
+  id: `offline_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+  name: draft.name,
+  writtenDescription: draft.writtenDescription || null,
+  folderId: currentFolderId ?? null,
+  projectId,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+  condition: draft.condition || null,
+  assetType: draft.assetType || "Other",
+  brand: draft.brand || null,
+  model: draft.model || null,
+  manufactureYear: draft.manufactureYear || null,
+  kilometersDriven: draft.kilometersDriven || null,
+  createdBy: {
+    id: "offline-user",
+    fullName: "You",
+    email: "",
+  },
+  images: [],
+  voiceNotes: [],
+});
+
 
   const handleCreateAsset = async (draft: AssetDraft) => {
-    const payload = {
-      projectId,
-      name: draft.name,
-      writtenDescription: draft.writtenDescription || null,
-      folderId: currentFolderId || undefined,
-      images: draft.images || [],
-      voiceNotes: draft.voiceNotes || [],
-      condition: draft.condition || null,
-      assetType: draft.assetType || "Other",
-      brand: draft.assetType === "Vehicle" ? draft.brand || null : null,
-      manufactureYear:
-        draft.assetType === "Vehicle" ? draft.manufactureYear || null : null,
-      kilometersDriven:
-        draft.assetType === "Vehicle" ? draft.kilometersDriven || null : null,
-    };
+  const newImages = (draft.images || []).filter(
+    (item: any) => item.uri && !item.uri.startsWith("http")
+  );
 
-    try {
-      const result = await safeApiCall(
-        () => projectContentApi.createAsset(payload),
-        payload,
-        { type: "createAsset", projectId }
-      );
+  const newVoiceNotes = (draft.voiceNotes || []).filter(
+    (item: any) => item.uri && !item.uri.startsWith("http")
+  );
 
-      if ("offline" in result) {
-        Alert.alert("Offline", result.message);
-      } else {
-        Alert.alert("Success", "Asset created");
+  const payload = {
+    projectId,
+    name: draft.name,
+    writtenDescription: draft.writtenDescription || null,
+    folderId: currentFolderId || undefined,
+    images: newImages,
+    voiceNotes: newVoiceNotes,
+    condition: draft.condition || null,
+    assetType: draft.assetType || "Other",
+    brand: draft.assetType === "Vehicle" ? draft.brand || null : null,
+    model: draft.assetType === "Vehicle" ? draft.model || null : null,
+    manufactureYear:
+      draft.assetType === "Vehicle" ? draft.manufactureYear || null : null,
+    kilometersDriven:
+      draft.assetType === "Vehicle" ? draft.kilometersDriven || null : null,
+  };
+
+  try {
+    const result = await safeApiCall(
+      () => projectContentApi.createAsset(payload),
+      payload,
+      { type: "createAsset", projectId }
+    );
+
+    if ("offline" in result) {
+      if (downloadedOffline) {
+        const localAsset = buildLocalAsset(draft);
+        localAsset.id = result.localId;
+
+        await upsertOfflineAsset(localAsset);
       }
 
-      setAssetModalVisible(false);
-      await loadContents(currentFolderId, { showSkeleton: true });
-    } catch (error: any) {
-      Alert.alert("Error", error.message || "Failed to create asset");
+      Alert.alert("Offline", result.message);
+    } else {
+      if (downloadedOffline) {
+        await upsertOfflineAsset(result.asset);
+      }
+
+      Alert.alert("Success", "Asset created");
     }
+
+    setAssetModalVisible(false);
+    await loadContents(currentFolderId, { showSkeleton: true });
+  } catch (error: any) {
+    Alert.alert("Error", error.message || "Failed to create asset");
+  }
+};
+
+
+ const handleUpdateAsset = async (draft: AssetDraft) => {
+  if (!editingAsset) return;
+
+  const newImages = (draft.images || []).filter(
+    (item: any) => !item.existing && item.uri && !item.uri.startsWith("http")
+  );
+
+  const newVoiceNotes = (draft.voiceNotes || []).filter(
+    (item: any) => !item.existing && item.uri && !item.uri.startsWith("http")
+  );
+
+  const payload = {
+    assetId: editingAsset.id,
+    writtenDescription: draft.writtenDescription || null,
+    images: newImages,
+    voiceNotes: newVoiceNotes,
+    condition: draft.condition || null,
+    assetType: draft.assetType || "Other",
+    brand: draft.assetType === "Vehicle" ? draft.brand || null : null,
+    model: draft.assetType === "Vehicle" ? draft.model || null : null,
+    manufactureYear:
+      draft.assetType === "Vehicle" ? draft.manufactureYear || null : null,
+    kilometersDriven:
+      draft.assetType === "Vehicle" ? draft.kilometersDriven || null : null,
   };
 
-  const handleUpdateAsset = async (draft: AssetDraft) => {
-    if (!editingAsset) return;
+  try {
+    const result = await safeApiCall(
+      () => projectContentApi.updateAsset(payload),
+      payload,
+      { type: "updateAsset", projectId }
+    );
 
-    const payload = {
-      assetId: editingAsset.id,
-      writtenDescription: draft.writtenDescription || null,
-      images: draft.images || [],
-      voiceNotes: draft.voiceNotes || [],
-      condition: draft.condition || null,
-      assetType: draft.assetType || "Other",
-      brand: draft.assetType === "Vehicle" ? draft.brand || null : null,
-      manufactureYear:
-        draft.assetType === "Vehicle" ? draft.manufactureYear || null : null,
-      kilometersDriven:
-        draft.assetType === "Vehicle" ? draft.kilometersDriven || null : null,
-    };
+    if ("offline" in result) {
+      if (downloadedOffline) {
+        const existingOfflineAsset =
+          (await getOfflineAssetById(editingAsset.id)) ?? editingAsset;
 
-    try {
-      await projectContentApi.updateAsset(payload);
+        const updatedOfflineAsset: AssetItem = {
+          ...existingOfflineAsset,
+          writtenDescription: draft.writtenDescription || null,
+          condition: draft.condition || null,
+          assetType: draft.assetType || "Other",
+          brand: draft.assetType === "Vehicle" ? draft.brand || null : null,
+          model: draft.assetType === "Vehicle" ? draft.model || null : null,
+          manufactureYear:
+            draft.assetType === "Vehicle" ? draft.manufactureYear || null : null,
+          kilometersDriven:
+            draft.assetType === "Vehicle" ? draft.kilometersDriven || null : null,
+          updatedAt: new Date().toISOString(),
+        };
+
+        await upsertOfflineAsset(updatedOfflineAsset);
+      }
+
+      Alert.alert("Offline", result.message);
+    } else {
+      if (downloadedOffline) {
+        await upsertOfflineAsset(result.asset);
+      }
+
       Alert.alert("Success", "Asset updated");
-      setEditingAsset(null);
-      setAssetModalVisible(false);
-      await loadContents(currentFolderId, { showSkeleton: true });
-    } catch (error: any) {
-      Alert.alert("Error", error.message || "Failed to update asset");
     }
-  };
+
+    setEditingAsset(null);
+    setAssetModalVisible(false);
+    await loadContents(currentFolderId, { showSkeleton: true });
+  } catch (error: any) {
+    Alert.alert("Error", error.message || "Failed to update asset");
+  }
+};
 
   const openEditAsset = (asset: AssetItem) => {
     setEditingAsset(asset);
@@ -312,6 +490,10 @@ export default function FolderAndAssetScreen({ route }: Props) {
       <View style={styles.container}>
         <Text style={styles.title}>{projectName}</Text>
         <Text style={styles.subtitle}>Folders & Assets</Text>
+
+        {downloadedOffline && !isOnline && (
+  <Text style={styles.offlineModeText}>OFFLINE</Text>
+)}
 
         {pendingCount > 0 && (
           <View style={styles.pendingBadge}>
@@ -419,13 +601,13 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
         <View
           style={[
-          styles.bottomActionBar,
-          {bottom: Math.max(insets.bottom, 0) - 30 },
+            styles.bottomActionBar,
+            { bottom: Math.max(insets.bottom, 0) - 30 },
           ]}
-          >
+        >
           <TouchableOpacity
             style={styles.primaryBtn}
-           onPress={openFolderModal}
+            onPress={openFolderModal}
             activeOpacity={0.85}
           >
             <Text style={styles.primaryBtnText}>New Folder</Text>
@@ -450,9 +632,9 @@ export default function FolderAndAssetScreen({ route }: Props) {
           statusBarTranslucent
           onRequestClose={() => setFolderModalVisible(false)}
           onShow={() => {
-          setTimeout(() => {
-          folderInputRef.current?.focus();
-          }, 80);
+            setTimeout(() => {
+              folderInputRef.current?.focus();
+            }, 80);
           }}
         >
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -466,19 +648,18 @@ export default function FolderAndAssetScreen({ route }: Props) {
                   <View style={styles.modalCard}>
                     <Text style={styles.modalTitle}>Create New Folder</Text>
 
-                  <TextInput
-                    ref={folderInputRef}
-                    style={styles.input}
-                    placeholder="Folder Name"
-                    placeholderTextColor="#777"
-                    value={folderName}
-                    onChangeText={setFolderName}
-                    returnKeyType="done"
-                   
-                    blurOnSubmit={false}
-                    showSoftInputOnFocus
-                    onSubmitEditing={handleCreateFolder}
-                  />
+                    <TextInput
+                      ref={folderInputRef}
+                      style={styles.input}
+                      placeholder="Folder Name"
+                      placeholderTextColor="#777"
+                      value={folderName}
+                      onChangeText={setFolderName}
+                      returnKeyType="done"
+                      blurOnSubmit={false}
+                      showSoftInputOnFocus
+                      onSubmitEditing={handleCreateFolder}
+                    />
 
                     <View style={styles.modalActions}>
                       <TouchableOpacity
@@ -539,6 +720,18 @@ const styles = StyleSheet.create({
     marginTop: 0,
     marginBottom: 10,
     fontSize: 15,
+  },
+  offlineModeBadge: {
+    backgroundColor: "rgba(212,255,0,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(212,255,0,0.35)",
+    padding: 8,
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  offlineModeText: {
+    color: ACC,
+    fontSize: 12,
   },
   pendingBadge: {
     flexDirection: "row",
