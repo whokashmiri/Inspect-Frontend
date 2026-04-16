@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { initOfflineSupport } from './app/offline';
 
+
 export default function App() {
   useEffect(() => {
     initOfflineSupport().catch(console.error);
@@ -10,7 +11,9 @@ export default function App() {
 
   return (
     <View style={styles.container}>
+      
       <Text>Open up App.tsx to start working on your app!</Text>
+      
       <StatusBar style="auto" />
     </View>
   );
