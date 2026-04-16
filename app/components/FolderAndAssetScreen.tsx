@@ -109,6 +109,8 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
   const [folderName, setFolderName] = useState("");
   const [navigatingFolderId, setNavigatingFolderId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<'all' | 'done' | 'incomplete'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     const interval = setInterval(async () => {
@@ -170,7 +172,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
         return;
       }
 
-      const data = await projectContentApi.listContents(projectId, folderId);
+      const data = await projectContentApi.listContents(projectId, folderId, filter, searchQuery);
       setFolders(data.folders || []);
       setAssets(data.assets || []);
     } catch (error: any) {
@@ -198,12 +200,12 @@ export default function FolderAndAssetScreen({ route }: Props) {
       setNavigatingFolderId(null);
     }
   },
-  [projectId, isOnline, downloadedOffline]
+  [projectId, isOnline, downloadedOffline, filter, searchQuery]
 );
 
   useEffect(() => {
     loadContents(currentFolderId);
-  }, [loadContents, currentFolderId]);
+  }, [loadContents, currentFolderId, filter, searchQuery]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -315,6 +317,7 @@ const handleCreateFolder = async () => {
   model: draft.model || null,
   manufactureYear: draft.manufactureYear || null,
   kilometersDriven: draft.kilometersDriven || null,
+  isDone: draft.isDone ?? false,
   createdBy: {
     id: "offline-user",
     fullName: "You",
@@ -349,6 +352,7 @@ const handleCreateFolder = async () => {
       draft.assetType === "Vehicle" ? draft.manufactureYear || null : null,
     kilometersDriven:
       draft.assetType === "Vehicle" ? draft.kilometersDriven || null : null,
+      isDone: draft.isDone ?? false,
   };
 
   try {
@@ -407,6 +411,7 @@ const handleCreateFolder = async () => {
       draft.assetType === "Vehicle" ? draft.manufactureYear || null : null,
     kilometersDriven:
       draft.assetType === "Vehicle" ? draft.kilometersDriven || null : null,
+      isDone: draft.isDone ?? false,
   };
 
   try {
@@ -432,6 +437,7 @@ const handleCreateFolder = async () => {
             draft.assetType === "Vehicle" ? draft.manufactureYear || null : null,
           kilometersDriven:
             draft.assetType === "Vehicle" ? draft.kilometersDriven || null : null,
+          isDone: (draft as any).isDone ?? existingOfflineAsset.isDone,
           updatedAt: new Date().toISOString(),
         };
 
@@ -465,13 +471,40 @@ const handleCreateFolder = async () => {
     setAssetModalVisible(false);
   };
 
-  const items = useMemo(() => {
-    return [
-      ...folders.map((folder) => ({ ...folder, itemType: "folder" as const })),
-      ...assets.map((asset) => ({ ...asset, itemType: "asset" as const })),
-    ];
-  }, [folders, assets]);
+  const filteredAssets = useMemo(() => {
+    let filtered = assets;
+    
+    // Apply filter
+    if (filter === 'done') {
+      filtered = filtered.filter(asset => asset.isDone);
+    } else if (filter === 'incomplete') {
+      filtered = filtered.filter(asset => !asset.isDone);
+    }
 
+    // Apply search
+    if (searchQuery.trim()) {
+      const query = searchQuery.trim().toLowerCase();
+      filtered = filtered.filter(asset => 
+        asset.name.toLowerCase().includes(query)
+      );
+    }
+
+    return filtered;
+  }, [assets, filter, searchQuery]);
+
+const items = useMemo(() => {
+  const combined = [
+    ...folders.map((folder) => ({ ...folder, itemType: "folder" as const })),
+    ...filteredAssets.map((asset) => ({ ...asset, itemType: "asset" as const })),
+  ];
+
+  const q = searchQuery.trim().toLowerCase();
+  if (!q) return combined;
+
+  return combined.filter((item) =>
+    item.name?.toLowerCase().includes(q)
+  );
+}, [folders, filteredAssets, searchQuery]);
   const renderSkeletons = () => {
     return Array.from({ length: 10 }).map((_, index) => (
       <View key={index} style={styles.gridItem}>
@@ -517,6 +550,37 @@ const handleCreateFolder = async () => {
             </TouchableOpacity>
           ))}
         </View>
+
+        <View style={styles.filterRow}>
+          <TouchableOpacity 
+            style={[styles.filterBtn, filter === 'all' && styles.filterBtnActive]}
+            onPress={() => setFilter('all')}
+          >
+            <Text style={[styles.filterText, filter === 'all' && styles.filterTextActive]}>All</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.filterBtn, filter === 'done' && styles.filterBtnActive]}
+            onPress={() => setFilter('done')}
+          >
+            <Text style={[styles.filterText, filter === 'done' && styles.filterTextActive]}>Done</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.filterBtn, filter === 'incomplete' && styles.filterBtnActive]}
+            onPress={() => setFilter('incomplete')}
+          >
+            <Text style={[styles.filterText, filter === 'incomplete' && styles.filterTextActive]}>Incomplete</Text>
+          </TouchableOpacity>
+        </View>
+
+       <View >
+  <TextInput
+    value={searchQuery}
+    onChangeText={setSearchQuery}
+    placeholder="Search Assets"
+    placeholderTextColor="#666"
+    style={styles.searchInput}
+  />
+</View>
 
         {loading || contentLoading ? (
           <View style={[styles.listContent, { paddingBottom: 120 + insets.bottom }]}>
@@ -708,6 +772,45 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
     paddingTop: 0,
+  },
+  filterRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 12,
+  },
+  filterBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: "#222",
+    borderRadius: 12,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#444",
+  },
+  filterBtnActive: {
+    backgroundColor: ACC,
+    borderColor: ACC,
+  },
+  filterText: {
+    color: "#999",
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  filterTextActive: {
+    color: "#000",
+    fontWeight: "600",
+  },
+  searchInput: {
+    backgroundColor: "#222",
+    borderWidth: 1,
+    borderColor: "#444",
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    color: "#fff",
+    fontSize: 14,
+    marginBottom: 12,
   },
   title: {
     fontSize: 15,

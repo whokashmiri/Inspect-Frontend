@@ -33,6 +33,7 @@ type ExtendedAssetDraft = AssetDraft & {
   model?: string;
   manufactureYear?: string;
   kilometersDriven?: string;
+  isDone?: boolean;
 };
 
 type Props = {
@@ -57,6 +58,7 @@ const getInitialDraft = (
   model: initialData?.model || "",
   manufactureYear: initialData?.manufactureYear || "",
   kilometersDriven: initialData?.kilometersDriven || "",
+  isDone: initialData?.isDone || false,
 });
 
 export default function CreateAssetWizardModal({
@@ -438,7 +440,7 @@ const scrollToField = (key: string) => {
   />
 </View>
 
-                           <View onLayout={setFieldPosition("kilometersDriven")}>
+                            <View onLayout={setFieldPosition("kilometersDriven")}>
   <TextInput
     placeholder="Kilometers Driven"
     placeholderTextColor="#666"
@@ -452,6 +454,7 @@ const scrollToField = (key: string) => {
     onFocus={() => scrollToField("kilometersDriven")}
   />
 </View>
+
                           </>
                         )}
                       </>
@@ -492,6 +495,22 @@ const scrollToField = (key: string) => {
                           </Text>
                         </TouchableOpacity>
 
+                        
+
+                        <TouchableOpacity 
+                              style={styles.checkboxWrap}
+                              onPress={() => setDraft(prev => ({ ...prev, isDone: !prev.isDone }))}
+                              activeOpacity={0.7}
+                            >
+                              <View style={[
+                                styles.checkbox,
+                                draft.isDone && styles.checkboxChecked
+                              ]}>
+                                {draft.isDone && <Text style={styles.checkmark}>✓</Text>}
+                              </View>
+                              <Text style={styles.checkboxLabel}>Mark as Done</Text>
+                            </TouchableOpacity>
+
                         <Text style={styles.helper}>
                           {(draft.voiceNotes || []).length} voice note
                           {(draft.voiceNotes || []).length === 1 ? "" : "s"} added
@@ -506,11 +525,22 @@ const scrollToField = (key: string) => {
                             <TouchableOpacity onPress={() => removeVoiceNote(index)}>
                               <Text style={styles.voiceRemove}>Remove</Text>
                             </TouchableOpacity>
+
+
+                            
                           </View>
+
+
+
                         ))}
                       </>
                     )}
+
+
+                    
                   </ScrollView>
+
+                  
 
                   <View style={styles.footer}>
                     <View style={styles.footerSide}>
@@ -586,6 +616,46 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.72)",
     paddingHorizontal: 14,
     paddingVertical: 20,
+  },
+
+  checkboxWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: "#1a1a1a",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#333",
+  },
+
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: "#666",
+    backgroundColor: "#222",
+    marginRight: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  checkboxChecked: {
+    borderColor: ACC,
+    backgroundColor: ACC,
+  },
+
+  checkmark: {
+    color: "#000",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+
+  checkboxLabel: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "500",
   },
 
   keyboardWrap: {

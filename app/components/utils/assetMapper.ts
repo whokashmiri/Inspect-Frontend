@@ -1,7 +1,7 @@
 import { AssetItem } from "../../../api/api";
 import { AssetDraft } from "./types";
 
-export function mapAssetToDraft(asset: AssetItem): AssetDraft {
+export function mapAssetToDraft(asset: AssetItem): AssetDraft & { isDone: boolean } {
   return {
     name: asset.name,
     writtenDescription: asset.writtenDescription || "",
@@ -11,6 +11,7 @@ export function mapAssetToDraft(asset: AssetItem): AssetDraft {
     model: asset.model || "",
     manufactureYear: asset.manufactureYear || "",
     kilometersDriven: asset.kilometersDriven || "",
+    isDone: asset.isDone || false,
     images: asset.images.map((img, index) => ({
       uri: img.url,
       name: `asset_image_${index + 1}.jpg`,

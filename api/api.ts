@@ -290,9 +290,12 @@ export interface AssetItem {
   brand: string | null;
   model: string | null;
   manufactureYear: string | null;
+
   kilometersDriven: string | null;
+  isDone: boolean;
 
   createdBy: {
+
     id: string;
     fullName: string;
     email: string;
@@ -327,15 +330,8 @@ export interface UploadFileInput {
 }
 
 export const projectContentApi = {
-  listContents: (projectId: string, parentId?: string | null) => {
-    const qs = parentId ? `?parentId=${encodeURIComponent(parentId)}` : "";
-    return request<ProjectContentsResponse>(
-      `/projects/${projectId}/contents${qs}`,
-      {
-        method: "GET",
-      },
-    );
-  },
+
+
 
   createFolder: (payload: {
     projectId: string;
@@ -350,88 +346,109 @@ export const projectContentApi = {
       },
     }),
 
-  createAsset: async (payload: {
-    projectId: string;
-    name: string;
-    writtenDescription?: string | null;
-    folderId?: string | null;
-    images?: UploadFileInput[];
-    voiceNotes?: UploadFileInput[];
-    condition?: "" | "New" | "Used" | "Damaged" | null;
-    assetType?: "Vehicle" | "Other";
-    brand?: string | null;
-    model?: string | null;
-    manufactureYear?: string | null;
-    kilometersDriven?: string | null;
-  }) => {
-    const form = new FormData();
+ createAsset: async (payload: {
+  projectId: string;
+  name: string;
+  writtenDescription?: string | null;
+  folderId?: string | null;
+  images?: UploadFileInput[];
+  voiceNotes?: UploadFileInput[];
+  condition?: "" | "New" | "Used" | "Damaged" | null;
+  assetType?: "Vehicle" | "Other";
+  brand?: string | null;
+  model?: string | null;
+  manufactureYear?: string | null;
+  kilometersDriven?: string | null;
+  isDone?: boolean;
+}) => {
+  const form = new FormData();
 
-    form.append("name", payload.name);
+  form.append("name", payload.name);
 
-    if (payload.writtenDescription?.trim()) {
-      form.append("writtenDescription", payload.writtenDescription.trim());
+  if (payload.writtenDescription?.trim()) {
+    form.append("writtenDescription", payload.writtenDescription.trim());
+  }
+
+  if (payload.folderId) {
+    form.append("folderId", payload.folderId);
+  }
+
+  if (payload.condition) {
+    form.append("condition", payload.condition);
+  }
+
+  if (payload.assetType) {
+    form.append("assetType", payload.assetType);
+  }
+
+  if (payload.brand?.trim()) {
+    form.append("brand", payload.brand.trim());
+  }
+
+  if (payload.model?.trim()) {
+    form.append("model", payload.model.trim());
+  }
+
+  if (payload.manufactureYear?.trim()) {
+    form.append("manufactureYear", payload.manufactureYear.trim());
+  }
+
+  if (payload.kilometersDriven?.trim()) {
+    form.append("kilometersDriven", payload.kilometersDriven.trim());
+  }
+
+  form.append("isDone", payload.isDone ? "true" : "false");
+
+  for (const image of payload.images ?? []) {
+    form.append("images", {
+      uri: image.uri,
+      name: image.name,
+      type: image.type,
+    } as any);
+  }
+
+  for (const voice of payload.voiceNotes ?? []) {
+    form.append("voiceNotes", {
+      uri: voice.uri,
+      name: voice.name,
+      type: voice.type,
+    } as any);
+  }
+
+  return requestForm<CreateAssetResponse>(
+    `/projects/${payload.projectId}/assets`,
+    {
+      method: "POST",
+      body: form,
     }
+  );
+},
 
-    if (payload.folderId) {
-      form.append("folderId", payload.folderId);
-    }
 
-    if (payload.condition) {
-      form.append("condition", payload.condition);
-    }
-
-    if (payload.assetType) {
-      form.append("assetType", payload.assetType);
-    }
-
-    if (payload.brand?.trim()) {
-      form.append("brand", payload.brand.trim());
-    }
-    if (payload.model?.trim()) {
-      form.append("model", payload.model.trim());
-    }
-
-    if (payload.manufactureYear?.trim()) {
-      form.append("manufactureYear", payload.manufactureYear.trim());
-    }
-
-    if (payload.kilometersDriven?.trim()) {
-      form.append("kilometersDriven", payload.kilometersDriven.trim());
-    }
-
-    for (const image of payload.images ?? []) {
-      form.append(
-        "images",
-        {
-          uri: image.uri,
-          name: image.name,
-          type: image.type,
-        } as any,
-      );
-    }
-
-    for (const voice of payload.voiceNotes ?? []) {
-      form.append(
-        "voiceNotes",
-        {
-          uri: voice.uri,
-          name: voice.name,
-          type: voice.type,
-        } as any,
-      );
-    }
-
-    return requestForm<CreateAssetResponse>(
-      `/projects/${payload.projectId}/assets`,
+  listContents: (projectId: string, parentId?: string | null, filter?: 'all' | 'done' | 'incomplete', search?: string) => {
+    let qs = '';
+    if (parentId) qs += `?parentId=${encodeURIComponent(parentId)}`;
+    if (filter) qs += `${qs ? '&' : '?'}filter=${filter}`;
+    if (search) qs += `${qs ? '&' : '?'}search=${encodeURIComponent(search)}`;
+    if (!qs) qs = '';
+    return request<ProjectContentsResponse>(
+      `/projects/${projectId}/contents${qs}`,
       {
-        method: "POST",
-        body: form,
+        method: "GET",
       },
     );
   },
 
+  toggleAssetDone: (projectId: string, assetId: string, isDone: boolean) =>
+    request(`/projects/${projectId}/assets/${assetId}/toggle-done`, {
+      method: "PATCH",
+      body: { isDone },
+    }),
 
-  updateAsset: async (payload: {
+
+
+
+updateAsset: async (payload: {
   assetId: string;
   writtenDescription?: string | null;
   images?: UploadFileInput[];
@@ -442,6 +459,7 @@ export const projectContentApi = {
   model?: string | null;
   manufactureYear?: string | null;
   kilometersDriven?: string | null;
+  isDone?: boolean;
 }) => {
   const form = new FormData();
 
@@ -453,7 +471,7 @@ export const projectContentApi = {
     form.append("condition", payload.condition ?? "");
   }
 
-  if (payload.assetType) {
+  if (payload.assetType !== undefined) {
     form.append("assetType", payload.assetType);
   }
 
@@ -473,30 +491,29 @@ export const projectContentApi = {
     form.append("kilometersDriven", payload.kilometersDriven ?? "");
   }
 
+  if (payload.isDone !== undefined) {
+    form.append("isDone", payload.isDone ? "true" : "false");
+  }
+
   for (const image of payload.images ?? []) {
-    form.append(
-      "images",
-      {
-        uri: image.uri,
-        name: image.name,
-        type: image.type,
-      } as any
-    );
+    form.append("images", {
+      uri: image.uri,
+      name: image.name,
+      type: image.type,
+    } as any);
   }
 
   for (const voice of payload.voiceNotes ?? []) {
-    form.append(
-      "voiceNotes",
-      {
-        uri: voice.uri,
-        name: voice.name,
-        type: voice.type,
-      } as any
-    );
+    form.append("voiceNotes", {
+      uri: voice.uri,
+      name: voice.name,
+      type: voice.type,
+    } as any);
   }
 
+ console.log("UPDATE FORM isDone:", payload.isDone);
+console.log("UPDATE FORM parts:", (form as any)._parts);
   return requestForm<UpdateAssetResponse>(
-    
     `/projects/assets/${payload.assetId}`,
     {
       method: "PATCH",
@@ -504,4 +521,6 @@ export const projectContentApi = {
     }
   );
 },
+
+
 };
