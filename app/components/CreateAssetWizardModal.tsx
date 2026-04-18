@@ -20,11 +20,12 @@ import {
 import { Picker } from "@react-native-picker/picker";
 import * as ImagePicker from "expo-image-picker";
 import AssetCameraModal from "./AssetCameraModal";
-import { AssetDraft } from "./types";
+import { AssetDraft } from "./utils/types";
 import { AudioModule, RecordingPresets, useAudioRecorder } from "expo-audio";
 
 type AssetCondition = "" | "New" | "Used" | "Damaged";
 type AssetType = "Other" | "Vehicle";
+type CameraMode = "photos" | "scan";
 
 type ExtendedAssetDraft = AssetDraft & {
   condition?: AssetCondition;
@@ -71,6 +72,7 @@ export default function CreateAssetWizardModal({
 }: Props) {
   const [step, setStep] = useState(1);
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
 
   const { width } = useWindowDimensions();
   const isSmallScreen = width < 380;
@@ -88,6 +90,7 @@ export default function CreateAssetWizardModal({
       setStep(1);
       setDraft(getInitialDraft(initialData));
       setIsRecording(false);
+      setCameraMode("photos");
     }
   }, [visible, initialData]);
 
@@ -102,22 +105,49 @@ export default function CreateAssetWizardModal({
   }, [width]);
 
   const fieldPositions = useRef<Record<string, number>>({});
-  const setFieldPosition =
-  (key: string) => (e: LayoutChangeEvent) => {
+
+  const setFieldPosition = (key: string) => (e: LayoutChangeEvent) => {
     fieldPositions.current[key] = e.nativeEvent.layout.y;
   };
 
-const scrollToField = (key: string) => {
-  const y = fieldPositions.current[key] ?? 0;
+  const scrollToField = (key: string) => {
+    const y = fieldPositions.current[key] ?? 0;
 
-  setTimeout(() => {
-    scrollRef.current?.scrollTo({
-      y: Math.max(0, y - 24),
-      animated: true,
+    setTimeout(() => {
+      scrollRef.current?.scrollTo({
+        y: Math.max(0, y - 24),
+        animated: true,
+      });
+    }, 120);
+  };
+
+  const openPhotoCamera = () => {
+    setCameraMode("photos");
+    setCameraOpen(true);
+  };
+
+  const openScanCamera = () => {
+    setCameraMode("scan");
+    setCameraOpen(true);
+  };
+
+  const appendScannedTextToDescription = (scannedText: string) => {
+    const cleanText = scannedText?.trim();
+    if (!cleanText) return;
+
+    setDraft((prev) => {
+      const current = (prev.writtenDescription || "").trim();
+
+      return {
+        ...prev,
+        writtenDescription: current ? `${current}\n${cleanText}` : cleanText,
+      };
     });
-  }, 120);
-};
 
+    setTimeout(() => {
+      scrollToField("writtenDescription");
+    }, 150);
+  };
 
   const pickImagesFromLibrary = async () => {
     try {
@@ -214,6 +244,7 @@ const scrollToField = (key: string) => {
   const handleClose = () => {
     setStep(1);
     setIsRecording(false);
+    setCameraMode("photos");
     Keyboard.dismiss();
     onClose();
   };
@@ -230,7 +261,12 @@ const scrollToField = (key: string) => {
 
   return (
     <>
-      <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
+      <Modal
+        visible={visible}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+      >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <View style={styles.overlay}>
             <KeyboardAvoidingView
@@ -278,7 +314,7 @@ const scrollToField = (key: string) => {
                         <View style={styles.imageActionRow}>
                           <TouchableOpacity
                             style={[styles.primaryBtn, styles.flexBtn]}
-                            onPress={() => setCameraOpen(true)}
+                            onPress={openPhotoCamera}
                             activeOpacity={0.85}
                           >
                             <Text style={styles.primaryText}>Open Camera</Text>
@@ -334,36 +370,36 @@ const scrollToField = (key: string) => {
                       <>
                         <Text style={styles.label}>Asset Details</Text>
 
-                       <View onLayout={setFieldPosition("name")}>
-  <TextInput
-    placeholder="Asset Name"
-    placeholderTextColor="#666"
-    value={draft.name}
-    onChangeText={(t) => {
-      if (!disableAssetName) {
-        setDraft((prev) => ({ ...prev, name: t }));
-      }
-    }}
-    editable={!disableAssetName}
-    selectTextOnFocus={!disableAssetName}
-    style={[
-      styles.input,
-      disableAssetName && styles.inputDisabled,
-    ]}
-    returnKeyType="next"
-    blurOnSubmit={false}
-    onFocus={() => scrollToField("name")}
-  />
-</View>
+                        <View onLayout={setFieldPosition("name")}>
+                          <TextInput
+                            placeholder="Asset Name"
+                            placeholderTextColor="#666"
+                            value={draft.name}
+                            onChangeText={(t) => {
+                              if (!disableAssetName) {
+                                setDraft((prev) => ({ ...prev, name: t }));
+                              }
+                            }}
+                            editable={!disableAssetName}
+                            selectTextOnFocus={!disableAssetName}
+                            style={[
+                              styles.input,
+                              disableAssetName && styles.inputDisabled,
+                            ]}
+                            returnKeyType="next"
+                            blurOnSubmit={false}
+                            onFocus={() => scrollToField("name")}
+                          />
+                        </View>
 
                         <View style={styles.pickerWrap}>
                           <Picker
                             selectedValue={draft.condition}
                             onValueChange={(value) =>
-                              setDraft({
-                                ...draft,
+                              setDraft((prev) => ({
+                                ...prev,
                                 condition: value,
-                              })
+                              }))
                             }
                             dropdownIconColor="#fff"
                             style={styles.picker}
@@ -379,10 +415,10 @@ const scrollToField = (key: string) => {
                           <Picker
                             selectedValue={draft.assetType}
                             onValueChange={(value) =>
-                              setDraft({
-                                ...draft,
+                              setDraft((prev) => ({
+                                ...prev,
                                 assetType: value,
-                              })
+                              }))
                             }
                             dropdownIconColor="#fff"
                             style={styles.picker}
@@ -394,67 +430,72 @@ const scrollToField = (key: string) => {
 
                         {draft.assetType === "Vehicle" && (
                           <>
-                           <View onLayout={setFieldPosition("brand")}>
-  <TextInput
-    placeholder="Brand"
-    placeholderTextColor="#666"
-    value={draft.brand}
-    onChangeText={(t) =>
-      setDraft({ ...draft, brand: t })
-    }
-    style={styles.input}
-    returnKeyType="next"
-    blurOnSubmit={false}
-    onFocus={() => scrollToField("brand")}
-  />
-</View>
+                            <View onLayout={setFieldPosition("brand")}>
+                              <TextInput
+                                placeholder="Brand"
+                                placeholderTextColor="#666"
+                                value={draft.brand}
+                                onChangeText={(t) =>
+                                  setDraft((prev) => ({ ...prev, brand: t }))
+                                }
+                                style={styles.input}
+                                returnKeyType="next"
+                                blurOnSubmit={false}
+                                onFocus={() => scrollToField("brand")}
+                              />
+                            </View>
 
                             <View onLayout={setFieldPosition("model")}>
-  <TextInput
-    placeholder="Model"
-    placeholderTextColor="#666"
-    value={draft.model}
-    onChangeText={(t) =>
-      setDraft({ ...draft, model: t })
-    }
-    style={styles.input}
-    returnKeyType="next"
-    blurOnSubmit={false}
-    onFocus={() => scrollToField("model")}
-  />
-</View>
+                              <TextInput
+                                placeholder="Model"
+                                placeholderTextColor="#666"
+                                value={draft.model}
+                                onChangeText={(t) =>
+                                  setDraft((prev) => ({ ...prev, model: t }))
+                                }
+                                style={styles.input}
+                                returnKeyType="next"
+                                blurOnSubmit={false}
+                                onFocus={() => scrollToField("model")}
+                              />
+                            </View>
 
                             <View onLayout={setFieldPosition("manufactureYear")}>
-  <TextInput
-    placeholder="Manufacture Year"
-    placeholderTextColor="#666"
-    value={draft.manufactureYear}
-    onChangeText={(t) =>
-      setDraft({ ...draft, manufactureYear: t })
-    }
-    keyboardType="numeric"
-    style={styles.input}
-    returnKeyType="next"
-    blurOnSubmit={false}
-    onFocus={() => scrollToField("manufactureYear")}
-  />
-</View>
+                              <TextInput
+                                placeholder="Manufacture Year"
+                                placeholderTextColor="#666"
+                                value={draft.manufactureYear}
+                                onChangeText={(t) =>
+                                  setDraft((prev) => ({
+                                    ...prev,
+                                    manufactureYear: t,
+                                  }))
+                                }
+                                keyboardType="numeric"
+                                style={styles.input}
+                                returnKeyType="next"
+                                blurOnSubmit={false}
+                                onFocus={() => scrollToField("manufactureYear")}
+                              />
+                            </View>
 
                             <View onLayout={setFieldPosition("kilometersDriven")}>
-  <TextInput
-    placeholder="Kilometers Driven"
-    placeholderTextColor="#666"
-    value={draft.kilometersDriven}
-    onChangeText={(t) =>
-      setDraft({ ...draft, kilometersDriven: t })
-    }
-    keyboardType="numeric"
-    style={styles.input}
-    returnKeyType="done"
-    onFocus={() => scrollToField("kilometersDriven")}
-  />
-</View>
-
+                              <TextInput
+                                placeholder="Kilometers Driven"
+                                placeholderTextColor="#666"
+                                value={draft.kilometersDriven}
+                                onChangeText={(t) =>
+                                  setDraft((prev) => ({
+                                    ...prev,
+                                    kilometersDriven: t,
+                                  }))
+                                }
+                                keyboardType="numeric"
+                                style={styles.input}
+                                returnKeyType="done"
+                                onFocus={() => scrollToField("kilometersDriven")}
+                              />
+                            </View>
                           </>
                         )}
                       </>
@@ -462,25 +503,39 @@ const scrollToField = (key: string) => {
 
                     {step === 3 && (
                       <>
-                        <Text style={styles.label}>Description</Text>
+                        <View style={styles.descriptionHeader}>
+                          <Text style={styles.label}>Description</Text>
+
+                          <TouchableOpacity
+                            style={styles.scanBtn}
+                            onPress={openScanCamera}
+                            activeOpacity={0.85}
+                          >
+                            <Text style={styles.scanBtnText}>Scan Text</Text>
+                          </TouchableOpacity>
+                        </View>
 
                         <View onLayout={setFieldPosition("writtenDescription")}>
-  <TextInput
-    placeholder="Write something..."
-    placeholderTextColor="#666"
-    value={draft.writtenDescription}
-    onChangeText={(t) =>
-      setDraft({
-        ...draft,
-        writtenDescription: t,
-      })
-    }
-    style={[styles.input, styles.textArea]}
-    multiline
-    textAlignVertical="top"
-    onFocus={() => scrollToField("writtenDescription")}
-  />
-</View>
+                          <TextInput
+                            placeholder="Write something..."
+                            placeholderTextColor="#666"
+                            value={draft.writtenDescription}
+                            onChangeText={(t) =>
+                              setDraft((prev) => ({
+                                ...prev,
+                                writtenDescription: t,
+                              }))
+                            }
+                            style={[styles.input, styles.textArea]}
+                            multiline
+                            textAlignVertical="top"
+                            onFocus={() => scrollToField("writtenDescription")}
+                          />
+                        </View>
+
+                        <Text style={styles.helper}>
+                          Scanned text will be appended here automatically.
+                        </Text>
 
                         <Text style={[styles.label, { marginTop: 8 }]}>
                           Voice Notes
@@ -495,21 +550,26 @@ const scrollToField = (key: string) => {
                           </Text>
                         </TouchableOpacity>
 
-                        
-
-                        <TouchableOpacity 
-                              style={styles.checkboxWrap}
-                              onPress={() => setDraft(prev => ({ ...prev, isDone: !prev.isDone }))}
-                              activeOpacity={0.7}
-                            >
-                              <View style={[
-                                styles.checkbox,
-                                draft.isDone && styles.checkboxChecked
-                              ]}>
-                                {draft.isDone && <Text style={styles.checkmark}>✓</Text>}
-                              </View>
-                              <Text style={styles.checkboxLabel}>Mark as Done</Text>
-                            </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.checkboxWrap}
+                          onPress={() =>
+                            setDraft((prev) => ({
+                              ...prev,
+                              isDone: !prev.isDone,
+                            }))
+                          }
+                          activeOpacity={0.7}
+                        >
+                          <View
+                            style={[
+                              styles.checkbox,
+                              draft.isDone && styles.checkboxChecked,
+                            ]}
+                          >
+                            {draft.isDone && <Text style={styles.checkmark}>✓</Text>}
+                          </View>
+                          <Text style={styles.checkboxLabel}>Mark as Done</Text>
+                        </TouchableOpacity>
 
                         <Text style={styles.helper}>
                           {(draft.voiceNotes || []).length} voice note
@@ -525,22 +585,11 @@ const scrollToField = (key: string) => {
                             <TouchableOpacity onPress={() => removeVoiceNote(index)}>
                               <Text style={styles.voiceRemove}>Remove</Text>
                             </TouchableOpacity>
-
-
-                            
                           </View>
-
-
-
                         ))}
                       </>
                     )}
-
-
-                    
                   </ScrollView>
-
-                  
 
                   <View style={styles.footer}>
                     <View style={styles.footerSide}>
@@ -588,8 +637,11 @@ const scrollToField = (key: string) => {
 
       <AssetCameraModal
         visible={cameraOpen}
+        mode={cameraMode}
         onClose={() => setCameraOpen(false)}
-        onDone={(photos) => {
+        onDone={(photos: any[]) => {
+          if (cameraMode !== "photos") return;
+
           const mapped = photos.map((p: any, i: number) => ({
             uri: "file://" + p.path,
             name: `photo_${Date.now()}_${i}.jpg`,
@@ -600,6 +652,11 @@ const scrollToField = (key: string) => {
             ...prev,
             images: [...prev.images, ...mapped],
           }));
+        }}
+        onScanText={(text: string) => {
+          if (cameraMode !== "scan") return;
+          appendScannedTextToDescription(text);
+          setCameraOpen(false);
         }}
       />
     </>
@@ -733,6 +790,31 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginBottom: 10,
     fontWeight: "500",
+  },
+
+  descriptionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 2,
+  },
+
+  scanBtn: {
+    backgroundColor: SURFACE,
+    minHeight: 38,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: BORDER,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
+
+  scanBtnText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "600",
   },
 
   input: {

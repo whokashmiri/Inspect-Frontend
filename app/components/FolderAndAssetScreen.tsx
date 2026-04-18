@@ -1,4 +1,4 @@
-import CreateAssetWizardModal from "./utils/CreateAssetWizardModal";
+import CreateAssetWizardModal from "./CreateAssetWizardModal";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFonts } from "expo-font";
 import fonts from "../fonts/fonts";
