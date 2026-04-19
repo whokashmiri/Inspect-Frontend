@@ -40,6 +40,10 @@ export async function processOfflineScanFromImage(
   return result.text;
 }
 
+function normalizeForCompare(value: string): string {
+  return value.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
 export async function processOfflineScanDetailed(
   imageUri: string,
   options?: ProcessOptions
@@ -130,6 +134,7 @@ function buildOutputText(params: {
     return totals.map((t) => `Total: ${t}`).join("\n").trim();
   }
 
+  // AUTO MODE
   const parts: string[] = [];
 
   if (barcodes.length > 0) {
@@ -148,13 +153,29 @@ function buildOutputText(params: {
     parts.push(...totals.map((t) => `Total: ${t}`));
   }
 
-  if (parts.length > 0) {
-    return dedupeStrings(parts).join("\n").trim();
+  const structuredText = dedupeStrings(parts).join("\n").trim();
+  const cleanRawText = rawText.trim();
+
+  // If there is meaningful OCR text, keep it too.
+  // This helps for receipts, invoices, labels, and A4 paper content.
+  const hasMeaningfulRawText =
+    cleanRawText.length >= 20 || cleanRawText.split(/\s+/).length >= 4;
+
+  if (structuredText && hasMeaningfulRawText) {
+    // Avoid duplicating when OCR is basically the same as one short scanned value
+    if (normalizeForCompare(cleanRawText) === normalizeForCompare(structuredText)) {
+      return structuredText;
+    }
+
+    return `${structuredText}\n\nScanned Text:\n${cleanRawText}`.trim();
   }
 
-  return rawText;
-}
+  if (structuredText) {
+    return structuredText;
+  }
 
+  return cleanRawText;
+}
 export function normalizeOcrText(input: string): string {
   if (!input) return "";
 
