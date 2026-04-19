@@ -4,7 +4,14 @@ import { useAuth } from "../../api/AuthContext";
 import { useFonts } from "expo-font";
 import fonts from "../fonts/fonts";
 
+import '../i18n/i18n';
+
+import React from 'react';
+
+import { useTranslation } from 'react-i18next';
+
 export default function HomeScreen() {
+   const { t } = useTranslation();
   const [loaded] = useFonts({
     ...fonts.poppins,
     ...fonts.inter,
@@ -27,8 +34,8 @@ export default function HomeScreen() {
             <View style={styles.logoInner} />
           </View>
 
-          <Text style={styles.title}>Your Companies</Text>
-          <Text style={styles.subtitle}>Select A Company..</Text>
+          <Text style={styles.title}>{t('companyPage.title')}</Text>
+          <Text style={styles.subtitle}>{t('companyPage.description')}</Text>
         </View>
 
         <Pressable style={styles.companyBtn} onPress={handleCompanyPress}>

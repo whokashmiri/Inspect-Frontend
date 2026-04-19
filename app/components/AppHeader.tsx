@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import i18n from "../i18n/i18n";
 
 const ACC = "#C6FF00";
 const SURFACE = "#111111";
@@ -48,12 +49,24 @@ const InfoRow = memo(function InfoRow({
   );
 });
 
+import '../i18n/i18n';
+
+
+
+import { useTranslation } from 'react-i18next';
 function AppHeaderComponent({
   isAuthenticated = false,
   user = null,
   title = "ValTech",
   onLogout,
 }: AppHeaderProps) {
+ const { t } = useTranslation();
+const toggleLanguage = useCallback(() => {
+      const current = i18n.language;
+      const next = current === "en" ? "ar" : "en";
+      i18n.changeLanguage(next);
+    }, []);
+ 
   const [profileVisible, setProfileVisible] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -98,9 +111,28 @@ function AppHeaderComponent({
 
           <View>
             <Text style={styles.companyName}>{title}</Text>
-            <Text style={styles.companySub}>Asset Inspection Platform</Text>
+            <Text style={styles.companySub}> {t('companyPage.header')}</Text>
           </View>
+
+          
         </View>
+
+        
+                        <View style={{ flexDirection: "row", alignItems: "center" }}>
+                          <TouchableOpacity
+                            onPress={toggleLanguage}
+                            style={styles.langToggle}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.langText}>
+                              {i18n.language === "en" ? "AR" : "EN"}
+                            </Text>
+                          </TouchableOpacity>
+                        
+                         
+                        </View>
+
+
 
         {isAuthenticated && user ? (
           <TouchableOpacity
@@ -194,6 +226,8 @@ function AppHeaderComponent({
 }
 
 export const AppHeader = memo(AppHeaderComponent);
+
+
 
 const styles = StyleSheet.create({
   header: {
@@ -372,4 +406,23 @@ const styles = StyleSheet.create({
     color: "#000",
     letterSpacing: 0.2,
   },
+  
+   langToggle: {
+  backgroundColor: SURFACE,
+  borderWidth: 1,
+  borderColor: BORDER,
+  paddingHorizontal: 10,
+  paddingVertical: 6,
+  borderRadius: 10,
+  marginRight: 10,
+},
+
+langText: {
+  color: "#fff",
+  fontSize: 10,
+  fontWeight: "700",
+  letterSpacing: 1,
+},
+
+ 
 });

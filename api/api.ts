@@ -467,9 +467,13 @@ updateAsset: async (payload: {
     form.append("writtenDescription", payload.writtenDescription ?? "");
   }
 
-  if (payload.condition !== undefined) {
-    form.append("condition", payload.condition ?? "");
-  }
+  if (
+  payload.condition === "New" ||
+  payload.condition === "Used" ||
+  payload.condition === "Damaged"
+) {
+  form.append("condition", payload.condition);
+}
 
   if (payload.assetType !== undefined) {
     form.append("assetType", payload.assetType);
