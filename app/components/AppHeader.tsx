@@ -7,9 +7,12 @@ import {
   Modal,
   Pressable,
   ActivityIndicator,
+  I18nManager,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import i18n from "../i18n/i18n";
+import * as Updates from "expo-updates";
+import { useTranslation } from 'react-i18next';
 
 const ACC = "#C6FF00";
 const SURFACE = "#111111";
@@ -49,11 +52,8 @@ const InfoRow = memo(function InfoRow({
   );
 });
 
-import '../i18n/i18n';
 
 
-
-import { useTranslation } from 'react-i18next';
 function AppHeaderComponent({
   isAuthenticated = false,
   user = null,
@@ -61,10 +61,12 @@ function AppHeaderComponent({
   onLogout,
 }: AppHeaderProps) {
  const { t } = useTranslation();
+ const [isRTL, setIsRTL] = useState(I18nManager.isRTL);
 const toggleLanguage = useCallback(() => {
       const current = i18n.language;
       const next = current === "en" ? "ar" : "en";
       i18n.changeLanguage(next);
+      setIsRTL(next === "ar");
     }, []);
  
   const [profileVisible, setProfileVisible] = useState(false);
@@ -103,8 +105,8 @@ const toggleLanguage = useCallback(() => {
 
   return (
     <>
-      <View style={styles.header}>
-        <View style={styles.brandRow}>
+      <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+        <View style={[styles.brandRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
           <View style={styles.logoMark}>
             <View style={styles.logoInner} />
           </View>
@@ -118,7 +120,7 @@ const toggleLanguage = useCallback(() => {
         </View>
 
         
-                        <View style={{ flexDirection: "row", alignItems: "center" }}>
+                        <View style={[{ flexDirection: "row", alignItems: "center" }, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
                           <TouchableOpacity
                             onPress={toggleLanguage}
                             style={styles.langToggle}

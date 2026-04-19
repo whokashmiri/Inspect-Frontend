@@ -101,7 +101,13 @@ export default function FolderAndAssetScreen({ route }: Props) {
   const [contentLoading, setContentLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  const [pendingAssetSaveCount, setPendingAssetSaveCount] = useState(0);
   const [downloadedOffline, setDownloadedOffline] = useState(false);
+  const [snackbar, setSnackbar] = useState<{
+    message: string;
+    type: "success" | "error" | "info";
+  } | null>(null);
+  const snackbarTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [folderModalVisible, setFolderModalVisible] = useState(false);
   const [assetModalVisible, setAssetModalVisible] = useState(false);
@@ -135,7 +141,25 @@ export default function FolderAndAssetScreen({ route }: Props) {
     checkDownloaded();
   }, [projectId]);
 
+  useEffect(() => {
+    return () => {
+      if (snackbarTimeout.current) {
+        clearTimeout(snackbarTimeout.current);
+      }
+    };
+  }, []);
 
+  const showSnackbar = (
+    message: string,
+    type: "success" | "error" | "info" = "success"
+  ) => {
+    if (snackbarTimeout.current) {
+      clearTimeout(snackbarTimeout.current);
+    }
+
+    setSnackbar({ message, type });
+    snackbarTimeout.current = setTimeout(() => setSnackbar(null), 3000);
+  };
 
  const loadContents = useCallback(
   async (
@@ -328,7 +352,7 @@ const handleCreateFolder = async () => {
 });
 
 
-  const handleCreateAsset = async (draft: AssetDraft) => {
+  const createAssetAsync = async (draft: AssetDraft) => {
   const newImages = (draft.images || []).filter(
     (item: any) => item.uri && !item.uri.startsWith("http")
   );
@@ -355,39 +379,33 @@ const handleCreateFolder = async () => {
       isDone: draft.isDone ?? false,
   };
 
-  try {
-    const result = await safeApiCall(
-      () => projectContentApi.createAsset(payload),
-      payload,
-      { type: "createAsset", projectId }
-    );
+  const result = await safeApiCall(
+    () => projectContentApi.createAsset(payload),
+    payload,
+    { type: "createAsset", projectId }
+  );
 
-    if ("offline" in result) {
-      if (downloadedOffline) {
-        const localAsset = buildLocalAsset(draft);
-        localAsset.id = result.localId;
+  if ("offline" in result) {
+    if (downloadedOffline) {
+      const localAsset = buildLocalAsset(draft);
+      localAsset.id = result.localId;
 
-        await upsertOfflineAsset(localAsset);
-      }
-
-      Alert.alert("Offline", result.message);
-    } else {
-      if (downloadedOffline) {
-        await upsertOfflineAsset(result.asset);
-      }
-
-      Alert.alert("Success", "Asset created");
+      await upsertOfflineAsset(localAsset);
     }
 
-    setAssetModalVisible(false);
-    await loadContents(currentFolderId, { showSkeleton: true });
-  } catch (error: any) {
-    Alert.alert("Error", error.message || "Failed to create asset");
+    showSnackbar(result.message, "info");
+  } else {
+    if (downloadedOffline) {
+      await upsertOfflineAsset(result.asset);
+    }
+
+    showSnackbar("Asset created successfully", "success");
   }
+
+  await loadContents(currentFolderId, { showSkeleton: true });
 };
 
-
- const handleUpdateAsset = async (draft: AssetDraft) => {
+  const updateAssetAsync = async (draft: AssetDraft) => {
   if (!editingAsset) return;
 
   const newImages = (draft.images || []).filter(
@@ -414,52 +432,64 @@ const handleCreateFolder = async () => {
       isDone: draft.isDone ?? false,
   };
 
-  try {
-    const result = await safeApiCall(
-      () => projectContentApi.updateAsset(payload),
-      payload,
-      { type: "updateAsset", projectId }
-    );
+  const result = await safeApiCall(
+    () => projectContentApi.updateAsset(payload),
+    payload,
+    { type: "updateAsset", projectId }
+  );
 
-    if ("offline" in result) {
-      if (downloadedOffline) {
-        const existingOfflineAsset =
-          (await getOfflineAssetById(editingAsset.id)) ?? editingAsset;
+  if ("offline" in result) {
+    if (downloadedOffline) {
+      const existingOfflineAsset =
+        (await getOfflineAssetById(editingAsset.id)) ?? editingAsset;
 
-        const updatedOfflineAsset: AssetItem = {
-          ...existingOfflineAsset,
-          writtenDescription: draft.writtenDescription || null,
-          condition: draft.condition || null,
-          assetType: draft.assetType || "Other",
-          brand: draft.assetType === "Vehicle" ? draft.brand || null : null,
-          model: draft.assetType === "Vehicle" ? draft.model || null : null,
-          manufactureYear:
-            draft.assetType === "Vehicle" ? draft.manufactureYear || null : null,
-          kilometersDriven:
-            draft.assetType === "Vehicle" ? draft.kilometersDriven || null : null,
-          isDone: (draft as any).isDone ?? existingOfflineAsset.isDone,
-          updatedAt: new Date().toISOString(),
-        };
+      const updatedOfflineAsset: AssetItem = {
+        ...existingOfflineAsset,
+        writtenDescription: draft.writtenDescription || null,
+        condition: draft.condition || null,
+        assetType: draft.assetType || "Other",
+        brand: draft.assetType === "Vehicle" ? draft.brand || null : null,
+        model: draft.assetType === "Vehicle" ? draft.model || null : null,
+        manufactureYear:
+          draft.assetType === "Vehicle" ? draft.manufactureYear || null : null,
+        kilometersDriven:
+          draft.assetType === "Vehicle" ? draft.kilometersDriven || null : null,
+        isDone: (draft as any).isDone ?? existingOfflineAsset.isDone,
+        updatedAt: new Date().toISOString(),
+      };
 
-        await upsertOfflineAsset(updatedOfflineAsset);
-      }
-
-      Alert.alert("Offline", result.message);
-    } else {
-      if (downloadedOffline) {
-        await upsertOfflineAsset(result.asset);
-      }
-
-      Alert.alert("Success", "Asset updated");
+      await upsertOfflineAsset(updatedOfflineAsset);
     }
 
-    setEditingAsset(null);
-    setAssetModalVisible(false);
-    await loadContents(currentFolderId, { showSkeleton: true });
-  } catch (error: any) {
-    Alert.alert("Error", error.message || "Failed to update asset");
+    showSnackbar(result.message, "info");
+  } else {
+    if (downloadedOffline) {
+      await upsertOfflineAsset(result.asset);
+    }
+
+    showSnackbar("Asset updated successfully", "success");
   }
+
+  await loadContents(currentFolderId, { showSkeleton: true });
 };
+
+  const submitAssetInBackground = async (
+    draft: AssetDraft,
+    isEdit: boolean
+  ) => {
+    setPendingAssetSaveCount((count) => count + 1);
+    try {
+      if (isEdit) {
+        await updateAssetAsync(draft);
+      } else {
+        await createAssetAsync(draft);
+      }
+    } catch (error: any) {
+      showSnackbar(error?.message || "Failed to save asset", "error");
+    } finally {
+      setPendingAssetSaveCount((count) => Math.max(0, count - 1));
+    }
+  };
 
   const openEditAsset = (asset: AssetItem) => {
     setEditingAsset(asset);
@@ -505,8 +535,19 @@ const items = useMemo(() => {
     item.name?.toLowerCase().includes(q)
   );
 }, [folders, filteredAssets, searchQuery]);
+
+const itemsWithPlaceholders = useMemo(() => {
+  return [
+    ...items,
+    ...Array.from({ length: pendingAssetSaveCount }, (_, index) => ({
+      itemType: "placeholder" as const,
+      id: `placeholder-${index}`,
+    })),
+  ];
+}, [items, pendingAssetSaveCount]);
+
   const renderSkeletons = () => {
-    return Array.from({ length: 10 }).map((_, index) => (
+    return Array.from({ length: 12 }).map((_, index) => (
       <View key={index} style={styles.gridItem}>
         <View style={styles.gridCard}>
           <View style={styles.skeletonIconGrid} />
@@ -587,9 +628,19 @@ const items = useMemo(() => {
             <View style={styles.gridWrap}>{renderSkeletons()}</View>
           </View>
         ) : (
-          <FlatList
-            data={items}
-            keyExtractor={(item) => `${item.itemType}-${item.id}`}
+          <>
+            {pendingAssetSaveCount > 0 && (
+              <View style={styles.pendingSaveBanner}>
+                <Text style={styles.pendingSaveText}>
+                  Saving {pendingAssetSaveCount} asset
+                  {pendingAssetSaveCount > 1 ? "s" : ""}…
+                </Text>
+              </View>
+            )}
+
+            <FlatList
+              data={itemsWithPlaceholders}
+              keyExtractor={(item) => `${item.itemType}-${item.id}`}
             numColumns={NUM_COLUMNS}
             columnWrapperStyle={styles.columnWrapper}
             refreshControl={
@@ -608,6 +659,17 @@ const items = useMemo(() => {
               </View>
             }
             renderItem={({ item }) => {
+              if (item.itemType === "placeholder") {
+                return (
+                  <View style={styles.gridItem}>
+                    <View style={styles.gridCard}>
+                      <View style={styles.skeletonIconGrid} />
+                      <View style={styles.skeletonTitleGrid} />
+                    </View>
+                  </View>
+                );
+              }
+
               if (item.itemType === "folder") {
                 const isOpening = navigatingFolderId === item.id;
 
@@ -661,6 +723,7 @@ const items = useMemo(() => {
               );
             }}
           />
+          </>
         )}
 
         <View
@@ -754,10 +817,25 @@ const items = useMemo(() => {
           disableAssetName={!!editingAsset}
           visible={assetModalVisible}
           onClose={closeAssetModal}
-          onSubmit={editingAsset ? handleUpdateAsset : handleCreateAsset}
+          onSubmit={(draft) => submitAssetInBackground(draft, !!editingAsset)}
           mode={editingAsset ? "edit" : "create"}
           initialData={editingAsset ? mapAssetToDraft(editingAsset) : undefined}
         />
+
+        {snackbar && (
+          <View
+            style={[
+              styles.snackbar,
+              snackbar.type === "error"
+                ? styles.snackbarError
+                : snackbar.type === "success"
+                ? styles.snackbarSuccess
+                : styles.snackbarInfo,
+            ]}
+          >
+            <Text style={styles.snackbarText}>{snackbar.message}</Text>
+          </View>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -879,6 +957,48 @@ const styles = StyleSheet.create({
   gridWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
+  },
+  pendingSaveBanner: {
+    backgroundColor: "rgba(212,255,0,0.14)",
+    borderColor: "rgba(212,255,0,0.35)",
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+  },
+  pendingSaveText: {
+    color: ACC,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  snackbar: {
+    position: "absolute",
+    left: 20,
+    right: 20,
+    bottom: 100,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  snackbarText: {
+    color: "#000",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  snackbarSuccess: {
+    backgroundColor: "#D4FF00",
+  },
+  snackbarError: {
+    backgroundColor: "#FF6B6B",
+  },
+  snackbarInfo: {
+    backgroundColor: "#444",
   },
   columnWrapper: {
     gap: GRID_GAP,

@@ -249,14 +249,26 @@ export default function CreateAssetWizardModal({
     onClose();
   };
 
-  const handleFinish = async () => {
+  const handleFinish = () => {
     if (!draft.name?.trim()) {
       Alert.alert("Validation", "Asset Name is required");
       return;
     }
 
-    await onSubmit(draft);
+    let submitPromise: Promise<void>;
+
+    try {
+      submitPromise = Promise.resolve(onSubmit(draft));
+    } catch (error: any) {
+      Alert.alert("Error", error?.message || "Failed to save asset");
+      return;
+    }
+
     handleClose();
+
+    submitPromise.catch((error) => {
+      Alert.alert("Error", error?.message || "Failed to save asset");
+    });
   };
 
   return (
