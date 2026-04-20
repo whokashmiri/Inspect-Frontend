@@ -447,28 +447,38 @@ export async function upsertOfflineAsset(
     [key: string]: any;
   }
 ): Promise<void> {
-  await initStorage();
+  try {
+    await initStorage();
 
-  await db.runAsync(
-    `INSERT OR REPLACE INTO offline_assets (id, projectId, folderId, data)
-     VALUES (?, ?, ?, ?);`,
-    [
-      asset.id,
-      asset.projectId,
-      asset.folderId ?? null,
-      JSON.stringify(asset),
-    ]
-  );
+    await db.runAsync(
+      `INSERT OR REPLACE INTO offline_assets (id, projectId, folderId, data)
+       VALUES (?, ?, ?, ?);`,
+      [
+        asset.id,
+        asset.projectId,
+        asset.folderId ?? null,
+        JSON.stringify(asset),
+      ]
+    );
+  } catch (error) {
+    console.error("Error upserting offline asset:", error);
+    throw error;
+  }
 }
 
 export async function getOfflineAssetById(assetId: string): Promise<any | null> {
-  await initStorage();
+  try {
+    await initStorage();
 
-  const row = await db.getFirstAsync<{ data: string }>(
-    `SELECT data FROM offline_assets WHERE id = ?;`,
-    [assetId]
-  );
+    const row = await db.getFirstAsync<{ data: string }>(
+      `SELECT data FROM offline_assets WHERE id = ?;`,
+      [assetId]
+    );
 
-  if (!row) return null;
-  return JSON.parse(row.data);
+    if (!row) return null;
+    return JSON.parse(row.data);
+  } catch (error) {
+    console.error("Error getting offline asset by ID:", error);
+    return null;
+  }
 }

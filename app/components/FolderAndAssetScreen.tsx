@@ -61,7 +61,7 @@ type Props = {
 };
 
 const ACC = "#D4FF00";
-const NUM_COLUMNS = 4;
+const NUM_COLUMNS = 3;
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const HORIZONTAL_PADDING = 15 * 2;
 const GRID_GAP = 5;
@@ -716,7 +716,7 @@ const itemsWithPlaceholders = useMemo(() => {
                         {isOpening ? (
                           <ActivityIndicator size="small" color={ACC} />
                         ) : (
-                          <Ionicons name="folder" size={26} color={ACC} />
+                          <Ionicons name="folder" size={36} color={ACC} />
                         )}
                       </View>
 
@@ -736,7 +736,7 @@ const itemsWithPlaceholders = useMemo(() => {
                     activeOpacity={0.85}
                   >
                     <View style={styles.iconWrap}>
-                      <Ionicons name="cube-outline" size={24} color={!item.isPresent ? "#FF4444" : "#fff"} />
+                      <Ionicons name="cube-outline" size={36} color={!item.isPresent ? "#FF4444" : "#fff"} />
                     </View>
 
                     <Text style={styles.gridTitle} numberOfLines={2}>
@@ -896,7 +896,7 @@ const itemsWithPlaceholders = useMemo(() => {
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
-    backgroundColor: "#000",
+    backgroundColor: "#ffffff",
   },
   container: {
     flex: 1,
@@ -960,11 +960,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 15,
     fontWeight: "400",
-    color: "#fff",
+    color: "#090808",
     marginTop: 4,
   },
   subtitle: {
-    color: "#999",
+    color: "#2a2828",
     marginTop: 0,
     marginBottom: 10,
     fontSize: 15,
@@ -1011,7 +1011,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   breadcrumbText: {
-    color: ACC,
+    color: "#888",
     fontSize: 10,
     fontWeight: "600",
   },
@@ -1096,7 +1096,7 @@ const styles = StyleSheet.create({
   },
   gridTitle: {
     color: "#fff",
-    fontSize: 11,
+    fontSize: 12,
     textAlign: "center",
     lineHeight: 14,
   },

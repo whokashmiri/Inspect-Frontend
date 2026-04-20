@@ -19,6 +19,7 @@ import {
 } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import * as ImagePicker from "expo-image-picker";
+import { Audio } from "expo-av";
 import AssetCameraModal from "./AssetCameraModal";
 import { AssetDraft } from "./utils/types";
 import { AudioModule, RecordingPresets, useAudioRecorder } from "expo-audio";
@@ -80,6 +81,8 @@ export default function CreateAssetWizardModal({
   const isSmallScreen = width < 380;
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
+  const soundObjectRef = useRef<any>(null);
+  const [playingIndex, setPlayingIndex] = useState<number | null>(null);
 
   const scrollRef = useRef<ScrollView>(null);
 
@@ -93,8 +96,61 @@ export default function CreateAssetWizardModal({
       setDraft(getInitialDraft(initialData));
       setIsRecording(false);
       setCameraMode("photos");
+    } else {
+      stopVoicePlayback();
     }
   }, [visible, initialData]);
+
+  const playVoiceNote = async (uri: string, index: number) => {
+    try {
+      // Check if this is a remote URL (Cloudinary)
+      if (uri.startsWith('http') || uri.startsWith('//')) {
+        Alert.alert("Playback not available", "Voice notes from saved assets cannot be played in the editor. You can listen to them after saving the asset.");
+        return;
+      }
+
+      if (playingIndex === index && soundObjectRef.current) {
+        await soundObjectRef.current.pauseAsync();
+        setPlayingIndex(null);
+        return;
+      }
+
+      if (soundObjectRef.current) {
+        await soundObjectRef.current.unloadAsync();
+      }
+
+      // Ensure URI is properly formatted for expo-av
+      const formattedUri = uri.startsWith('file://') ? uri : `file://${uri}`;
+
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: formattedUri },
+        { shouldPlay: true }
+      );
+      soundObjectRef.current = sound;
+      setPlayingIndex(index);
+
+      sound.setOnPlaybackStatusUpdate((status: any) => {
+        if (status.didJustFinish) {
+          setPlayingIndex(null);
+        }
+      });
+    } catch (error) {
+      console.error("Error playing voice note:", error);
+      Alert.alert("Error", "Could not play voice note.");
+    }
+  };
+
+  const stopVoicePlayback = async () => {
+    try {
+      if (soundObjectRef.current) {
+        await soundObjectRef.current.unloadAsync();
+        soundObjectRef.current = null;
+      }
+      setPlayingIndex(null);
+    } catch (error) {
+      console.error("Error stopping playback:", error);
+    }
+  };
 
   const next = () => setStep((s) => Math.min(s + 1, 3));
   const back = () => setStep((s) => Math.max(s - 1, 1));
@@ -243,7 +299,17 @@ export default function CreateAssetWizardModal({
     }));
   };
 
-  const handleClose = () => {
+  const handleClose = async () => {
+    // Stop any ongoing recording before closing
+    if (isRecording) {
+      try {
+        await stopRecording();
+      } catch (error) {
+        console.error("Error stopping recording on close:", error);
+      }
+    }
+
+    await stopVoicePlayback();
     setStep(1);
     setIsRecording(false);
     setCameraMode("photos");
@@ -251,9 +317,30 @@ export default function CreateAssetWizardModal({
     onClose();
   };
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
     if (!draft.name?.trim()) {
       Alert.alert("Validation", "Asset Name is required");
+      return;
+    }
+
+    // Check if recording is in progress
+    if (isRecording) {
+      Alert.alert(
+        "Recording in Progress",
+        "Please stop the voice recording before saving the asset.",
+        [
+          { text: "Stop Recording & Save", onPress: async () => {
+            try {
+              await stopRecording();
+              // After stopping, proceed with save
+              handleFinish();
+            } catch (error) {
+              Alert.alert("Error", "Failed to stop recording. Please try again.");
+            }
+          }},
+          { text: "Cancel", style: "cancel" }
+        ]
+      );
       return;
     }
 
@@ -613,17 +700,35 @@ export default function CreateAssetWizardModal({
                           {(draft.voiceNotes || []).length === 1 ? "" : "s"} added
                         </Text>
 
-                        {(draft.voiceNotes || []).map((note, index) => (
-                          <View key={`${note.uri}-${index}`} style={styles.voiceItem}>
-                            <Text style={styles.voiceText} numberOfLines={1}>
-                              {note.name || `Voice Note ${index + 1}`}
-                            </Text>
+                        {(draft.voiceNotes || []).map((note, index) => {
+                          const isRemote = note.uri.startsWith('http') || note.uri.startsWith('//');
+                          const canPlay = !isRemote;
 
-                            <TouchableOpacity onPress={() => removeVoiceNote(index)}>
-                              <Text style={styles.voiceRemove}>Remove</Text>
-                            </TouchableOpacity>
-                          </View>
-                        ))}
+                          return (
+                            <View key={`${note.uri}-${index}`} style={styles.voiceItem}>
+                              <Text style={styles.voiceText} numberOfLines={1}>
+                                {note.name || `Voice Note ${index + 1}`}
+                                {isRemote && <Text style={styles.voiceRemoteText}> (saved)</Text>}
+                              </Text>
+
+                              <View style={styles.voiceActions}>
+                                {canPlay && (
+                                  <TouchableOpacity
+                                    onPress={() => playVoiceNote(note.uri, index)}
+                                    activeOpacity={0.7}
+                                  >
+                                    <Text style={styles.voicePlay}>
+                                      {playingIndex === index ? "⏸" : "▶"}
+                                    </Text>
+                                  </TouchableOpacity>
+                                )}
+                                <TouchableOpacity onPress={() => removeVoiceNote(index)}>
+                                  <Text style={styles.voiceRemove}>Remove</Text>
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+                          );
+                        })}
                       </>
                     )}
                   </ScrollView>
@@ -1062,6 +1167,24 @@ checkboxLabelIsPresent: {
     color: "#fff",
     flex: 1,
     fontSize: 13,
+  },
+
+  voiceActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+
+  voicePlay: {
+    color: ACC,
+    fontSize: 16,
+    fontWeight: "600",
+  },
+
+  voiceRemoteText: {
+    color: "#666",
+    fontSize: 12,
+    fontStyle: "italic",
   },
 
   voiceRemove: {
