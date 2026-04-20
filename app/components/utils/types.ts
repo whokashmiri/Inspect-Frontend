@@ -1,3 +1,4 @@
+import { AssetItem } from "../../../api/api";
 
 //components/utils/types.ts
 export type UploadFileInput = {
@@ -13,6 +14,7 @@ export type AssetDraft = {
   images: UploadFileInput[];
   name: string;
   writtenDescription: string;
+  code?: string; 
   voiceNotes: UploadFileInput[];
   condition?: AssetCondition;
   assetType?: AssetType;
@@ -21,4 +23,5 @@ export type AssetDraft = {
   manufactureYear?: string;
   kilometersDriven?: string;
   isDone?: boolean;
+  isPresent?: boolean;
 };

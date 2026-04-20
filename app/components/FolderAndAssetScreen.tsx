@@ -5,6 +5,8 @@ import fonts from "../fonts/fonts";
 import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { AssetDraft } from "./utils/types";
 import { mapAssetToDraft } from "./utils/assetMapper";
+import CodeScannerModal from "../components/CodeScannerModal";
+import { normalizeCode } from "../components/utils/codeScannerUtils";
 
 import {
   Alert,
@@ -113,6 +115,9 @@ export default function FolderAndAssetScreen({ route }: Props) {
   const [assetModalVisible, setAssetModalVisible] = useState(false);
   const [editingAsset, setEditingAsset] = useState<AssetItem | null>(null);
 
+const [codeScannerVisible, setCodeScannerVisible] = useState(false);
+const [codeLookupLoading, setCodeLookupLoading] = useState(false);
+
   const [folderName, setFolderName] = useState("");
   const [navigatingFolderId, setNavigatingFolderId] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'done' | 'incomplete'>('all');
@@ -161,6 +166,25 @@ export default function FolderAndAssetScreen({ route }: Props) {
     snackbarTimeout.current = setTimeout(() => setSnackbar(null), 3000);
   };
 
+
+const handleDetectedAssetCode = async (rawCode: string) => {
+  const code = normalizeCode(rawCode);
+  if (!code) return;
+
+  try {
+    setCodeLookupLoading(true);
+
+    const result = await projectContentApi.getAssetByCode(projectId, code);
+
+    setCodeScannerVisible(false);
+    setEditingAsset(result.asset);
+    setAssetModalVisible(true);
+  } catch (error: any) {
+    Alert.alert("Not found", error?.message || "Asset not found for this code");
+  } finally {
+    setCodeLookupLoading(false);
+  }
+};
  const loadContents = useCallback(
   async (
     folderId: string | null,
@@ -339,9 +363,11 @@ const handleCreateFolder = async () => {
   assetType: draft.assetType || "Other",
   brand: draft.brand || null,
   model: draft.model || null,
+  code: draft.code || null,
   manufactureYear: draft.manufactureYear || null,
   kilometersDriven: draft.kilometersDriven || null,
   isDone: draft.isDone ?? false,
+  isPresent: draft.isPresent ?? true,
   createdBy: {
     id: "offline-user",
     fullName: "You",
@@ -369,6 +395,7 @@ const handleCreateFolder = async () => {
     images: newImages,
     voiceNotes: newVoiceNotes,
     condition: draft.condition || null,
+    code: draft.code || null,
     assetType: draft.assetType || "Other",
     brand: draft.assetType === "Vehicle" ? draft.brand || null : null,
     model: draft.assetType === "Vehicle" ? draft.model || null : null,
@@ -421,6 +448,7 @@ const handleCreateFolder = async () => {
     writtenDescription: draft.writtenDescription || null,
     images: newImages,
     voiceNotes: newVoiceNotes,
+    code: draft.code || null,
     condition: draft.condition || null,
     assetType: draft.assetType || "Other",
     brand: draft.assetType === "Vehicle" ? draft.brand || null : null,
@@ -429,7 +457,8 @@ const handleCreateFolder = async () => {
       draft.assetType === "Vehicle" ? draft.manufactureYear || null : null,
     kilometersDriven:
       draft.assetType === "Vehicle" ? draft.kilometersDriven || null : null,
-      isDone: draft.isDone ?? false,
+    isDone: draft.isDone ?? false,
+    isPresent: draft.isPresent ?? true,
   };
 
   const result = await safeApiCall(
@@ -447,6 +476,7 @@ const handleCreateFolder = async () => {
         ...existingOfflineAsset,
         writtenDescription: draft.writtenDescription || null,
         condition: draft.condition || null,
+        code: draft.code ?? existingOfflineAsset.code ?? null,
         assetType: draft.assetType || "Other",
         brand: draft.assetType === "Vehicle" ? draft.brand || null : null,
         model: draft.assetType === "Vehicle" ? draft.model || null : null,
@@ -455,6 +485,7 @@ const handleCreateFolder = async () => {
         kilometersDriven:
           draft.assetType === "Vehicle" ? draft.kilometersDriven || null : null,
         isDone: (draft as any).isDone ?? existingOfflineAsset.isDone,
+        isPresent: draft.isPresent ?? existingOfflineAsset.isPresent,
         updatedAt: new Date().toISOString(),
       };
 
@@ -705,7 +736,7 @@ const itemsWithPlaceholders = useMemo(() => {
                     activeOpacity={0.85}
                   >
                     <View style={styles.iconWrap}>
-                      <Ionicons name="cube-outline" size={24} color="#fff" />
+                      <Ionicons name="cube-outline" size={24} color={!item.isPresent ? "#FF4444" : "#fff"} />
                     </View>
 
                     <Text style={styles.gridTitle} numberOfLines={2}>
@@ -725,6 +756,17 @@ const itemsWithPlaceholders = useMemo(() => {
           />
           </>
         )}
+
+   <TouchableOpacity
+  style={[
+    styles.scanFab,
+    { bottom: Math.max(insets.bottom, 0) + 46 },
+  ]}
+  onPress={() => setCodeScannerVisible(true)}
+  activeOpacity={0.85}
+>
+  <Ionicons name="search-outline" size={22} color="#000" />
+</TouchableOpacity>
 
         <View
           style={[
@@ -813,6 +855,16 @@ const itemsWithPlaceholders = useMemo(() => {
           </TouchableWithoutFeedback>
         </Modal>
 
+
+        <CodeScannerModal
+  visible={codeScannerVisible}
+  loading={codeLookupLoading}
+  onClose={() => {
+    if (!codeLookupLoading) setCodeScannerVisible(false);
+  }}
+  onDetected={handleDetectedAssetCode}
+/>
+
         <CreateAssetWizardModal
           disableAssetName={!!editingAsset}
           visible={assetModalVisible}
@@ -851,6 +903,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 0,
   },
+
+  scanFab: {
+  position: "absolute",
+  right: 20,
+  width: 52,
+  height: 52,
+  borderRadius: 26,
+  backgroundColor: ACC,
+  alignItems: "center",
+  justifyContent: "center",
+  borderWidth: 1,
+  borderColor: ACC,
+  zIndex: 20,
+  elevation: 8,
+},
   filterRow: {
     flexDirection: "row",
     gap: 8,

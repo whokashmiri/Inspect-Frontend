@@ -34,6 +34,7 @@ type ExtendedAssetDraft = AssetDraft & {
   model?: string;
   manufactureYear?: string;
   kilometersDriven?: string;
+  isPresent?: boolean;
   isDone?: boolean;
 };
 
@@ -59,6 +60,7 @@ const getInitialDraft = (
   model: initialData?.model || "",
   manufactureYear: initialData?.manufactureYear || "",
   kilometersDriven: initialData?.kilometersDriven || "",
+  isPresent: initialData?.isPresent ?? true,
   isDone: initialData?.isDone || false,
 });
 
@@ -348,6 +350,8 @@ export default function CreateAssetWizardModal({
                           {draft.images.length === 1 ? "" : "s"} selected
                         </Text>
 
+                        
+
                         {draft.images.length > 0 && (
                           <View style={styles.previewGrid}>
                             {draft.images.map((img, index) => (
@@ -373,9 +377,30 @@ export default function CreateAssetWizardModal({
                                 </TouchableOpacity>
                               </View>
                             ))}
+
                           </View>
                         )}
+
+
+  <View style={styles.row}>
+  <TouchableOpacity
+    onPress={() => setDraft(prev => ({ ...prev, isPresent: !prev.isPresent }))}
+    style={[
+      styles.checkboxIsPresent,
+      draft.isPresent && styles.checkboxActive
+    ]}
+  >
+    {draft.isPresent && <Text style={styles.checkmarkIsPresent}>✓</Text>}
+  </TouchableOpacity>
+
+  <Text style={styles.checkboxLabelIsPresent}>
+    Asset is present
+  </Text>
+</View>
+
                       </>
+
+                      
                     )}
 
                     {step === 2 && (
@@ -804,6 +829,39 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 
+
+  row: {
+  flexDirection: "row",
+  alignItems: "center",
+  marginTop: 16,
+},
+
+checkboxIsPresent: {
+  width: 22,
+  height: 22,
+  borderWidth: 2,
+  borderColor: "#999",
+  borderRadius: 4,
+  marginRight: 10,
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+checkboxActive: {
+  backgroundColor: "#4CAF50",
+  borderColor: "#4CAF50",
+},
+
+checkmarkIsPresent: {
+  color: "#fff",
+  fontSize: 14,
+  fontWeight: "bold",
+},
+
+checkboxLabelIsPresent: {
+  fontSize: 16,
+  color: "#fff", // match your theme
+},
   descriptionHeader: {
     flexDirection: "row",
     alignItems: "center",

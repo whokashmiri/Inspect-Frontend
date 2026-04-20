@@ -36,6 +36,7 @@ interface FormRequestOptions {
   auth?: boolean;
 }
 
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -284,8 +285,9 @@ export interface AssetItem {
   projectId: string;
   createdAt: string;
   updatedAt: string;
+  code: string | null;
 
-  condition: "" | "New" | "Used" | "Damaged" | null;
+  condition: "" | "New" | "Used" | "Damaged" | "Good" | null;
   assetType: "Vehicle" | "Other";
   brand: string | null;
   model: string | null;
@@ -293,6 +295,7 @@ export interface AssetItem {
 
   kilometersDriven: string | null;
   isDone: boolean;
+  isPresent: boolean;
 
   createdBy: {
 
@@ -316,6 +319,11 @@ export interface CreateFolderResponse {
 }
 
 export interface CreateAssetResponse {
+  asset: AssetItem;
+}
+
+
+export interface GetAssetByCodeResponse {
   asset: AssetItem;
 }
 
@@ -353,13 +361,14 @@ export const projectContentApi = {
   folderId?: string | null;
   images?: UploadFileInput[];
   voiceNotes?: UploadFileInput[];
-  condition?: "" | "New" | "Used" | "Damaged" | null;
+  condition?: "" | "New" | "Used" | "Damaged" | "Good" | null;
   assetType?: "Vehicle" | "Other";
   brand?: string | null;
   model?: string | null;
   manufactureYear?: string | null;
   kilometersDriven?: string | null;
   isDone?: boolean;
+  isPresent?: boolean;
 }) => {
   const form = new FormData();
 
@@ -398,6 +407,7 @@ export const projectContentApi = {
   }
 
   form.append("isDone", payload.isDone ? "true" : "false");
+   form.append("isPresent", payload.isPresent === false ? "false" : "true");
 
   for (const image of payload.images ?? []) {
     form.append("images", {
@@ -420,6 +430,19 @@ export const projectContentApi = {
     {
       method: "POST",
       body: form,
+    }
+  );
+},
+
+
+getAssetByCode: async (projectId: string, code: string) => {
+  
+  console.log("SCANNED RAW CODE:", JSON.stringify(code));
+console.log("PROJECT ID USED:", projectId);
+  return request<GetAssetByCodeResponse>(
+    `/projects/${projectId}/assets/by-code?code=${encodeURIComponent(code)}`,
+    {
+      method: "GET",
     }
   );
 },
@@ -453,13 +476,14 @@ updateAsset: async (payload: {
   writtenDescription?: string | null;
   images?: UploadFileInput[];
   voiceNotes?: UploadFileInput[];
-  condition?: "" | "New" | "Used" | "Damaged" | null;
+  condition?: "" | "New" | "Used" | "Damaged" | "Good" | null;
   assetType?: "Vehicle" | "Other";
   brand?: string | null;
   model?: string | null;
   manufactureYear?: string | null;
   kilometersDriven?: string | null;
   isDone?: boolean;
+  isPresent?: boolean;
 }) => {
   const form = new FormData();
 
@@ -498,6 +522,10 @@ updateAsset: async (payload: {
   if (payload.isDone !== undefined) {
     form.append("isDone", payload.isDone ? "true" : "false");
   }
+
+  if (payload.isPresent !== undefined) {
+      form.append("isPresent", payload.isPresent ? "true" : "false");
+    }
 
   for (const image of payload.images ?? []) {
     form.append("images", {
