@@ -1,5 +1,6 @@
 import CreateAssetWizardModal from "./CreateAssetWizardModal";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "expo-router";
 import { useFonts } from "expo-font";
 import fonts from "../fonts/fonts";
 import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
@@ -83,6 +84,8 @@ export default function FolderAndAssetScreen({ route }: Props) {
       }, 350);
     });
   };
+
+  const router = useRouter();
 
   const [loaded] = useFonts({
     ...fonts.poppins,
@@ -593,8 +596,20 @@ const itemsWithPlaceholders = useMemo(() => {
   return (
     <SafeAreaView style={styles.flex} edges={["left", "right", "bottom"]}>
       <View style={styles.container}>
-        <Text style={styles.title}>{projectName}</Text>
-        <Text style={styles.subtitle}>Folders & Assets</Text>
+        <View style={styles.headerRow}>
+          <View>
+            <Text style={styles.title}>{projectName}</Text>
+            <Text style={styles.subtitle}>Folders & Assets</Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.dashboardBtn}
+            onPress={() => router.push("/(app)/project")}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.dashboardBtnText}>Dashboard</Text>
+          </TouchableOpacity>
+        </View>
 
         {downloadedOffline && !isOnline && (
   <Text style={styles.offlineModeText}>OFFLINE</Text>
@@ -968,6 +983,25 @@ const styles = StyleSheet.create({
     marginTop: 0,
     marginBottom: 10,
     fontSize: 15,
+  },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  dashboardBtn: {
+    backgroundColor: ACC,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: ACC,
+  },
+  dashboardBtnText: {
+    color: "#000",
+    fontSize: 12,
+    fontWeight: "700",
   },
   offlineModeBadge: {
     backgroundColor: "rgba(212,255,0,0.12)",
