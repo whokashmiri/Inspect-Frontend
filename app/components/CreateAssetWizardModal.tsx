@@ -1117,10 +1117,11 @@ checkboxLabelIsPresent: {
     minHeight: 46,
     paddingHorizontal: 12,
     justifyContent: "center",
+    borderColor: "#333",
   },
 
   secondaryText: {
-    color: "#888",
+    color: "#ded6d6",
     fontWeight: "600",
     fontSize: 14,
   },
@@ -1142,6 +1143,7 @@ checkboxLabelIsPresent: {
   footerSide: {
     flex: 1,
     alignItems: "flex-start",
+   
   },
 
   footerSideRight: {
