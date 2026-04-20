@@ -57,7 +57,7 @@ const SURFACE = "#111";
 const BORDER = "#222";
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: "#000" },
+  flex: { flex: 1, backgroundColor: "#ffffff" },
   scroll: {
     flexGrow: 1,
     justifyContent: "center",
@@ -83,7 +83,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.inter.semiBold as unknown as string,
     fontSize: 22,
     fontWeight: "400",
-    color: "#fff",
+    color: "#060606",
     letterSpacing: -0.5,
     marginBottom: 6,
   },

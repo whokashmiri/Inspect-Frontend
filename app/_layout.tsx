@@ -14,7 +14,7 @@ export default function RootLayout() {
           screenOptions={{
             headerShown: false,
             animation: "slide_from_right",
-            contentStyle: { backgroundColor: "#000" },
+            contentStyle: { backgroundColor: "#8AA39B" },
           }}
         >
 
@@ -27,7 +27,7 @@ export default function RootLayout() {
 
 
 const styles = StyleSheet.create({
-  root: { flex: 1 ,  backgroundColor: "#000"},
+  root: { flex: 1 ,  backgroundColor: "#8AA39B"},
 
 
 });

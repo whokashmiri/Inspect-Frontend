@@ -272,7 +272,7 @@ export default function ProjectScreen() {
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
           <Text style={styles.title}>
-            Project for:{" "}
+            Your Company:{" "}
             <Text style={styles.companyName}>{user?.companyName ?? "Company"}</Text>
           </Text>
           <Text style={styles.subtitle}>Manage your company projects</Text>
@@ -493,14 +493,14 @@ export default function ProjectScreen() {
 
 const ACC = "#C8F135";
 const SURFACE = "#111";
-const BORDER = "#222";
+const BORDER = "#f8f1f1";
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: "#000" },
+  flex: { flex: 1, backgroundColor: "#ffffff" },
   scroll: { padding: 24, paddingTop: 20, paddingBottom: 40 },
   header: { marginBottom: 18 },
   title: {
-    color: "#fff",
+    color: "#020202",
     fontSize: 15,
     fontFamily: fonts.inter.semiBold as unknown as string,
   },

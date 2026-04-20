@@ -7,7 +7,7 @@
     "userInterfaceStyle": "dark",
     "scheme": "batchcam",
     "splash": {
-      "backgroundColor": "#000000"
+      "backgroundColor": "#8AA39B"
     },
     "ios": {
       "supportsTablet": false,
