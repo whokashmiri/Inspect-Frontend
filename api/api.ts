@@ -136,10 +136,10 @@ export interface AuthTokens {
 
 export interface User {
   id: string;
-  email: string;
-  companyName: string;
-  fullName: string;
-  role: "Manager" | "Inspector" | "Valuator";
+  username: string;
+  companyName: string | null;
+  role: "Manager" | "Inspector" | "Valuator" | "company_admin" | null;
+  isBlocked?: boolean;
 }
 
 export interface AuthResponse {
@@ -148,20 +148,9 @@ export interface AuthResponse {
 }
 
 export const authApi = {
-  signup: (payload: {
-    fullName: string;
-    role: "Manager" | "Inspector" | "Valuator";
-    email: string;
-    password: string;
-    companyName: string;
-  }) =>
-    request<AuthResponse>("/auth/signup", {
-      method: "POST",
-      body: payload,
-      auth: false,
-    }),
+  
 
-  login: (payload: { email: string; password: string }) =>
+  login: (payload: { username: string; password: string }) =>
     request<AuthResponse>("/auth/login", {
       method: "POST",
       body: payload,
@@ -184,49 +173,37 @@ export const authApi = {
 };
 
 // ─── Convenience wrapper ────────────────────────────────────────────────────
-export async function loginAndSave(email: string, password: string) {
-  const res = await authApi.login({ email, password });
+export async function loginAndSave(username: string, password: string) {
+  const res = await authApi.login({ username, password });
   await tokenStore.setToken(res.tokens.accessToken);
   await tokenStore.setRefresh(res.tokens.refreshToken);
   return res;
 }
 
-export async function signupAndSave(
-  fullName: string,
-  role: "Manager" | "Inspector" | "Valuator",
-  email: string,
-  password: string,
-  companyName: string,
-) {
-  const res = await authApi.signup({
-    fullName: fullName.trim(),
-    role,
-    email: email.trim().toLowerCase(),
-    password,
-    companyName: companyName.trim(),
-  });
-
-  await tokenStore.setToken(res.tokens.accessToken);
-  await tokenStore.setRefresh(res.tokens.refreshToken);
-  return res;
-}
 
 // ─── Projects ───────────────────────────────────────────────────────────────
+
+export interface ProjectCompany {
+  id: string;
+  name: string | null;
+}
+
+export interface ProjectUser {
+  id: string;
+  username: string | null;
+  role: string | null;
+}
+
 export interface Project {
   id: string;
   name: string;
-  status: "New" | "Favorite" | "Done";
-  isFavorite: boolean;
   createdAt: string;
-  company: {
-    id: string;
-    name: string;
-  };
-  createdBy: {
-    id: string;
-    fullName: string;
-    email: string;
-  };
+  updatedAt: string;
+  workflowStatus: string;
+  companyId: string;
+  userId: string;
+  company: ProjectCompany | null;
+  user: ProjectUser | null;
 }
 
 export interface CreateProjectResponse {
@@ -249,7 +226,6 @@ export const projectApi = {
       method: "GET",
     }),
 };
-
 // ─── Folders & Assets ───────────────────────────────────────────────────────
 export interface FolderItem {
   id: string;

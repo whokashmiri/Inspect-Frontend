@@ -26,7 +26,17 @@ import { downloadProjectForOffline } from "../offline/downloader";
 import { useFonts } from "expo-font";
 import fonts from "../fonts/fonts";
 
-type FilterType = "Recent" | "New" | "Favorite" | "Done";
+type FilterType = "Recent" | "New";
+
+const ACC = "#C6FF00";
+
+function getProjectStatusLabel(project: Project) {
+  const raw = (project.workflowStatus ?? "").toLowerCase();
+
+  if (raw === "new") return "New";
+  if (raw === "done") return "Done";
+  return project.workflowStatus || "New";
+}
 
 export default function ProjectScreen() {
   const [loaded] = useFonts({
@@ -216,25 +226,28 @@ export default function ProjectScreen() {
     });
   }
 
-  const offlineProjectEntries = useMemo(() => {
+  const offlineProjectEntries = useMemo<Project[]>(() => {
     return pendingProjects.map((item) => {
       const payload = item.payload as { name?: string };
+
       return {
         id: item.id,
         name: payload.name ?? "Offline project",
-        status: "New",
-        isFavorite: false,
         createdAt: new Date(item.createdAt).toISOString(),
+        updatedAt: new Date(item.createdAt).toISOString(),
+        workflowStatus: "new",
+        companyId: "offline-company",
+        userId: user?.id ?? "offline-user",
         company: {
-          id: user?.companyName ?? "offline",
+          id: "offline-company",
           name: user?.companyName ?? "Offline project",
         },
-        createdBy: {
-          id: user?.id ?? "offline",
-          fullName: user?.fullName ?? "You",
-          email: user?.email ?? "",
+        user: {
+          id: user?.id ?? "offline-user",
+          username: user?.username ?? "You",
+          role: user?.role ?? null,
         },
-      } as Project;
+      };
     });
   }, [pendingProjects, user]);
 
@@ -251,15 +264,9 @@ export default function ProjectScreen() {
     }
 
     if (filter === "New") {
-      return combinedProjects.filter((p) => p.status === "New");
-    }
-
-    if (filter === "Favorite") {
-      return combinedProjects.filter((p) => p.isFavorite);
-    }
-
-    if (filter === "Done") {
-      return combinedProjects.filter((p) => p.status === "Done");
+      return combinedProjects.filter(
+        (p) => (p.workflowStatus ?? "").toLowerCase() === "new"
+      );
     }
 
     return combinedProjects;
@@ -298,7 +305,7 @@ export default function ProjectScreen() {
         </View>
 
         <View style={styles.filterRow}>
-          {(["Recent", "New", "Favorite", "Done"] as FilterType[]).map((item) => (
+          {(["Recent", "New"] as FilterType[]).map((item) => (
             <Pressable
               key={item}
               onPress={() => setFilter(item)}
@@ -343,15 +350,17 @@ export default function ProjectScreen() {
                   <View style={styles.projectCardTop}>
                     <Text style={styles.projectName}>{project.name}</Text>
                     <View style={styles.statusPill}>
-                      <Text style={styles.statusPillText}>{project.status}</Text>
+                      <Text style={styles.statusPillText}>
+                        {getProjectStatusLabel(project)}
+                      </Text>
                     </View>
                   </View>
 
                   <Text style={styles.projectMeta}>
-                    Created by: {project.createdBy.fullName}
+                    Created by: {project.user?.username ?? "Unknown"}
                   </Text>
                   <Text style={styles.projectMeta}>
-                    Company: {project.company.name}
+                    Company: {project.company?.name ?? "Unknown"}
                   </Text>
 
                   <View style={styles.projectFooterRow}>
@@ -491,7 +500,7 @@ export default function ProjectScreen() {
   );
 }
 
-const ACC = "#C8F135";
+// const ACC = "#C8F135";
 const SURFACE = "#111";
 const BORDER = "#f8f1f1";
 

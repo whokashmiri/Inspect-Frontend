@@ -679,7 +679,7 @@ const itemsWithPlaceholders = useMemo(() => {
             {pendingAssetSaveCount > 0 && (
               <View style={styles.pendingSaveBanner}>
                 <Text style={styles.pendingSaveText}>
-                  Saving {pendingAssetSaveCount} asset
+                  Saving {pendingAssetSaveCount} Asset
                   {pendingAssetSaveCount > 1 ? "s" : ""}…
                 </Text>
               </View>
@@ -1083,7 +1083,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   pendingSaveText: {
-    color: ACC,
+    color: "#090909",
     fontSize: 12,
     fontWeight: "600",
   },

@@ -26,19 +26,18 @@ export default function LoginScreen() {
   const router = useRouter();
   const { login } = useAuth();
 
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<{ email?: string; password?: string }>(
+  const [errors, setErrors] = useState<{ username?: string; password?: string }>(
     {},
   );
 
   // ── Validation ────────────────────────────────────────────────────────────
   function validate() {
     const e: typeof errors = {};
-    if (!email.trim()) e.email = "Email is required.";
-    else if (!/\S+@\S+\.\S+/.test(email)) e.email = "Enter a valid email.";
+    if (!username.trim()) e.username = "Username is required.";
     if (!password) e.password = "Password is required.";
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -49,7 +48,7 @@ export default function LoginScreen() {
     if (!validate()) return;
     setLoading(true);
     try {
-      await login(email.trim().toLowerCase(), password);
+      await login(username.trim().toLowerCase(), password);
       // Navigation is handled by the root layout based on auth state
     } catch (err) {
       const msg =
@@ -80,25 +79,25 @@ export default function LoginScreen() {
 
         {/* ── Form ── */}
         <View style={styles.form}>
-          {/* Email */}
+          {/* Username */}
           <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Email</Text>
+            <Text style={styles.label}>Username</Text>
             <TextInput
-              style={[styles.input, errors.email && styles.inputError]}
-              placeholder="E-mail address"
+              style={[styles.input, errors.username && styles.inputError]}
+              placeholder="Username"
               placeholderTextColor="#555"
-              value={email}
+              value={username}
               onChangeText={(t) => {
-                setEmail(t);
-                if (errors.email)
-                  setErrors((e) => ({ ...e, email: undefined }));
+                setUsername(t);
+                if (errors.username)
+                  setErrors((e) => ({ ...e, username: undefined }));
               }}
-              keyboardType="email-address"
+              keyboardType="default"
               autoCapitalize="none"
               autoCorrect={false}
             />
-            {errors.email && (
-              <Text style={styles.errorText}>{errors.email}</Text>
+            {errors.username && (
+              <Text style={styles.errorText}>{errors.username}</Text>
             )}
           </View>
 
@@ -266,6 +265,3 @@ const styles = StyleSheet.create({
   footerText: { fontSize: 14, color: "#555" },
   footerLink: { fontSize: 14, color: ACC, fontWeight: "600" },
 });
-
-
-
