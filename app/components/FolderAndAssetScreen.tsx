@@ -1276,10 +1276,10 @@ const styles = StyleSheet.create({
   // Asset image fills the entire card as background, centered
   assetImageBackground: {
     position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    top: 4,
+    left: 9,
+    right: 1,
+    bottom: 1,
     width: "100%",
     height: "100%",
     borderRadius: 15,
@@ -1293,9 +1293,9 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: 6,
     paddingVertical: 6,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    borderBottomLeftRadius: 15,
-    borderBottomRightRadius: 15,
+    // backgroundColor: "rgba(0,0,0,0.55)",
+    borderBottomLeftRadius: 10,
+    borderBottomRightRadius: 10,
     zIndex: 10,
   },
   gridTitleOverlay: {
