@@ -20,11 +20,12 @@ import {
 import { Picker } from "@react-native-picker/picker";
 import * as ImagePicker from "expo-image-picker";
 import { Audio } from "expo-av";
+import { MaterialIcons } from "@expo/vector-icons";
 import AssetCameraModal from "./AssetCameraModal";
 import { AssetDraft } from "./utils/types";
 import { AudioModule, RecordingPresets, useAudioRecorder } from "expo-audio";
 
-type AssetCondition = "" | "New" | "Used" | "Damaged";
+type AssetCondition = "" | "New" | "Used" | "Damaged" | "Good";
 type AssetType = "Other" | "Vehicle";
 type CameraMode = "photos" | "scan";
 
@@ -55,7 +56,7 @@ const getInitialDraft = (
   name: initialData?.name || "",
   writtenDescription: initialData?.writtenDescription || "",
   voiceNotes: initialData?.voiceNotes || [],
-  condition: initialData?.condition || "",
+  condition: initialData?.condition || "Good",
   assetType: initialData?.assetType || "Other",
   brand: initialData?.brand || "",
   model: initialData?.model || "",
@@ -430,6 +431,16 @@ export default function CreateAssetWizardModal({
                               Upload from Phone
                             </Text>
                           </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={[styles.darkBtn, styles.flexBtn]}
+                            onPress={openScanCamera}
+                            activeOpacity={0.85}
+                          >
+                            <Text style={styles.darkBtnText}>
+                              Scan Text
+                            </Text>
+                          </TouchableOpacity>
                         </View>
 
                         <Text style={styles.helper}>
@@ -495,6 +506,7 @@ export default function CreateAssetWizardModal({
                         <Text style={styles.label}>Asset Details</Text>
 
                         <View onLayout={setFieldPosition("name")}>
+                          <Text style={styles.fieldLabel}>Asset Name</Text>
                           <TextInput
                             placeholder="Asset Name"
                             placeholderTextColor="#666"
@@ -516,6 +528,7 @@ export default function CreateAssetWizardModal({
                           />
                         </View>
 
+                        <Text style={styles.fieldLabel}>Condition</Text>
                         <View style={styles.pickerWrap}>
                           <Picker
                             selectedValue={draft.condition}
@@ -528,13 +541,14 @@ export default function CreateAssetWizardModal({
                             dropdownIconColor="#fff"
                             style={styles.picker}
                           >
-                            <Picker.Item label="Condition" value="" />
+                            <Picker.Item label="Good" value="Good" />
                             <Picker.Item label="New" value="New" />
                             <Picker.Item label="Used" value="Used" />
                             <Picker.Item label="Damaged" value="Damaged" />
                           </Picker>
                         </View>
 
+                        <Text style={styles.fieldLabel}>Asset Type</Text>
                         <View style={styles.pickerWrap}>
                           <Picker
                             selectedValue={draft.assetType}
@@ -555,6 +569,7 @@ export default function CreateAssetWizardModal({
                         {draft.assetType === "Vehicle" && (
                           <>
                             <View onLayout={setFieldPosition("brand")}>
+                              <Text style={styles.fieldLabel}>Brand</Text>
                               <TextInput
                                 placeholder="Brand"
                                 placeholderTextColor="#666"
@@ -570,6 +585,7 @@ export default function CreateAssetWizardModal({
                             </View>
 
                             <View onLayout={setFieldPosition("model")}>
+                              <Text style={styles.fieldLabel}>Model</Text>
                               <TextInput
                                 placeholder="Model"
                                 placeholderTextColor="#666"
@@ -577,7 +593,7 @@ export default function CreateAssetWizardModal({
                                 onChangeText={(t) =>
                                   setDraft((prev) => ({ ...prev, model: t }))
                                 }
-                                style={styles.input}
+                                style={[styles.input, styles.modelInput]}
                                 returnKeyType="next"
                                 blurOnSubmit={false}
                                 onFocus={() => scrollToField("model")}
@@ -585,6 +601,7 @@ export default function CreateAssetWizardModal({
                             </View>
 
                             <View onLayout={setFieldPosition("manufactureYear")}>
+                              <Text style={styles.fieldLabel}>Manufacture Year</Text>
                               <TextInput
                                 placeholder="Manufacture Year"
                                 placeholderTextColor="#666"
@@ -604,8 +621,9 @@ export default function CreateAssetWizardModal({
                             </View>
 
                             <View onLayout={setFieldPosition("kilometersDriven")}>
+                              <Text style={styles.fieldLabel}>Kilometers Driven / Hours Used</Text>
                               <TextInput
-                                placeholder="Kilometers Driven"
+                                placeholder="Kilometers Driven / Hours Used"
                                 placeholderTextColor="#666"
                                 value={draft.kilometersDriven}
                                 onChangeText={(t) =>
@@ -639,7 +657,7 @@ export default function CreateAssetWizardModal({
                           </TouchableOpacity>
                         </View>
 
-                        <View onLayout={setFieldPosition("writtenDescription")}>
+                        <View onLayout={setFieldPosition("writtenDescription")} style={styles.descriptionInputWrapper}>
                           <TextInput
                             placeholder="Write something..."
                             placeholderTextColor="#666"
@@ -652,6 +670,7 @@ export default function CreateAssetWizardModal({
                             }
                             style={[styles.input, styles.textArea]}
                             multiline
+                            scrollEnabled={true}
                             textAlignVertical="top"
                             onFocus={() => scrollToField("writtenDescription")}
                           />
@@ -706,25 +725,32 @@ export default function CreateAssetWizardModal({
 
                           return (
                             <View key={`${note.uri}-${index}`} style={styles.voiceItem}>
-                              <Text style={styles.voiceText} numberOfLines={1}>
-                                {note.name || `Voice Note ${index + 1}`}
-                                {isRemote && <Text style={styles.voiceRemoteText}> (saved)</Text>}
-                              </Text>
+                              <View style={styles.voiceActionsLeft}>
+                                <TouchableOpacity onPress={() => removeVoiceNote(index)} activeOpacity={0.7}>
+                                  <MaterialIcons name="delete-outline" size={20} color="#ff6b6b" />
+                                </TouchableOpacity>
+                              </View>
 
-                              <View style={styles.voiceActions}>
+                              <View style={styles.voiceTextContainer}>
+                                <Text style={styles.voiceText} numberOfLines={1}>
+                                  {note.name || `Voice Note ${index + 1}`}
+                                  {isRemote && <Text style={styles.voiceRemoteText}> (saved)</Text>}
+                                </Text>
+                              </View>
+
+                              <View style={styles.voiceActionsRight}>
                                 {canPlay && (
                                   <TouchableOpacity
                                     onPress={() => playVoiceNote(note.uri, index)}
                                     activeOpacity={0.7}
                                   >
-                                    <Text style={styles.voicePlay}>
-                                      {playingIndex === index ? "⏸" : "▶"}
-                                    </Text>
+                                    <MaterialIcons
+                                      name={playingIndex === index ? "pause-circle-filled" : "play-circle-filled"}
+                                      size={24}
+                                      color={ACC}
+                                    />
                                   </TouchableOpacity>
                                 )}
-                                <TouchableOpacity onPress={() => removeVoiceNote(index)}>
-                                  <Text style={styles.voiceRemove}>Remove</Text>
-                                </TouchableOpacity>
                               </View>
                             </View>
                           );
@@ -1117,7 +1143,9 @@ checkboxLabelIsPresent: {
     minHeight: 46,
     paddingHorizontal: 12,
     justifyContent: "center",
-    borderColor: "#333",
+    borderColor: "#666",
+    borderWidth: 1,
+    borderRadius: 8,
   },
 
   secondaryText: {
@@ -1130,6 +1158,22 @@ checkboxLabelIsPresent: {
     color: "#777",
     marginTop: 8,
     fontSize: 12,
+  },
+
+  fieldLabel: {
+    color: "#ccc",
+    fontSize: 12,
+    marginBottom: 6,
+    fontWeight: "500",
+  },
+
+  modelInput: {
+    minHeight: 54,
+  },
+
+  descriptionInputWrapper: {
+    maxHeight: 150,
+    marginBottom: 12,
   },
 
   footer: {
@@ -1165,33 +1209,29 @@ checkboxLabelIsPresent: {
     gap: 10,
   },
 
+  voiceActionsLeft: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  voiceTextContainer: {
+    flex: 1,
+    marginHorizontal: 8,
+  },
+
   voiceText: {
     color: "#fff",
-    flex: 1,
     fontSize: 13,
   },
 
-  voiceActions: {
-    flexDirection: "row",
+  voiceActionsRight: {
     alignItems: "center",
-    gap: 12,
-  },
-
-  voicePlay: {
-    color: ACC,
-    fontSize: 16,
-    fontWeight: "600",
+    justifyContent: "center",
   },
 
   voiceRemoteText: {
     color: "#666",
     fontSize: 12,
     fontStyle: "italic",
-  },
-
-  voiceRemove: {
-    color: "#ff6b6b",
-    fontSize: 13,
-    fontWeight: "600",
   },
 });

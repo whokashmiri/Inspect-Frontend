@@ -7,7 +7,7 @@ export type UploadFileInput = {
   type: string;
 };
 
-export type AssetCondition = "" | "New" | "Used" | "Damaged";
+export type AssetCondition = "" | "New" | "Used" | "Damaged" | "Good";
 export type AssetType = "Vehicle" | "Other";
 
 export type AssetDraft = {
