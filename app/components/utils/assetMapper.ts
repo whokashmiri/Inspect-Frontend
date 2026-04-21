@@ -11,6 +11,7 @@ export function mapAssetToDraft(asset: AssetItem): AssetDraft & { isDone: boolea
     model: asset.model || "",
     manufactureYear: asset.manufactureYear || "",
     kilometersDriven: asset.kilometersDriven || "",
+    isPresent: asset.isPresent,
     isDone: asset.isDone || false,
     images: asset.images.map((img, index) => ({
       uri: img.url,

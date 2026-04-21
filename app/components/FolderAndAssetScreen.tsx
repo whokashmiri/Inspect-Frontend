@@ -25,6 +25,7 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
   Dimensions,
+  Image,
 } from "react-native";
 import {
   projectContentApi,
@@ -750,20 +751,33 @@ const itemsWithPlaceholders = useMemo(() => {
                     onPress={() => openEditAsset(item)}
                     activeOpacity={0.85}
                   >
-                    <View style={styles.iconWrap}>
-                      <Ionicons name="cube-outline" size={36} color={!item.isPresent ? "#FF4444" : "#fff"} />
+                    {item.images && item.images.length > 0 ? (
+                      <Image
+                        source={{ uri: item.images[0].url }}
+                        style={styles.assetImageBackground}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={styles.iconWrap}>
+                        <Ionicons name="cube-outline" size={36} color={!item.isPresent ? "#FF4444" : "#fff"} />
+                      </View>
+                    )}
+
+                    {!item.isPresent && (
+                      <View style={styles.notPresentOverlay} />
+                    )}
+
+                    <View style={styles.assetNameOverlay}>
+                      <Text style={styles.gridTitleOverlay} numberOfLines={2}>
+                        {item.name}
+                      </Text>
                     </View>
 
-                    <Text style={styles.gridTitle} numberOfLines={2}>
-                      {item.name}
-                    </Text>
-
-                    <Ionicons
-                      name="create-outline"
-                      size={14}
-                      color={ACC}
-                      style={styles.editBadge}
-                    />
+                    {item.images && item.images.length > 0 && (
+                      <View style={styles.photoCountBadge}>
+                        <Text style={styles.photoCountText}>{item.images.length}</Text>
+                      </View>
+                    )}
                   </TouchableOpacity>
                 </View>
               );
@@ -1112,7 +1126,7 @@ const styles = StyleSheet.create({
   },
   gridCard: {
     width: "100%",
-    minHeight: ITEM_SIZE,
+    height: ITEM_SIZE,
     backgroundColor: "#111",
     borderRadius: 16,
     borderWidth: 1,
@@ -1122,22 +1136,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
+    overflow: "hidden",
   },
   iconWrap: {
+    width: 48,
+    height: 48,
     marginBottom: 10,
     alignItems: "center",
     justifyContent: "center",
+    position: "relative",
   },
   gridTitle: {
     color: "#fff",
     fontSize: 12,
     textAlign: "center",
     lineHeight: 14,
-  },
-  editBadge: {
-    position: "absolute",
-    top: 8,
-    right: 8,
   },
   skeletonIconGrid: {
     width: 26,
@@ -1173,11 +1186,8 @@ const styles = StyleSheet.create({
     right: 20,
     flexDirection: "row",
     gap: 5,
-    // backgroundColor: "#0b0b0b",
-    // borderWidth: 1,
     borderColor: "#1f1f1f",
     borderRadius: 15,
-    // padding: 10,
   },
   primaryBtn: {
     flex: 1,
@@ -1262,5 +1272,67 @@ const styles = StyleSheet.create({
   },
   modalSaveText: {
     color: "#000",
+  },
+  // Asset image fills the entire card as background, centered
+  assetImageBackground: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: "100%",
+    height: "100%",
+    borderRadius: 15,
+    zIndex: 1,
+  },
+  // Frosted name bar pinned to bottom of card
+  assetNameOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 6,
+    paddingVertical: 6,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    borderBottomLeftRadius: 15,
+    borderBottomRightRadius: 15,
+    zIndex: 10,
+  },
+  gridTitleOverlay: {
+    color: "#fff",
+    fontSize: 11,
+    textAlign: "center",
+    lineHeight: 14,
+    fontWeight: "500",
+  },
+  notPresentOverlay: {
+    position: "absolute",
+    top: 6,
+    left: 6,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#FF4444",
+    borderWidth: 2,
+    borderColor: "#111",
+    zIndex: 10,
+  },
+  photoCountBadge: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    zIndex: 10,
+  },
+  photoCountText: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "600",
   },
 });
