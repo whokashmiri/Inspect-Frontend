@@ -1,10 +1,54 @@
 import { Alert } from "react-native";
-import { projectApi, projectContentApi } from "../../api/api";
+import NetInfo from "@react-native-community/netinfo";
+import { projectApi, projectContentApi, authApi, tokenStore } from "../../api/api";
 import { getPending, updateStatus, deletePending, updatePayload } from "./storage";
 import { PendingItem } from "./types";
-import NetInfo from "@react-native-community/netinfo";
+import {
+  getCachedUser,
+  getSessionMeta,
+  isOfflineSessionValid,
+  cacheAuthenticatedSession,
+  getCachedCompanies,
+} from "./authStorage";
 
 let isSyncing = false;
+
+async function ensureValidSessionForSync(): Promise<boolean> {
+  const state = await NetInfo.fetch();
+  const isOnline = !!state.isConnected && !!state.isInternetReachable;
+  if (!isOnline) return false;
+
+  try {
+    const token = await tokenStore.getToken();
+    if (!token) return false;
+
+    const user = await authApi.me();
+    const cachedUser = await getCachedUser();
+    const companies = cachedUser ? await getCachedCompanies(cachedUser.id) : [];
+
+    await cacheAuthenticatedSession({
+      user: {
+        ...user,
+        selectedCompanyId:
+          cachedUser?.selectedCompanyId ??
+          (await getSessionMeta())?.selectedCompanyId ??
+          null,
+      },
+      accessToken: token,
+      refreshToken: null,
+      companies,
+      selectedCompanyId:
+        cachedUser?.selectedCompanyId ??
+        (await getSessionMeta())?.selectedCompanyId ??
+        null,
+    });
+
+    return true;
+  } catch (error: any) {
+    const validOffline = await isOfflineSessionValid();
+    return validOffline;
+  }
+}
 
 async function patchPendingProjectRefs(
   localId: string,
@@ -12,18 +56,18 @@ async function patchPendingProjectRefs(
   pendingItems?: PendingItem[]
 ) {
   const queue = pendingItems ?? (await getPending("pending"));
-  const updatePromises: Promise<void>[] = [];
+  const updates: Promise<void>[] = [];
 
   for (const item of queue) {
     const payload = item.payload as Record<string, unknown>;
     if (payload?.projectId === localId) {
       const updatedPayload = { ...payload, projectId: remoteId };
-      updatePromises.push(updatePayload(item.id, updatedPayload));
+      updates.push(updatePayload(item.id, updatedPayload));
       item.payload = updatedPayload;
     }
   }
 
-  await Promise.all(updatePromises);
+  await Promise.all(updates);
 }
 
 async function patchPendingFolderRefs(
@@ -32,7 +76,7 @@ async function patchPendingFolderRefs(
   pendingItems?: PendingItem[]
 ) {
   const queue = pendingItems ?? (await getPending("pending"));
-  const updatePromises: Promise<void>[] = [];
+  const updates: Promise<void>[] = [];
 
   for (const item of queue) {
     const payload = item.payload as Record<string, unknown>;
@@ -44,18 +88,18 @@ async function patchPendingFolderRefs(
       changed = true;
     }
 
-    if (payload?.folderId === localId) {
-      updatedPayload = { ...updatedPayload, folderId: remoteId };
+    if (payload?.parentSubProjectId === localId) {
+      updatedPayload = { ...updatedPayload, parentSubProjectId: remoteId };
       changed = true;
     }
 
     if (changed) {
-      updatePromises.push(updatePayload(item.id, updatedPayload));
+      updates.push(updatePayload(item.id, updatedPayload));
       item.payload = updatedPayload;
     }
   }
 
-  await Promise.all(updatePromises);
+  await Promise.all(updates);
 }
 
 async function processQueueItem(
@@ -65,14 +109,14 @@ async function processQueueItem(
   try {
     switch (item.type) {
       case "createProject": {
-        const projectResult = await projectApi.create(item.payload as any);
-        await patchPendingProjectRefs(item.id, projectResult.project.id, pendingItems);
+        const result = await projectApi.create(item.payload as any);
+        await patchPendingProjectRefs(item.id, result.project.id, pendingItems);
         break;
       }
 
       case "createFolder": {
-        const folderResult = await projectContentApi.createFolder(item.payload as any);
-        await patchPendingFolderRefs(item.id, folderResult.folder.id, pendingItems);
+        const result = await projectContentApi.createFolder(item.payload as any);
+        await patchPendingFolderRefs(item.id, result.folder.id, pendingItems);
         break;
       }
 
@@ -82,7 +126,6 @@ async function processQueueItem(
       }
 
       case "updateAsset": {
-        
         await projectContentApi.updateAsset(item.payload as any);
         break;
       }
@@ -95,16 +138,16 @@ async function processQueueItem(
     await updateStatus(item.id, "synced");
     await deletePending(item.id);
     return true;
-  } catch (error: any) {
+  } catch (error) {
     console.error(`Sync failed for ${item.id}:`, error);
 
     if ((item.retryCount ?? 0) < 3) {
-      await updateStatus(item.id, "pending", (item.retryCount || 0) + 1, Date.now());
-      return false;
+      await updateStatus(item.id, "pending", (item.retryCount ?? 0) + 1, Date.now());
     } else {
-      await updateStatus(item.id, "failed");
-      return false;
+      await updateStatus(item.id, "failed", item.retryCount ?? 3, Date.now());
     }
+
+    return false;
   }
 }
 
@@ -115,8 +158,14 @@ export async function syncQueue(): Promise<{
 }> {
   if (isSyncing) return { synced: 0, failed: 0, pending: 0 };
 
-  const wasOnline = await NetInfo.fetch().then((s) => s.isConnected ?? false);
-  if (!wasOnline) return { synced: 0, failed: 0, pending: 0 };
+  const net = await NetInfo.fetch();
+  const isOnline = !!net.isConnected && !!net.isInternetReachable;
+  if (!isOnline) return { synced: 0, failed: 0, pending: 0 };
+
+  const canSync = await ensureValidSessionForSync();
+  if (!canSync) {
+    return { synced: 0, failed: 0, pending: 0 };
+  }
 
   isSyncing = true;
   console.log("🛜 Starting sync...");
@@ -131,31 +180,45 @@ export async function syncQueue(): Promise<{
       if (success) synced++;
       else failed++;
 
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 400));
     }
 
     if (synced > 0) {
-      Alert.alert("Sync Complete", `${synced} items synced!`);
+      Alert.alert("Sync Complete", `${synced} item(s) synced.`);
     }
 
-    console.log(`✅ Sync complete: ${synced} synced, ${failed} failed`);
-    return { synced, failed, pending: pending.length - synced - failed };
+    return {
+      synced,
+      failed,
+      pending: Math.max(0, pending.length - synced - failed),
+    };
   } finally {
     isSyncing = false;
   }
 }
 
+let unsubscribeSyncListener: (() => void) | null = null;
+
 export function startSyncListener() {
-  NetInfo.addEventListener(async (state) => {
-    if (state.isConnected) {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+  if (unsubscribeSyncListener) return;
+
+  unsubscribeSyncListener = NetInfo.addEventListener(async (state) => {
+    if (state.isConnected && state.isInternetReachable) {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
       await syncQueue();
     }
   });
 }
 
+export function stopSyncListener() {
+  if (unsubscribeSyncListener) {
+    unsubscribeSyncListener();
+    unsubscribeSyncListener = null;
+  }
+}
+
 export function triggerManualSync() {
-  syncQueue();
+  void syncQueue();
 }
 
 export async function initSync() {

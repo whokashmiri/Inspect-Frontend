@@ -1,23 +1,22 @@
 import NetInfo from "@react-native-community/netinfo";
 import { savePending, initStorage } from "./storage";
 import { PendingItem, OfflineResult, OfflineAction } from "./types";
+import { getCachedUser, isOfflineSessionValid } from "./authStorage";
 
 function extractLocalMediaUris(payload: any, type: OfflineAction): string[] {
   if ((type !== "createAsset" && type !== "updateAsset") || !payload) return [];
 
-  const imageUris =
-    Array.isArray(payload.images)
-      ? payload.images
-          .map((item: any) => item?.uri)
-          .filter((uri: any) => typeof uri === "string")
-      : [];
+  const imageUris = Array.isArray(payload.images)
+    ? payload.images
+        .map((item: any) => item?.uri)
+        .filter((uri: any) => typeof uri === "string")
+    : [];
 
-  const voiceUris =
-    Array.isArray(payload.voiceNotes)
-      ? payload.voiceNotes
-          .map((item: any) => item?.uri)
-          .filter((uri: any) => typeof uri === "string")
-      : [];
+  const voiceUris = Array.isArray(payload.voiceNotes)
+    ? payload.voiceNotes
+        .map((item: any) => item?.uri)
+        .filter((uri: any) => typeof uri === "string")
+    : [];
 
   return [...imageUris, ...voiceUris];
 }
@@ -45,9 +44,14 @@ export async function safeApiCall<T>(
     }
   }
 
-  const localId = `offline_${Date.now()}_${Math.random()
-    .toString(36)
-    .slice(2, 11)}`;
+  const cachedUser = await getCachedUser();
+  const canUseOffline = cachedUser && (await isOfflineSessionValid());
+
+  if (!canUseOffline) {
+    throw new Error("Offline session is not available. Please reconnect and sign in again.");
+  }
+
+  const localId = `offline_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
 
   const pending: Omit<PendingItem, "status" | "retryCount" | "lastAttempt"> = {
     id: localId,
@@ -73,5 +77,7 @@ export function useSafeApiCall() {
     apiFn: () => Promise<T>,
     fallbackPayload: any,
     options: Parameters<typeof safeApiCall>[2]
-  ): Promise<T | OfflineResult> => safeApiCall(apiFn, fallbackPayload, options);
+  ): Promise<T | OfflineResult> => {
+    return safeApiCall(apiFn, fallbackPayload, options);
+  };
 }

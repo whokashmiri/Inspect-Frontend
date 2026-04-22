@@ -191,11 +191,11 @@ const handleDetectedAssetCode = async (rawCode: string) => {
 };
  const loadContents = useCallback(
   async (
-    folderId: string | null,
+    parentSubProjectId: string | null,
     options?: { showSkeleton?: boolean }
   ) => {
     const readOffline = async () => {
-      const offlineData = await getOfflineContents(projectId, folderId);
+      const offlineData = await getOfflineContents(projectId, parentSubProjectId);
       setFolders((offlineData.folders || []) as FolderItem[]);
       setAssets((offlineData.assets || []) as AssetItem[]);
     };
@@ -224,7 +224,7 @@ const handleDetectedAssetCode = async (rawCode: string) => {
         return;
       }
 
-      const data = await projectContentApi.listContents(projectId, folderId, filter, searchQuery);
+      const data = await projectContentApi.listContents(projectId, parentSubProjectId, filter, searchQuery);
       setFolders(data.folders || []);
       setAssets(data.assets || []);
     } catch (error: any) {
@@ -353,36 +353,46 @@ const handleCreateFolder = async () => {
   }
 }; 
 
+const normalizeAssetType = (
+  value?: "vehicle" | "other" | "Vehicle" | "Other" | null
+): "vehicle" | "other" => {
+  return String(value || "").toLowerCase() === "vehicle" ? "vehicle" : "other";
+};
 
 
-  const buildLocalAsset = (draft: AssetDraft): AssetItem => ({
-  id: `offline_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-  name: draft.name,
-  writtenDescription: draft.writtenDescription || null,
-  folderId: currentFolderId ?? null,
-  projectId,
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
-  condition: draft.condition || null,
-  assetType: draft.assetType || "Other",
-  brand: draft.brand || null,
-  model: draft.model || null,
-  code: draft.code || null,
-  manufactureYear: draft.manufactureYear || null,
-  kilometersDriven: draft.kilometersDriven || null,
-  isDone: draft.isDone ?? false,
-  isPresent: draft.isPresent ?? true,
-  createdBy: {
-    id: "offline-user",
-    fullName: "You",
-    email: "",
-  },
-  images: [],
-  voiceNotes: [],
-});
+const buildLocalAsset = (draft: AssetDraft): AssetItem => {
+  const normalizedAssetType = normalizeAssetType(draft.assetType as any);
+  const isVehicle = normalizedAssetType === "vehicle";
+
+  return {
+    id: `offline_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+    name: draft.name,
+    writtenDescription: draft.writtenDescription || null,
+    parentSubProjectId: currentFolderId ?? null,
+    projectId,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    condition: draft.condition || null,
+    assetType: normalizedAssetType,
+    brand: isVehicle ? draft.brand || null : null,
+    model: isVehicle ? draft.model || null : null,
+    code: draft.code || null,
+    manufactureYear: isVehicle ? draft.manufactureYear || null : null,
+    kilometersDriven: isVehicle ? draft.kilometersDriven || null : null,
+    isDone: draft.isDone ?? false,
+    isPresent: draft.isPresent ?? true,
+    createdBy: {
+      id: "offline-user",
+      fullName: "You",
+      email: "",
+    },
+    images: [],
+    voiceNotes: [],
+  };
+};
 
 
-  const createAssetAsync = async (draft: AssetDraft) => {
+const createAssetAsync = async (draft: AssetDraft) => {
   const newImages = (draft.images || []).filter(
     (item: any) => item.uri && !item.uri.startsWith("http")
   );
@@ -391,23 +401,25 @@ const handleCreateFolder = async () => {
     (item: any) => item.uri && !item.uri.startsWith("http")
   );
 
+  const normalizedAssetType = normalizeAssetType(draft.assetType as any);
+  const isVehicle = normalizedAssetType === "vehicle";
+
   const payload = {
     projectId,
     name: draft.name,
     writtenDescription: draft.writtenDescription || null,
-    folderId: currentFolderId || undefined,
+    parentSubProjectId: currentFolderId || undefined,
     images: newImages,
     voiceNotes: newVoiceNotes,
     condition: draft.condition || null,
     code: draft.code || null,
-    assetType: draft.assetType || "Other",
-    brand: draft.assetType === "Vehicle" ? draft.brand || null : null,
-    model: draft.assetType === "Vehicle" ? draft.model || null : null,
-    manufactureYear:
-      draft.assetType === "Vehicle" ? draft.manufactureYear || null : null,
-    kilometersDriven:
-      draft.assetType === "Vehicle" ? draft.kilometersDriven || null : null,
-      isDone: draft.isDone ?? false,
+    assetType: normalizedAssetType,
+    brand: isVehicle ? draft.brand || null : null,
+    model: isVehicle ? draft.model || null : null,
+    manufactureYear: isVehicle ? draft.manufactureYear || null : null,
+    kilometersDriven: isVehicle ? draft.kilometersDriven || null : null,
+    isDone: draft.isDone ?? false,
+    isPresent: draft.isPresent ?? true,
   };
 
   const result = await safeApiCall(
@@ -436,7 +448,7 @@ const handleCreateFolder = async () => {
   await loadContents(currentFolderId, { showSkeleton: true });
 };
 
-  const updateAssetAsync = async (draft: AssetDraft) => {
+const updateAssetAsync = async (draft: AssetDraft) => {
   if (!editingAsset) return;
 
   const newImages = (draft.images || []).filter(
@@ -447,20 +459,22 @@ const handleCreateFolder = async () => {
     (item: any) => !item.existing && item.uri && !item.uri.startsWith("http")
   );
 
+  const normalizedAssetType = normalizeAssetType(draft.assetType as any);
+  const isVehicle = normalizedAssetType === "vehicle";
+
   const payload = {
     assetId: editingAsset.id,
+    name: draft.name,
     writtenDescription: draft.writtenDescription || null,
     images: newImages,
     voiceNotes: newVoiceNotes,
     code: draft.code || null,
     condition: draft.condition || null,
-    assetType: draft.assetType || "Other",
-    brand: draft.assetType === "Vehicle" ? draft.brand || null : null,
-    model: draft.assetType === "Vehicle" ? draft.model || null : null,
-    manufactureYear:
-      draft.assetType === "Vehicle" ? draft.manufactureYear || null : null,
-    kilometersDriven:
-      draft.assetType === "Vehicle" ? draft.kilometersDriven || null : null,
+    assetType: normalizedAssetType,
+    brand: isVehicle ? draft.brand || null : null,
+    model: isVehicle ? draft.model || null : null,
+    manufactureYear: isVehicle ? draft.manufactureYear || null : null,
+    kilometersDriven: isVehicle ? draft.kilometersDriven || null : null,
     isDone: draft.isDone ?? false,
     isPresent: draft.isPresent ?? true,
   };
@@ -478,17 +492,16 @@ const handleCreateFolder = async () => {
 
       const updatedOfflineAsset: AssetItem = {
         ...existingOfflineAsset,
+        name: draft.name,
         writtenDescription: draft.writtenDescription || null,
         condition: draft.condition || null,
         code: draft.code ?? existingOfflineAsset.code ?? null,
-        assetType: draft.assetType || "Other",
-        brand: draft.assetType === "Vehicle" ? draft.brand || null : null,
-        model: draft.assetType === "Vehicle" ? draft.model || null : null,
-        manufactureYear:
-          draft.assetType === "Vehicle" ? draft.manufactureYear || null : null,
-        kilometersDriven:
-          draft.assetType === "Vehicle" ? draft.kilometersDriven || null : null,
-        isDone: (draft as any).isDone ?? existingOfflineAsset.isDone,
+        assetType: normalizedAssetType,
+        brand: isVehicle ? draft.brand || null : null,
+        model: isVehicle ? draft.model || null : null,
+        manufactureYear: isVehicle ? draft.manufactureYear || null : null,
+        kilometersDriven: isVehicle ? draft.kilometersDriven || null : null,
+        isDone: draft.isDone ?? existingOfflineAsset.isDone,
         isPresent: draft.isPresent ?? existingOfflineAsset.isPresent,
         updatedAt: new Date().toISOString(),
       };

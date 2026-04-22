@@ -26,6 +26,8 @@ export interface OfflineProjectRecord {
   id: string;
   data: string;
   downloadedAt: number;
+  userId?: string | null;
+  companyId?: string | null;
 }
 
 export interface OfflineFolderRecord {
@@ -33,11 +35,50 @@ export interface OfflineFolderRecord {
   projectId: string;
   parentId: string | null;
   data: string;
+  userId?: string | null;
+  companyId?: string | null;
 }
 
 export interface OfflineAssetRecord {
   id: string;
   projectId: string;
-  folderId: string | null;
+  parentSubProjectId: string | null;
   data: string;
+  userId?: string | null;
+  companyId?: string | null;
 }
+
+export interface CachedCompany {
+  id: string;
+  name: string;
+  [key: string]: any;
+}
+
+
+export type AppRole =
+  | "Manager"
+  | "Inspector"
+  | "Valuator"
+  | "company_admin";
+
+export interface CachedUser {
+  id: string;
+  username: string;
+  companyName: string | null;
+  role: AppRole | null;
+  isBlocked?: boolean;
+  [key: string]: any;
+}
+
+
+export interface OfflineSessionMeta {
+  userId: string;
+  username: string;
+  lastOnlineAuthAt: number;
+  offlineAllowedUntil: number;
+  selectedCompanyId?: string | null;
+}
+
+
+
+

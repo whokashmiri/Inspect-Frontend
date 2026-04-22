@@ -7,20 +7,22 @@ import * as SecureStore from "expo-secure-store";
 // ─── Config ────────────────────────────────────────────────────────────────
 export const BASE_URL = "http://192.168.0.198:3000/api/v1";
 
-const TOKEN_KEY = "auth_token";
-const REFRESH_KEY = "refresh_token";
+const TOKEN_KEY = "auth.accessToken";
+const REFRESH_KEY = "auth.refreshToken";
 
 // ─── Token helpers ──────────────────────────────────────────────────────────
 export const tokenStore = {
   getToken: () => SecureStore.getItemAsync(TOKEN_KEY),
   setToken: (t: string) => SecureStore.setItemAsync(TOKEN_KEY, t),
-  getRefresh: () => SecureStore.getItemAsync(REFRESH_KEY),
-  setRefresh: (t: string) => SecureStore.setItemAsync(REFRESH_KEY, t),
+
+  getRefreshToken: () => SecureStore.getItemAsync(REFRESH_KEY),
+  setRefreshToken: (t: string) => SecureStore.setItemAsync(REFRESH_KEY, t),
+
   clear: async () => {
     await SecureStore.deleteItemAsync(TOKEN_KEY);
     await SecureStore.deleteItemAsync(REFRESH_KEY);
   },
-};
+};;
 
 type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
@@ -77,13 +79,13 @@ async function request<T>(
 
   if (res.status === 401 && auth && retry) {
     try {
-      const refreshToken = await tokenStore.getRefresh();
+      const refreshToken = await tokenStore.getRefreshToken();
       if (!refreshToken) throw new Error("No refresh token");
 
       const newTokens = await authApi.refreshToken(refreshToken);
 
       await tokenStore.setToken(newTokens.accessToken);
-      await tokenStore.setRefresh(newTokens.refreshToken);
+      await tokenStore.setRefreshToken(newTokens.refreshToken);
 
       return request<T>(path, { method, body, auth }, false);
     } catch {
@@ -142,6 +144,12 @@ export interface User {
   isBlocked?: boolean;
 }
 
+export interface LoginResponse {
+  accessToken: string;
+  refreshToken?: string | null;
+  user: User;
+}
+
 export interface AuthResponse {
   user: User;
   tokens: AuthTokens;
@@ -175,11 +183,15 @@ export const authApi = {
 // ─── Convenience wrapper ────────────────────────────────────────────────────
 export async function loginAndSave(username: string, password: string) {
   const res = await authApi.login({ username, password });
+
   await tokenStore.setToken(res.tokens.accessToken);
-  await tokenStore.setRefresh(res.tokens.refreshToken);
+
+  if (res.tokens.refreshToken) {
+    await tokenStore.setRefreshToken(res.tokens.refreshToken);
+  }
+
   return res;
 }
-
 
 // ─── Projects ───────────────────────────────────────────────────────────────
 
@@ -227,6 +239,316 @@ export const projectApi = {
     }),
 };
 // ─── Folders & Assets ───────────────────────────────────────────────────────
+// export interface FolderItem {
+//   id: string;
+//   name: string;
+//   parentId: string | null;
+//   projectId: string;
+//   createdAt: string;
+//   createdBy: {
+//     id: string;
+//     fullName: string;
+//     email: string;
+//   };
+// }
+// export interface AssetImageItem {
+//   id: string;
+//   url: string;
+//   publicId: string | null;
+//   createdAt: string;
+// }
+
+// export interface AssetVoiceNoteItem {
+//   id: string;
+//   url: string;
+//   publicId: string | null;
+//   duration: number | null;
+//   createdAt: string;
+// }
+// export interface AssetItem {
+//   id: string;
+//   name: string;
+//   writtenDescription: string | null;
+//   folderId: string | null;
+//   projectId: string;
+//   createdAt: string;
+//   updatedAt: string;
+//   code: string | null;
+
+//   condition: "" | "New" | "Used" | "Damaged" | "Good" | null;
+//   assetType: "Vehicle" | "Other";
+//   brand: string | null;
+//   model: string | null;
+//   manufactureYear: string | null;
+
+//   kilometersDriven: string | null;
+//   isDone: boolean;
+//   isPresent: boolean;
+
+//   createdBy: {
+
+//     id: string;
+//     fullName: string;
+//     email: string;
+//   };
+
+//   images: AssetImageItem[];
+//   voiceNotes: AssetVoiceNoteItem[];
+// }
+
+// export interface ProjectContentsResponse {
+//   parentId: string | null;
+//   folders: FolderItem[];
+//   assets: AssetItem[];
+// }
+
+// export interface CreateFolderResponse {
+//   folder: FolderItem;
+// }
+
+// export interface CreateAssetResponse {
+//   asset: AssetItem;
+// }
+
+
+// export interface GetAssetByCodeResponse {
+//   asset: AssetItem;
+// }
+
+// export interface UpdateAssetResponse {
+//   asset: AssetItem;
+// }
+
+// export interface UploadFileInput {
+//   uri: string;
+//   name: string;
+//   type: string;
+// }
+
+// export const projectContentApi = {
+
+
+
+//   createFolder: (payload: {
+//     projectId: string;
+//     name: string;
+//     parentId?: string | null;
+//   }) =>
+//     request<CreateFolderResponse>(`/projects/${payload.projectId}/folders`, {
+//       method: "POST",
+//       body: {
+//         name: payload.name,
+//         parentId: payload.parentId ?? null,
+//       },
+//     }),
+
+//  createAsset: async (payload: {
+//   projectId: string;
+//   name: string;
+//   writtenDescription?: string | null;
+//   folderId?: string | null;
+//   images?: UploadFileInput[];
+//   voiceNotes?: UploadFileInput[];
+//   condition?: "" | "New" | "Used" | "Damaged" | "Good" | null;
+//   assetType?: "Vehicle" | "Other";
+//   brand?: string | null;
+//   model?: string | null;
+//   manufactureYear?: string | null;
+//   kilometersDriven?: string | null;
+//   isDone?: boolean;
+//   isPresent?: boolean;
+// }) => {
+//   const form = new FormData();
+
+//   form.append("name", payload.name);
+
+//   if (payload.writtenDescription?.trim()) {
+//     form.append("writtenDescription", payload.writtenDescription.trim());
+//   }
+
+//   if (payload.folderId) {
+//     form.append("folderId", payload.folderId);
+//   }
+
+//   if (payload.condition) {
+//     form.append("condition", payload.condition);
+//   }
+
+//   if (payload.assetType) {
+//     form.append("assetType", payload.assetType);
+//   }
+
+//   if (payload.brand?.trim()) {
+//     form.append("brand", payload.brand.trim());
+//   }
+
+//   if (payload.model?.trim()) {
+//     form.append("model", payload.model.trim());
+//   }
+
+//   if (payload.manufactureYear?.trim()) {
+//     form.append("manufactureYear", payload.manufactureYear.trim());
+//   }
+
+//   if (payload.kilometersDriven?.trim()) {
+//     form.append("kilometersDriven", payload.kilometersDriven.trim());
+//   }
+
+//   form.append("isDone", payload.isDone ? "true" : "false");
+//    form.append("isPresent", payload.isPresent === false ? "false" : "true");
+
+//   for (const image of payload.images ?? []) {
+//     form.append("images", {
+//       uri: image.uri,
+//       name: image.name,
+//       type: image.type,
+//     } as any);
+//   }
+
+//   for (const voice of payload.voiceNotes ?? []) {
+//     form.append("voiceNotes", {
+//       uri: voice.uri,
+//       name: voice.name,
+//       type: voice.type,
+//     } as any);
+//   }
+
+//   return requestForm<CreateAssetResponse>(
+//     `/projects/${payload.projectId}/assets`,
+//     {
+//       method: "POST",
+//       body: form,
+//     }
+//   );
+// },
+
+
+// getAssetByCode: async (projectId: string, code: string) => {
+  
+//   console.log("SCANNED RAW CODE:", JSON.stringify(code));
+// console.log("PROJECT ID USED:", projectId);
+//   return request<GetAssetByCodeResponse>(
+//     `/projects/${projectId}/assets/by-code?code=${encodeURIComponent(code)}`,
+//     {
+//       method: "GET",
+//     }
+//   );
+// },
+
+
+//   listContents: (projectId: string, parentId?: string | null, filter?: 'all' | 'done' | 'incomplete', search?: string) => {
+//     let qs = '';
+//     if (parentId) qs += `?parentId=${encodeURIComponent(parentId)}`;
+//     if (filter) qs += `${qs ? '&' : '?'}filter=${filter}`;
+//     if (search) qs += `${qs ? '&' : '?'}search=${encodeURIComponent(search)}`;
+//     if (!qs) qs = '';
+//     return request<ProjectContentsResponse>(
+//       `/projects/${projectId}/contents${qs}`,
+//       {
+//         method: "GET",
+//       },
+//     );
+//   },
+
+//   toggleAssetDone: (projectId: string, assetId: string, isDone: boolean) =>
+//     request(`/projects/${projectId}/assets/${assetId}/toggle-done`, {
+//       method: "PATCH",
+//       body: { isDone },
+//     }),
+
+
+
+
+// updateAsset: async (payload: {
+//   assetId: string;
+//   writtenDescription?: string | null;
+//   images?: UploadFileInput[];
+//   voiceNotes?: UploadFileInput[];
+//   condition?: "" | "New" | "Used" | "Damaged" | "Good" | null;
+//   assetType?: "Vehicle" | "Other";
+//   brand?: string | null;
+//   model?: string | null;
+//   manufactureYear?: string | null;
+//   kilometersDriven?: string | null;
+//   isDone?: boolean;
+//   isPresent?: boolean;
+// }) => {
+//   const form = new FormData();
+
+//   if (payload.writtenDescription !== undefined) {
+//     form.append("writtenDescription", payload.writtenDescription ?? "");
+//   }
+
+//   if (
+//   payload.condition === "New" ||
+//   payload.condition === "Used" ||
+//   payload.condition === "Damaged"
+// ) {
+//   form.append("condition", payload.condition);
+// }
+
+//   if (payload.assetType !== undefined) {
+//     form.append("assetType", payload.assetType);
+//   }
+
+//   if (payload.brand !== undefined) {
+//     form.append("brand", payload.brand ?? "");
+//   }
+
+//   if (payload.model !== undefined) {
+//     form.append("model", payload.model ?? "");
+//   }
+
+//   if (payload.manufactureYear !== undefined) {
+//     form.append("manufactureYear", payload.manufactureYear ?? "");
+//   }
+
+//   if (payload.kilometersDriven !== undefined) {
+//     form.append("kilometersDriven", payload.kilometersDriven ?? "");
+//   }
+
+//   if (payload.isDone !== undefined) {
+//     form.append("isDone", payload.isDone ? "true" : "false");
+//   }
+
+//   if (payload.isPresent !== undefined) {
+//       form.append("isPresent", payload.isPresent ? "true" : "false");
+//     }
+
+//   for (const image of payload.images ?? []) {
+//     form.append("images", {
+//       uri: image.uri,
+//       name: image.name,
+//       type: image.type,
+//     } as any);
+//   }
+
+//   for (const voice of payload.voiceNotes ?? []) {
+//     form.append("voiceNotes", {
+//       uri: voice.uri,
+//       name: voice.name,
+//       type: voice.type,
+//     } as any);
+//   }
+
+//  console.log("UPDATE FORM isDone:", payload.isDone);
+// console.log("UPDATE FORM parts:", (form as any)._parts);
+//   return requestForm<UpdateAssetResponse>(
+//     `/projects/assets/${payload.assetId}`,
+//     {
+//       method: "PATCH",
+//       body: form,
+//     }
+//   );
+// },
+
+
+// };
+
+
+
+
+// ─── Folders & Assets ───────────────────────────────────────────────────────
 export interface FolderItem {
   id: string;
   name: string;
@@ -239,6 +561,7 @@ export interface FolderItem {
     email: string;
   };
 }
+
 export interface AssetImageItem {
   id: string;
   url: string;
@@ -253,28 +576,32 @@ export interface AssetVoiceNoteItem {
   duration: number | null;
   createdAt: string;
 }
+
 export interface AssetItem {
   id: string;
   name: string;
   writtenDescription: string | null;
-  folderId: string | null;
+
+  // old: folderId
+  parentSubProjectId: string | null;
+
   projectId: string;
   createdAt: string;
   updatedAt: string;
   code: string | null;
 
   condition: "" | "New" | "Used" | "Damaged" | "Good" | null;
-  assetType: "Vehicle" | "Other";
+  assetType: "vehicle" | "other";
+
   brand: string | null;
   model: string | null;
   manufactureYear: string | null;
-
   kilometersDriven: string | null;
+
   isDone: boolean;
   isPresent: boolean;
 
   createdBy: {
-
     id: string;
     fullName: string;
     email: string;
@@ -298,7 +625,6 @@ export interface CreateAssetResponse {
   asset: AssetItem;
 }
 
-
 export interface GetAssetByCodeResponse {
   asset: AssetItem;
 }
@@ -313,10 +639,14 @@ export interface UploadFileInput {
   type: string;
 }
 
+const normalizeAssetType = (
+  assetType?: "vehicle" | "other" | "Vehicle" | "Other"
+): "vehicle" | "other" | undefined => {
+  if (!assetType) return undefined;
+  return String(assetType).toLowerCase() === "vehicle" ? "vehicle" : "other";
+};
+
 export const projectContentApi = {
-
-
-
   createFolder: (payload: {
     projectId: string;
     name: string;
@@ -330,112 +660,128 @@ export const projectContentApi = {
       },
     }),
 
- createAsset: async (payload: {
-  projectId: string;
-  name: string;
-  writtenDescription?: string | null;
-  folderId?: string | null;
-  images?: UploadFileInput[];
-  voiceNotes?: UploadFileInput[];
-  condition?: "" | "New" | "Used" | "Damaged" | "Good" | null;
-  assetType?: "Vehicle" | "Other";
-  brand?: string | null;
-  model?: string | null;
-  manufactureYear?: string | null;
-  kilometersDriven?: string | null;
-  isDone?: boolean;
-  isPresent?: boolean;
-}) => {
-  const form = new FormData();
+  createAsset: async (payload: {
+    projectId: string;
+    name: string;
+    writtenDescription?: string | null;
 
-  form.append("name", payload.name);
+    // new field
+    parentSubProjectId?: string | null;
 
-  if (payload.writtenDescription?.trim()) {
-    form.append("writtenDescription", payload.writtenDescription.trim());
-  }
+    // temporary compatibility if some screens still use old field
+    folderId?: string | null;
 
-  if (payload.folderId) {
-    form.append("folderId", payload.folderId);
-  }
+    images?: UploadFileInput[];
+    voiceNotes?: UploadFileInput[];
+    condition?: "" | "New" | "Used" | "Damaged" | "Good" | null;
+    assetType?: "vehicle" | "other" | "Vehicle" | "Other";
+    brand?: string | null;
+    model?: string | null;
+    code?: string | null;
+    manufactureYear?: string | null;
+    kilometersDriven?: string | null;
+    isDone?: boolean;
+    isPresent?: boolean;
+  }) => {
+    const form = new FormData();
 
-  if (payload.condition) {
-    form.append("condition", payload.condition);
-  }
+    form.append("name", payload.name);
 
-  if (payload.assetType) {
-    form.append("assetType", payload.assetType);
-  }
-
-  if (payload.brand?.trim()) {
-    form.append("brand", payload.brand.trim());
-  }
-
-  if (payload.model?.trim()) {
-    form.append("model", payload.model.trim());
-  }
-
-  if (payload.manufactureYear?.trim()) {
-    form.append("manufactureYear", payload.manufactureYear.trim());
-  }
-
-  if (payload.kilometersDriven?.trim()) {
-    form.append("kilometersDriven", payload.kilometersDriven.trim());
-  }
-
-  form.append("isDone", payload.isDone ? "true" : "false");
-   form.append("isPresent", payload.isPresent === false ? "false" : "true");
-
-  for (const image of payload.images ?? []) {
-    form.append("images", {
-      uri: image.uri,
-      name: image.name,
-      type: image.type,
-    } as any);
-  }
-
-  for (const voice of payload.voiceNotes ?? []) {
-    form.append("voiceNotes", {
-      uri: voice.uri,
-      name: voice.name,
-      type: voice.type,
-    } as any);
-  }
-
-  return requestForm<CreateAssetResponse>(
-    `/projects/${payload.projectId}/assets`,
-    {
-      method: "POST",
-      body: form,
+    if (payload.writtenDescription?.trim()) {
+      form.append("writtenDescription", payload.writtenDescription.trim());
     }
-  );
-},
 
+    const resolvedParentSubProjectId =
+      payload.parentSubProjectId ?? payload.folderId ?? null;
 
-getAssetByCode: async (projectId: string, code: string) => {
-  
-  console.log("SCANNED RAW CODE:", JSON.stringify(code));
-console.log("PROJECT ID USED:", projectId);
-  return request<GetAssetByCodeResponse>(
-    `/projects/${projectId}/assets/by-code?code=${encodeURIComponent(code)}`,
-    {
-      method: "GET",
+    if (resolvedParentSubProjectId) {
+      form.append("parentSubProjectId", resolvedParentSubProjectId);
     }
-  );
-},
 
+    if (payload.condition) {
+      form.append("condition", payload.condition);
+    }
 
-  listContents: (projectId: string, parentId?: string | null, filter?: 'all' | 'done' | 'incomplete', search?: string) => {
-    let qs = '';
-    if (parentId) qs += `?parentId=${encodeURIComponent(parentId)}`;
-    if (filter) qs += `${qs ? '&' : '?'}filter=${filter}`;
-    if (search) qs += `${qs ? '&' : '?'}search=${encodeURIComponent(search)}`;
-    if (!qs) qs = '';
-    return request<ProjectContentsResponse>(
-      `/projects/${projectId}/contents${qs}`,
+    const normalizedAssetType = normalizeAssetType(payload.assetType);
+    if (normalizedAssetType) {
+      form.append("assetType", normalizedAssetType);
+    }
+
+    if (payload.brand?.trim()) {
+      form.append("brand", payload.brand.trim());
+    }
+
+    if (payload.model?.trim()) {
+      form.append("model", payload.model.trim());
+    }
+
+    if (payload.code?.trim()) {
+      form.append("code", payload.code.trim());
+    }
+
+    if (payload.manufactureYear?.trim()) {
+      form.append("manufactureYear", payload.manufactureYear.trim());
+    }
+
+    if (payload.kilometersDriven?.trim()) {
+      form.append("kilometersDriven", payload.kilometersDriven.trim());
+    }
+
+    form.append("isDone", payload.isDone ? "true" : "false");
+    form.append("isPresent", payload.isPresent === false ? "false" : "true");
+
+    for (const image of payload.images ?? []) {
+      form.append("images", {
+        uri: image.uri,
+        name: image.name,
+        type: image.type,
+      } as any);
+    }
+
+    for (const voice of payload.voiceNotes ?? []) {
+      form.append("voiceNotes", {
+        uri: voice.uri,
+        name: voice.name,
+        type: voice.type,
+      } as any);
+    }
+
+    return requestForm<CreateAssetResponse>(
+      `/projects/${payload.projectId}/assets`,
+      {
+        method: "POST",
+        body: form,
+      }
+    );
+  },
+
+  getAssetByCode: async (projectId: string, code: string) => {
+    console.log("SCANNED RAW CODE:", JSON.stringify(code));
+    console.log("PROJECT ID USED:", projectId);
+
+    return request<GetAssetByCodeResponse>(
+      `/projects/${projectId}/assets/by-code?code=${encodeURIComponent(code)}`,
       {
         method: "GET",
-      },
+      }
     );
+  },
+
+  listContents: (
+    projectId: string,
+    parentId?: string | null,
+    filter?: "all" | "done" | "incomplete",
+    search?: string
+  ) => {
+    let qs = "";
+
+    if (parentId) qs += `?parentId=${encodeURIComponent(parentId)}`;
+    if (filter) qs += `${qs ? "&" : "?"}filter=${filter}`;
+    if (search) qs += `${qs ? "&" : "?"}search=${encodeURIComponent(search)}`;
+
+    return request<ProjectContentsResponse>(`/projects/${projectId}/contents${qs}`, {
+      method: "GET",
+    });
   },
 
   toggleAssetDone: (projectId: string, assetId: string, isDone: boolean) =>
@@ -444,91 +790,99 @@ console.log("PROJECT ID USED:", projectId);
       body: { isDone },
     }),
 
+  updateAsset: async (payload: {
+    assetId: string;
+    name?: string | null;
+    writtenDescription?: string | null;
+    images?: UploadFileInput[];
+    voiceNotes?: UploadFileInput[];
+    condition?: "" | "New" | "Used" | "Damaged" | "Good" | null;
+    assetType?: "vehicle" | "other" | "Vehicle" | "Other";
+    brand?: string | null;
+    model?: string | null;
+    code?: string | null;
+    manufactureYear?: string | null;
+    kilometersDriven?: string | null;
+    isDone?: boolean;
+    isPresent?: boolean;
+  }) => {
+    const form = new FormData();
 
+    if (payload.name !== undefined) {
+      form.append("name", payload.name ?? "");
+    }
 
+    if (payload.writtenDescription !== undefined) {
+      form.append("writtenDescription", payload.writtenDescription ?? "");
+    }
 
-updateAsset: async (payload: {
-  assetId: string;
-  writtenDescription?: string | null;
-  images?: UploadFileInput[];
-  voiceNotes?: UploadFileInput[];
-  condition?: "" | "New" | "Used" | "Damaged" | "Good" | null;
-  assetType?: "Vehicle" | "Other";
-  brand?: string | null;
-  model?: string | null;
-  manufactureYear?: string | null;
-  kilometersDriven?: string | null;
-  isDone?: boolean;
-  isPresent?: boolean;
-}) => {
-  const form = new FormData();
+    if (
+      payload.condition === "New" ||
+      payload.condition === "Used" ||
+      payload.condition === "Damaged" ||
+      payload.condition === "Good"
+    ) {
+      form.append("condition", payload.condition);
+    }
 
-  if (payload.writtenDescription !== undefined) {
-    form.append("writtenDescription", payload.writtenDescription ?? "");
-  }
+    const normalizedAssetType = normalizeAssetType(payload.assetType);
+    if (normalizedAssetType !== undefined) {
+      form.append("assetType", normalizedAssetType);
+    }
 
-  if (
-  payload.condition === "New" ||
-  payload.condition === "Used" ||
-  payload.condition === "Damaged"
-) {
-  form.append("condition", payload.condition);
-}
+    if (payload.brand !== undefined) {
+      form.append("brand", payload.brand ?? "");
+    }
 
-  if (payload.assetType !== undefined) {
-    form.append("assetType", payload.assetType);
-  }
+    if (payload.model !== undefined) {
+      form.append("model", payload.model ?? "");
+    }
 
-  if (payload.brand !== undefined) {
-    form.append("brand", payload.brand ?? "");
-  }
+    if (payload.code !== undefined) {
+      form.append("code", payload.code ?? "");
+    }
 
-  if (payload.model !== undefined) {
-    form.append("model", payload.model ?? "");
-  }
+    if (payload.manufactureYear !== undefined) {
+      form.append("manufactureYear", payload.manufactureYear ?? "");
+    }
 
-  if (payload.manufactureYear !== undefined) {
-    form.append("manufactureYear", payload.manufactureYear ?? "");
-  }
+    if (payload.kilometersDriven !== undefined) {
+      form.append("kilometersDriven", payload.kilometersDriven ?? "");
+    }
 
-  if (payload.kilometersDriven !== undefined) {
-    form.append("kilometersDriven", payload.kilometersDriven ?? "");
-  }
+    if (payload.isDone !== undefined) {
+      form.append("isDone", payload.isDone ? "true" : "false");
+    }
 
-  if (payload.isDone !== undefined) {
-    form.append("isDone", payload.isDone ? "true" : "false");
-  }
-
-  if (payload.isPresent !== undefined) {
+    if (payload.isPresent !== undefined) {
       form.append("isPresent", payload.isPresent ? "true" : "false");
     }
 
-  for (const image of payload.images ?? []) {
-    form.append("images", {
-      uri: image.uri,
-      name: image.name,
-      type: image.type,
-    } as any);
-  }
-
-  for (const voice of payload.voiceNotes ?? []) {
-    form.append("voiceNotes", {
-      uri: voice.uri,
-      name: voice.name,
-      type: voice.type,
-    } as any);
-  }
-
- console.log("UPDATE FORM isDone:", payload.isDone);
-console.log("UPDATE FORM parts:", (form as any)._parts);
-  return requestForm<UpdateAssetResponse>(
-    `/projects/assets/${payload.assetId}`,
-    {
-      method: "PATCH",
-      body: form,
+    for (const image of payload.images ?? []) {
+      form.append("images", {
+        uri: image.uri,
+        name: image.name,
+        type: image.type,
+      } as any);
     }
-  );
-},
 
+    for (const voice of payload.voiceNotes ?? []) {
+      form.append("voiceNotes", {
+        uri: voice.uri,
+        name: voice.name,
+        type: voice.type,
+      } as any);
+    }
 
+    console.log("UPDATE FORM isDone:", payload.isDone);
+    console.log("UPDATE FORM parts:", (form as any)._parts);
+
+    return requestForm<UpdateAssetResponse>(
+      `/projects/assets/${payload.assetId}`,
+      {
+        method: "PATCH",
+        body: form,
+      }
+    );
+  },
 };

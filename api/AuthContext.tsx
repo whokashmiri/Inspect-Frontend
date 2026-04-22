@@ -5,73 +5,262 @@ import React, {
   useState,
   useCallback,
 } from "react";
-import { tokenStore, authApi, loginAndSave, User } from "./api";
+import NetInfo from "@react-native-community/netinfo";
+import { authApi, loginAndSave, tokenStore, User } from "./api";
+import {
+  initAuthStorage,
+  getCachedUser,
+  cacheAuthenticatedSession,
+  clearOfflineAuthState,
+  isOfflineSessionValid,
+  getCachedCompanies,
+  getSelectedCompanyId,
+  saveSelectedCompany,
+} from "../app/offline/authStorage";
 
-type SignupPayload = {
-  fullName: string;
-  role: "Manager" | "Inspector" | "Valuator";
-  email: string;
-  password: string;
-  companyName: string;
+type AuthMode = "online" | "offline" | "none";
+
+type Company = {
+  id: string;
+  name: string;
+  [key: string]: any;
 };
 
 interface AuthState {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  isOnline: boolean;
+  authMode: AuthMode;
+  companies: Company[];
+  selectedCompanyId: string | null;
 }
 
 interface AuthContextValue extends AuthState {
-  login: (email: string, password: string) => Promise<void>;
-  signup: (data: SignupPayload) => Promise<void>;
+  login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  refreshSession: () => Promise<void>;
+  selectCompany: (companyId: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+async function fetchCompaniesOnline(): Promise<Company[]> {
+  if (typeof (authApi as any).getCompanies === "function") {
+    return (authApi as any).getCompanies();
+  }
+  if (typeof (authApi as any).companies === "function") {
+    return (authApi as any).companies();
+  }
+  return [];
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthState>({
     user: null,
     isLoading: true,
     isAuthenticated: false,
+    isOnline: true,
+    authMode: "none",
+    companies: [],
+    selectedCompanyId: null,
   });
 
-  useEffect(() => {
-    (async () => {
+  const bootstrap = useCallback(async () => {
+    await initAuthStorage();
+
+    const net = await NetInfo.fetch();
+    const isOnline = !!net.isConnected && !!net.isInternetReachable;
+
+    setState((prev) => ({ ...prev, isOnline, isLoading: true }));
+
+    const token = await tokenStore.getToken();
+    const cachedUser = await getCachedUser();
+
+    if (isOnline && token) {
       try {
-        const token = await tokenStore.getToken();
-        if (token) {
-          const user = await authApi.me();
-          setState({ user, isLoading: false, isAuthenticated: true });
-        } else {
-          setState((s) => ({ ...s, isLoading: false }));
-        }
+        const user = await authApi.me();
+        const companies = await fetchCompaniesOnline();
+        const selectedCompanyId = await getSelectedCompanyId(user.id);
+
+        await cacheAuthenticatedSession({
+          user,
+          accessToken: token,
+          refreshToken: await tokenStore.getRefreshToken(),
+          companies,
+          selectedCompanyId,
+        });
+
+        setState({
+          user,
+          isLoading: false,
+          isAuthenticated: true,
+          isOnline: true,
+          authMode: "online",
+          companies,
+          selectedCompanyId,
+        });
+
+        return;
       } catch {
+        const validOffline = await isOfflineSessionValid();
+
+        if (cachedUser && validOffline) {
+          const companies = await getCachedCompanies(cachedUser.id);
+          const selectedCompanyId = await getSelectedCompanyId(cachedUser.id);
+
+          setState({
+            user: cachedUser as User,
+            isLoading: false,
+            isAuthenticated: true,
+            isOnline: false,
+            authMode: "offline",
+            companies,
+            selectedCompanyId,
+          });
+
+          return;
+        }
+
+        await clearOfflineAuthState();
         await tokenStore.clear();
-        setState({ user: null, isLoading: false, isAuthenticated: false });
+
+        setState({
+          user: null,
+          isLoading: false,
+          isAuthenticated: false,
+          isOnline,
+          authMode: "none",
+          companies: [],
+          selectedCompanyId: null,
+        });
+
+        return;
       }
-    })();
+    }
+
+    if (!isOnline) {
+      const validOffline = await isOfflineSessionValid();
+
+      if (cachedUser && validOffline) {
+        const companies = await getCachedCompanies(cachedUser.id);
+        const selectedCompanyId = await getSelectedCompanyId(cachedUser.id);
+
+        setState({
+          user: cachedUser as User,
+          isLoading: false,
+          isAuthenticated: true,
+          isOnline: false,
+          authMode: "offline",
+          companies,
+          selectedCompanyId,
+        });
+
+        return;
+      }
+    }
+
+    setState({
+      user: null,
+      isLoading: false,
+      isAuthenticated: false,
+      isOnline,
+      authMode: "none",
+      companies: [],
+      selectedCompanyId: null,
+    });
   }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const res = await loginAndSave(email, password);
-    setState({ user: res.user, isLoading: false, isAuthenticated: true });
+  useEffect(() => {
+    void bootstrap();
+
+    const unsubscribe = NetInfo.addEventListener((net) => {
+      const isOnline = !!net.isConnected && !!net.isInternetReachable;
+      setState((prev) => ({ ...prev, isOnline }));
+    });
+
+    return unsubscribe;
+  }, [bootstrap]);
+
+  const login = useCallback(async (username: string, password: string) => {
+    const res = await loginAndSave(username, password);
+
+    const companies = await fetchCompaniesOnline().catch(() => []);
+    const selectedCompanyId = companies.length === 1 ? companies[0].id : null;
+
+    await cacheAuthenticatedSession({
+      user: res.user,
+      accessToken: res.tokens.accessToken,
+      refreshToken: res.tokens.refreshToken ?? null,
+      companies,
+      selectedCompanyId,
+    });
+
+    setState({
+      user: res.user,
+      isLoading: false,
+      isAuthenticated: true,
+      isOnline: true,
+      authMode: "online",
+      companies,
+      selectedCompanyId,
+    });
   }, []);
 
- const signup = useCallback(async (data: SignupPayload) => {
-  await authApi.signup(data);
+  const refreshSession = useCallback(async () => {
+    await bootstrap();
+  }, [bootstrap]);
 
-  await tokenStore.clear();
-  setState({ user: null, isLoading: false, isAuthenticated: false });
-}, []);
+  const selectCompany = useCallback(
+    async (companyId: string) => {
+      if (!state.user) return;
+
+      await saveSelectedCompany(state.user.id, companyId);
+
+      setState((prev) => ({
+        ...prev,
+        selectedCompanyId: companyId,
+      }));
+    },
+    [state.user]
+  );
 
   const logout = useCallback(async () => {
-    await authApi.logout();
-    setState({ user: null, isLoading: false, isAuthenticated: false });
+    const net = await NetInfo.fetch();
+    const isOnline = !!net.isConnected && !!net.isInternetReachable;
+
+    try {
+      if (isOnline) {
+        await authApi.logout();
+      }
+    } catch {
+      // continue local logout anyway
+    }
+
+    await tokenStore.clear();
+    await clearOfflineAuthState();
+
+    setState({
+      user: null,
+      isLoading: false,
+      isAuthenticated: false,
+      isOnline,
+      authMode: "none",
+      companies: [],
+      selectedCompanyId: null,
+    });
   }, []);
 
   return (
-    <AuthContext.Provider value={{ ...state, login, signup, logout }}>
+    <AuthContext.Provider
+      value={{
+        ...state,
+        login,
+        logout,
+        refreshSession,
+        selectCompany,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

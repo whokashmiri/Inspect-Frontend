@@ -1,3 +1,5 @@
+
+//offline/storage.ts
 import * as SQLite from "expo-sqlite";
 import { Platform } from "react-native";
 import {
@@ -161,12 +163,8 @@ export async function savePending(
 }
 
 export async function getPendingByProjectId(projectId: string): Promise<PendingItem[]> {
-  await initStorage();
-
-  const rows = await db.getAllAsync<PendingQueueRow>(
-    `SELECT * FROM pending_queue
-     WHERE projectId = ? AND status = 'pending'
-     ORDER BY createdAt ASC;`,
+  const rows = await db.getAllAsync<any>(
+    `SELECT * FROM pending_queue WHERE projectId = ? ORDER BY createdAt ASC`,
     [projectId]
   );
 
@@ -178,25 +176,18 @@ export async function getPendingByProjectId(projectId: string): Promise<PendingI
     localMediaUris: row.localMediaUris ? JSON.parse(row.localMediaUris) : [],
     createdAt: Number(row.createdAt),
     status: row.status,
-    retryCount: Number(row.retryCount ?? 0),
-    lastAttempt:
-      row.lastAttempt === null || row.lastAttempt === undefined
-        ? null
-        : Number(row.lastAttempt),
+    retryCount: Number(row.retryCount),
+    lastAttempt: row.lastAttempt == null ? undefined : Number(row.lastAttempt),
   }));
 }
 
-export async function getPendingCountByProjectId(projectId: string): Promise<number> {
-  await initStorage();
 
-  const result = await db.getFirstAsync<{ count: number | string }>(
-    `SELECT COUNT(*) as count
-     FROM pending_queue
-     WHERE projectId = ? AND status = 'pending';`,
+export async function getPendingCountByProjectId(projectId: string): Promise<number> {
+  const row = await db.getFirstAsync<{ count: number | string }>(
+    `SELECT COUNT(*) as count FROM pending_queue WHERE projectId = ? AND status = 'pending'`,
     [projectId]
   );
-
-  return Number(result?.count ?? 0);
+  return Number(row?.count ?? 0);
 }
 
 export async function getPending(
@@ -262,14 +253,9 @@ export async function getPendingCount(): Promise<number> {
   }
 }
 
-export async function updatePayload(
-  id: string,
-  payload: Record<string, unknown>
-): Promise<void> {
-  await initStorage();
-
+export async function updatePayload(id: string, payload: Record<string, any>): Promise<void> {
   await db.runAsync(
-    `UPDATE pending_queue SET payload = ? WHERE id = ?;`,
+    `UPDATE pending_queue SET payload = ? WHERE id = ?`,
     [JSON.stringify(payload), id]
   );
 }
@@ -309,7 +295,7 @@ export async function saveFoldersOffline(
 }
 
 export async function saveAssetsOffline(
-  assets: Array<{ id: string; projectId: string; folderId: string | null; [key: string]: any }>
+  assets: Array<{ id: string; projectId: string; parentSubProjectId: string | null; [key: string]: any }>
 ) {
   await initStorage();
 
@@ -443,7 +429,7 @@ export async function upsertOfflineAsset(
   asset: {
     id: string;
     projectId: string;
-    folderId: string | null;
+    parentSubProjectId: string | null;
     [key: string]: any;
   }
 ): Promise<void> {
@@ -482,3 +468,5 @@ export async function getOfflineAssetById(assetId: string): Promise<any | null> 
     return null;
   }
 }
+
+
