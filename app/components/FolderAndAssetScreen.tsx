@@ -191,11 +191,11 @@ const handleDetectedAssetCode = async (rawCode: string) => {
 };
  const loadContents = useCallback(
   async (
-    parentSubProjectId: string | null,
+    parent: string | null,
     options?: { showSkeleton?: boolean }
   ) => {
     const readOffline = async () => {
-      const offlineData = await getOfflineContents(projectId, parentSubProjectId);
+      const offlineData = await getOfflineContents(projectId, parent);
       setFolders((offlineData.folders || []) as FolderItem[]);
       setAssets((offlineData.assets || []) as AssetItem[]);
     };
@@ -224,7 +224,7 @@ const handleDetectedAssetCode = async (rawCode: string) => {
         return;
       }
 
-      const data = await projectContentApi.listContents(projectId, parentSubProjectId, filter, searchQuery);
+      const data = await projectContentApi.listContents(projectId, parent, filter, searchQuery);
       setFolders(data.folders || []);
       setAssets(data.assets || []);
     } catch (error: any) {
@@ -368,7 +368,7 @@ const buildLocalAsset = (draft: AssetDraft): AssetItem => {
     id: `offline_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
     name: draft.name,
     writtenDescription: draft.writtenDescription || null,
-    parentSubProjectId: currentFolderId ?? null,
+    parent: currentFolderId ?? null,
     projectId,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -408,7 +408,7 @@ const createAssetAsync = async (draft: AssetDraft) => {
     projectId,
     name: draft.name,
     writtenDescription: draft.writtenDescription || null,
-    parentSubProjectId: currentFolderId || undefined,
+    parent: currentFolderId || undefined,
     images: newImages,
     voiceNotes: newVoiceNotes,
     condition: draft.condition || null,

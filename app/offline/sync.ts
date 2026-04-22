@@ -88,8 +88,8 @@ async function patchPendingFolderRefs(
       changed = true;
     }
 
-    if (payload?.parentSubProjectId === localId) {
-      updatedPayload = { ...updatedPayload, parentSubProjectId: remoteId };
+    if (payload?.parent === localId) {
+      updatedPayload = { ...updatedPayload, parent: remoteId };
       changed = true;
     }
 

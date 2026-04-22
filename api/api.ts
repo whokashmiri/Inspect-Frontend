@@ -583,7 +583,7 @@ export interface AssetItem {
   writtenDescription: string | null;
 
   // old: folderId
-  parentSubProjectId: string | null;
+  parent: string | null;
 
   projectId: string;
   createdAt: string;
@@ -666,7 +666,7 @@ export const projectContentApi = {
     writtenDescription?: string | null;
 
     // new field
-    parentSubProjectId?: string | null;
+    parent?: string | null;
 
     // temporary compatibility if some screens still use old field
     folderId?: string | null;
@@ -692,10 +692,10 @@ export const projectContentApi = {
     }
 
     const resolvedParentSubProjectId =
-      payload.parentSubProjectId ?? payload.folderId ?? null;
+      payload.parent ?? payload.folderId ?? null;
 
     if (resolvedParentSubProjectId) {
-      form.append("parentSubProjectId", resolvedParentSubProjectId);
+      form.append("parent", resolvedParentSubProjectId);
     }
 
     if (payload.condition) {

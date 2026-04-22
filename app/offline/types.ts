@@ -42,7 +42,7 @@ export interface OfflineFolderRecord {
 export interface OfflineAssetRecord {
   id: string;
   projectId: string;
-  parentSubProjectId: string | null;
+  parent: string | null;
   data: string;
   userId?: string | null;
   companyId?: string | null;

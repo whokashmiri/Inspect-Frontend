@@ -295,7 +295,7 @@ export async function saveFoldersOffline(
 }
 
 export async function saveAssetsOffline(
-  assets: Array<{ id: string; projectId: string; parentSubProjectId: string | null; [key: string]: any }>
+  assets: Array<{ id: string; projectId: string; parent: string | null; [key: string]: any }>
 ) {
   await initStorage();
 
@@ -429,7 +429,7 @@ export async function upsertOfflineAsset(
   asset: {
     id: string;
     projectId: string;
-    parentSubProjectId: string | null;
+    parent: string | null;
     [key: string]: any;
   }
 ): Promise<void> {
