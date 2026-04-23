@@ -123,6 +123,7 @@ const handleBackPress = async () => {
   const [path, setPath] = useState<FolderPathItem[]>([
     { id: null, name: projectName },
   ]);
+  const isRootFolder = currentFolderId === null;
 
   const [loading, setLoading] = useState(true);
   const [contentLoading, setContentLoading] = useState(false);
@@ -735,7 +736,9 @@ const itemsWithPlaceholders = useMemo(() => {
               <View style={styles.emptyWrap}>
                 <Text style={styles.emptyTitle}>No contents yet</Text>
                 <Text style={styles.emptyText}>
-                  Create a folder or add a new asset.
+                  {isRootFolder
+                    ? "Open a folder to add folders or assets."
+                    : "Create a folder or add a new asset."}
                 </Text>
               </View>
             }
@@ -839,31 +842,33 @@ const itemsWithPlaceholders = useMemo(() => {
   <Text style={styles.backText}>← Back</Text>
 </TouchableOpacity>
 
-        <View
-          style={[
-            styles.bottomActionBar,
-            { bottom: Math.max(insets.bottom, 0) - 30 },
-          ]}
-        >
-          <TouchableOpacity
-            style={styles.primaryBtn}
-            onPress={openFolderModal}
-            activeOpacity={0.85}
+        {!isRootFolder && (
+          <View
+            style={[
+              styles.bottomActionBar,
+              { bottom: Math.max(insets.bottom, 0) - 30 },
+            ]}
           >
-            <Text style={styles.primaryBtnText}>New Folder</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.primaryBtn}
+              onPress={openFolderModal}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.primaryBtnText}>New Folder</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.secondaryBtn}
-            onPress={() => {
-              setEditingAsset(null);
-              setAssetModalVisible(true);
-            }}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.secondaryBtnText}>New Asset</Text>
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity
+              style={styles.secondaryBtn}
+              onPress={() => {
+                setEditingAsset(null);
+                setAssetModalVisible(true);
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.secondaryBtnText}>New Asset</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <Modal
           visible={folderModalVisible}
