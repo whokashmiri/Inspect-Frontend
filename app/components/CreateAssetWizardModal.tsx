@@ -839,8 +839,8 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.72)",
-    paddingHorizontal: 14,
-    paddingVertical: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 1,
   },
 
   checkboxWrap: {

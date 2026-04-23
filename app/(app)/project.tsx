@@ -296,12 +296,12 @@ export default function ProjectScreen() {
             <Text style={styles.switchBtnText}>Switch Company</Text>
           </Pressable>
 
-          <Pressable
+          {/* <Pressable
             style={styles.createBtn}
             onPress={() => setShowCreateModal(true)}
           >
             <Text style={styles.createBtnText}>Create New Project</Text>
-          </Pressable>
+          </Pressable> */}
         </View>
 
         <View style={styles.filterRow}>
@@ -452,7 +452,7 @@ export default function ProjectScreen() {
         )}
       </ScrollView>
 
-      <Modal
+      {/* <Modal
         visible={showCreateModal}
         transparent
         animationType="fade"
@@ -460,7 +460,7 @@ export default function ProjectScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Create New Project</Text>
+            <Text style={styles.modalTitle}>Create New Projecttt</Text>
 
             <TextInput
               value={projectName}
@@ -495,7 +495,7 @@ export default function ProjectScreen() {
             </View>
           </View>
         </View>
-      </Modal>
+      </Modal> */}
     </View>
   );
 }
@@ -506,20 +506,20 @@ const BORDER = "#f8f1f1";
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: "#ffffff" },
-  scroll: { padding: 24, paddingTop: 20, paddingBottom: 40 },
-  header: { marginBottom: 18 },
+  scroll: { padding: 8, paddingTop: 10, paddingBottom: 40 },
+  header: { marginBottom: 10  },
   title: {
-    color: "#020202",
-    fontSize: 15,
+    color: SURFACE,
+    fontSize: 17,
     fontFamily: fonts.inter.semiBold as unknown as string,
   },
-  companyName: { color: ACC },
+  companyName: { color: SURFACE , textTransform: "uppercase" },
   subtitle: { color: "#666", marginTop: 6, fontSize: 10 },
 
   actionRow: {
     flexDirection: "row",
     gap: 10,
-    marginBottom: 18,
+    marginBottom: 5,
   },
   switchBtn: {
     flex: 1,
@@ -552,7 +552,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
-    marginBottom: 18,
+    marginBottom: 5,
   },
   filterBtn: {
     backgroundColor: SURFACE,

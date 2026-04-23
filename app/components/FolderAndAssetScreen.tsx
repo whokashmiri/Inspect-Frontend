@@ -837,9 +837,12 @@ const itemsWithPlaceholders = useMemo(() => {
 <TouchableOpacity
   onPress={handleBackPress}
   activeOpacity={0.8}
-  style={styles.backButton}
+  style={[
+    styles.backButton,
+    { bottom: Math.max(insets.bottom, 0) + 46 },
+  ]}
 >
-  <Text style={styles.backText}>← Back</Text>
+  <Text  style={styles.backText}>Back</Text>
 </TouchableOpacity>
 
         {!isRootFolder && (
@@ -976,7 +979,7 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    paddingHorizontal: 20,
+    paddingHorizontal: 10,
     paddingTop: 0,
   },
 
@@ -1383,10 +1386,9 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  backButton: {
-  marginHorizontal: 0,
-  marginTop: 0,
-  marginBottom:80,
+backButton: {
+  position: "absolute",
+  left: 20,
   zIndex: 20,
 },
 
