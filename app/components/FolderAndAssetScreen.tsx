@@ -72,6 +72,27 @@ const ITEM_SIZE =
   NUM_COLUMNS;
 
 export default function FolderAndAssetScreen({ route }: Props) {
+
+
+
+
+const handleBackPress = async () => {
+  if (navigatingFolderId) return;
+
+  // If inside a folder, move to previous breadcrumb
+  if (path.length > 1) {
+    const previousIndex = path.length - 2;
+    await goToPathIndex(previousIndex);
+    return;
+  }
+
+  // If already at root, leave the screen
+  router.back();
+};
+
+
+
+
   const folderInputRef = useRef<TextInput>(null);
   const isOnline = useIsOnline();
 
@@ -807,7 +828,15 @@ const itemsWithPlaceholders = useMemo(() => {
   onPress={() => setCodeScannerVisible(true)}
   activeOpacity={0.85}
 >
-  <Ionicons name="search-outline" size={22} color="#000" />
+  <Ionicons name="barcode-outline" size={22} color="#000" />
+</TouchableOpacity>
+
+<TouchableOpacity
+  onPress={handleBackPress}
+  activeOpacity={0.8}
+  style={styles.backButton}
+>
+  <Text style={styles.backText}>← Back</Text>
 </TouchableOpacity>
 
         <View
@@ -1348,4 +1377,17 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "600",
   },
+
+  backButton: {
+  marginHorizontal: 0,
+  marginTop: 0,
+  marginBottom:80,
+  zIndex: 20,
+},
+
+backText: {
+  fontSize: 16,
+  fontWeight: "600",
+  color: "#111",
+},
 });
