@@ -1,5 +1,3 @@
-
-//offline/storage.ts
 import * as SQLite from "expo-sqlite";
 import { Platform } from "react-native";
 import {
@@ -34,6 +32,14 @@ type JsonRow = {
 
 let initialized = false;
 
+function normalizeFolderParent(folder: any): string | null {
+  return folder.parentId ?? folder.parent ?? null;
+}
+
+function normalizeAssetFolder(asset: any): string | null {
+  return asset.folderId ?? asset.parent ?? null;
+}
+
 export async function initStorage(): Promise<void> {
   if (initialized) return;
 
@@ -52,31 +58,31 @@ export async function initStorage(): Promise<void> {
       );
     `);
 
-    // ---- migration for older installs ----
-    const columns = await db.getAllAsync<{ name: string }>(
+    // ---- migration for older installs: pending_queue ----
+    const pendingColumns = await db.getAllAsync<{ name: string }>(
       `PRAGMA table_info(pending_queue);`
     );
-    const columnNames = columns.map((c) => c.name);
+    const pendingColumnNames = pendingColumns.map((c) => c.name);
 
-    if (!columnNames.includes("projectId")) {
+    if (!pendingColumnNames.includes("projectId")) {
       await db.execAsync(`ALTER TABLE pending_queue ADD COLUMN projectId TEXT;`);
     }
 
-    if (!columnNames.includes("localMediaUris")) {
+    if (!pendingColumnNames.includes("localMediaUris")) {
       await db.execAsync(`ALTER TABLE pending_queue ADD COLUMN localMediaUris TEXT;`);
     }
 
-    if (!columnNames.includes("retryCount")) {
+    if (!pendingColumnNames.includes("retryCount")) {
       await db.execAsync(
         `ALTER TABLE pending_queue ADD COLUMN retryCount INTEGER NOT NULL DEFAULT 0;`
       );
     }
 
-    if (!columnNames.includes("lastAttempt")) {
+    if (!pendingColumnNames.includes("lastAttempt")) {
       await db.execAsync(`ALTER TABLE pending_queue ADD COLUMN lastAttempt INTEGER;`);
     }
 
-    if (!columnNames.includes("status")) {
+    if (!pendingColumnNames.includes("status")) {
       await db.execAsync(
         `ALTER TABLE pending_queue ADD COLUMN status TEXT NOT NULL DEFAULT 'pending';`
       );
@@ -91,6 +97,8 @@ export async function initStorage(): Promise<void> {
 
       CREATE TABLE IF NOT EXISTS offline_projects (
         id TEXT PRIMARY KEY NOT NULL,
+        companyId TEXT,
+        userId TEXT,
         data TEXT NOT NULL,
         downloadedAt INTEGER NOT NULL
       );
@@ -121,6 +129,92 @@ export async function initStorage(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_offline_assets_folderId
       ON offline_assets(folderId);
     `);
+
+    // ---- migration for older installs: offline_projects ----
+    const projectColumns = await db.getAllAsync<{ name: string }>(
+      `PRAGMA table_info(offline_projects);`
+    );
+    const projectColumnNames = projectColumns.map((c) => c.name);
+
+    if (!projectColumnNames.includes("companyId")) {
+      await db.execAsync(`ALTER TABLE offline_projects ADD COLUMN companyId TEXT;`);
+    }
+
+    if (!projectColumnNames.includes("userId")) {
+      await db.execAsync(`ALTER TABLE offline_projects ADD COLUMN userId TEXT;`);
+    }
+
+    // Backfill old offline_projects rows from stored JSON
+    const projectRows = await db.getAllAsync<{
+      id: string;
+      data: string;
+      companyId: string | null;
+      userId: string | null;
+    }>(`SELECT id, data, companyId, userId FROM offline_projects;`);
+
+    for (const row of projectRows) {
+      try {
+        const parsed = JSON.parse(row.data);
+
+        const companyId = row.companyId ?? parsed?.companyId ?? null;
+        const userId = row.userId ?? parsed?.userId ?? null;
+
+        if (companyId !== row.companyId || userId !== row.userId) {
+          await db.runAsync(
+            `UPDATE offline_projects SET companyId = ?, userId = ? WHERE id = ?;`,
+            [companyId, userId, row.id]
+          );
+        }
+      } catch {
+        // ignore malformed rows
+      }
+    }
+
+    // Backfill old offline_folders rows where parent may be inside JSON as "parent"
+    const folderRows = await db.getAllAsync<{
+      id: string;
+      data: string;
+      parentId: string | null;
+    }>(`SELECT id, data, parentId FROM offline_folders;`);
+
+    for (const row of folderRows) {
+      try {
+        const parsed = JSON.parse(row.data);
+        const normalizedParentId = row.parentId ?? parsed?.parentId ?? parsed?.parent ?? null;
+
+        if (normalizedParentId !== row.parentId) {
+          await db.runAsync(
+            `UPDATE offline_folders SET parentId = ? WHERE id = ?;`,
+            [normalizedParentId, row.id]
+          );
+        }
+      } catch {
+        // ignore malformed rows
+      }
+    }
+
+    // Backfill old offline_assets rows where folder may be stored as "parent"
+    const assetRows = await db.getAllAsync<{
+      id: string;
+      data: string;
+      folderId: string | null;
+    }>(`SELECT id, data, folderId FROM offline_assets;`);
+
+    for (const row of assetRows) {
+      try {
+        const parsed = JSON.parse(row.data);
+        const normalizedFolderId = row.folderId ?? parsed?.folderId ?? parsed?.parent ?? null;
+
+        if (normalizedFolderId !== row.folderId) {
+          await db.runAsync(
+            `UPDATE offline_assets SET folderId = ? WHERE id = ?;`,
+            [normalizedFolderId, row.id]
+          );
+        }
+      } catch {
+        // ignore malformed rows
+      }
+    }
 
     initialized = true;
     console.log("✅ Offline storage initialized");
@@ -163,8 +257,10 @@ export async function savePending(
 }
 
 export async function getPendingByProjectId(projectId: string): Promise<PendingItem[]> {
+  await initStorage();
+
   const rows = await db.getAllAsync<any>(
-    `SELECT * FROM pending_queue WHERE projectId = ? ORDER BY createdAt ASC`,
+    `SELECT * FROM pending_queue WHERE projectId = ? ORDER BY createdAt ASC;`,
     [projectId]
   );
 
@@ -181,12 +277,14 @@ export async function getPendingByProjectId(projectId: string): Promise<PendingI
   }));
 }
 
-
 export async function getPendingCountByProjectId(projectId: string): Promise<number> {
+  await initStorage();
+
   const row = await db.getFirstAsync<{ count: number | string }>(
-    `SELECT COUNT(*) as count FROM pending_queue WHERE projectId = ? AND status = 'pending'`,
+    `SELECT COUNT(*) as count FROM pending_queue WHERE projectId = ? AND status = 'pending';`,
     [projectId]
   );
+
   return Number(row?.count ?? 0);
 }
 
@@ -254,61 +352,80 @@ export async function getPendingCount(): Promise<number> {
 }
 
 export async function updatePayload(id: string, payload: Record<string, any>): Promise<void> {
-  await db.runAsync(
-    `UPDATE pending_queue SET payload = ? WHERE id = ?`,
-    [JSON.stringify(payload), id]
-  );
+  await initStorage();
+
+  await db.runAsync(`UPDATE pending_queue SET payload = ? WHERE id = ?;`, [
+    JSON.stringify(payload),
+    id,
+  ]);
 }
 
 /* -------------------- Offline downloaded project cache -------------------- */
 
-export async function saveProjectOffline(project: { id: string; [key: string]: any }) {
-  
+export async function saveProjectOffline(project: any) {
   await initStorage();
 
   await db.runAsync(
-    `INSERT OR REPLACE INTO offline_projects (id, data, downloadedAt)
-     VALUES (?, ?, ?);`,
-    [project.id, JSON.stringify(project), Date.now()]
+    `INSERT OR REPLACE INTO offline_projects
+     (id, companyId, userId, data, downloadedAt)
+     VALUES (?, ?, ?, ?, ?);`,
+    [
+      project.id,
+      project.companyId ?? null,
+      project.userId ?? null,
+      JSON.stringify(project),
+      Date.now(),
+    ]
   );
 }
 
 export async function saveFoldersOffline(
-  folders: Array<{ id: string; projectId: string; parentId: string | null; [key: string]: any }>
-  
+  folders: Array<{ id: string; projectId: string; parentId?: string | null; parent?: string | null; [key: string]: any }>
 ) {
   await initStorage();
 
   for (const folder of folders) {
-   
+    const parentId = normalizeFolderParent(folder);
+
+    const normalizedFolder = {
+      ...folder,
+      parentId,
+    };
+
     await db.runAsync(
       `INSERT OR REPLACE INTO offline_folders (id, projectId, parentId, data)
        VALUES (?, ?, ?, ?);`,
       [
         folder.id,
         folder.projectId,
-        folder.parentId ?? null,
-        JSON.stringify(folder),
+        parentId,
+        JSON.stringify(normalizedFolder),
       ]
     );
   }
 }
 
 export async function saveAssetsOffline(
-  assets: Array<{ id: string; projectId: string; parent: string | null; [key: string]: any }>
+  assets: Array<{ id: string; projectId: string; folderId?: string | null; parent?: string | null; [key: string]: any }>
 ) {
   await initStorage();
 
   for (const asset of assets) {
-   
+    const folderId = normalizeAssetFolder(asset);
+
+    const normalizedAsset = {
+      ...asset,
+      folderId,
+    };
+
     await db.runAsync(
       `INSERT OR REPLACE INTO offline_assets (id, projectId, folderId, data)
        VALUES (?, ?, ?, ?);`,
       [
         asset.id,
         asset.projectId,
-        asset.folderId ?? null,
-        JSON.stringify(asset),
+        folderId,
+        JSON.stringify(normalizedAsset),
       ]
     );
   }
@@ -346,20 +463,15 @@ export async function getDownloadedProject(projectId: string) {
 }
 
 export async function getOfflineContents(
- 
   projectId: string,
   parentId: string | null
-  
 ): Promise<{ folders: any[]; assets: any[] }> {
   await initStorage();
 
   let folderRows: { data: string }[] = [];
   let assetRows: { data: string }[] = [];
-  console.log("GET OFFLINE CONTENTS INPUT:", { projectId, parentId });
 
   if (parentId === null) {
-     console.log("ROOT FOLDER ROWS:", folderRows.length);
-  console.log("ROOT ASSET ROWS:", assetRows.length);
     folderRows = await db.getAllAsync<{ data: string }>(
       `SELECT data FROM offline_folders
        WHERE projectId = ? AND parentId IS NULL;`,
@@ -372,8 +484,6 @@ export async function getOfflineContents(
       [projectId]
     );
   } else {
-    console.log("CHILD FOLDER ROWS:", folderRows.length, "for parentId:", parentId);
-  console.log("CHILD ASSET ROWS:", assetRows.length, "for folderId:", parentId);
     folderRows = await db.getAllAsync<{ data: string }>(
       `SELECT data FROM offline_folders
        WHERE projectId = ? AND parentId = ?;`,
@@ -403,25 +513,38 @@ export async function getAllDownloadedProjects(): Promise<any[]> {
   return rows.map((row) => JSON.parse(row.data));
 }
 
+export async function getDownloadedProjectsByCompany(companyId: string) {
+  await initStorage();
+
+  const rows = await db.getAllAsync<{ data: string }>(
+    `SELECT data FROM offline_projects WHERE companyId = ? ORDER BY downloadedAt DESC;`,
+    [companyId]
+  );
+
+  return rows.map((row) => JSON.parse(row.data));
+}
+
 export async function upsertOfflineFolder(
   folder: {
     id: string;
     projectId: string;
-    parentId: string | null;
+    parentId?: string | null;
+    parent?: string | null;
     [key: string]: any;
   }
 ): Promise<void> {
   await initStorage();
 
+  const parentId = normalizeFolderParent(folder);
+  const normalizedFolder = {
+    ...folder,
+    parentId,
+  };
+
   await db.runAsync(
     `INSERT OR REPLACE INTO offline_folders (id, projectId, parentId, data)
      VALUES (?, ?, ?, ?);`,
-    [
-      folder.id,
-      folder.projectId,
-      folder.parentId ?? null,
-      JSON.stringify(folder),
-    ]
+    [folder.id, folder.projectId, parentId, JSON.stringify(normalizedFolder)]
   );
 }
 
@@ -429,22 +552,24 @@ export async function upsertOfflineAsset(
   asset: {
     id: string;
     projectId: string;
-    parent: string | null;
+    folderId?: string | null;
+    parent?: string | null;
     [key: string]: any;
   }
 ): Promise<void> {
   try {
     await initStorage();
 
+    const folderId = normalizeAssetFolder(asset);
+    const normalizedAsset = {
+      ...asset,
+      folderId,
+    };
+
     await db.runAsync(
       `INSERT OR REPLACE INTO offline_assets (id, projectId, folderId, data)
        VALUES (?, ?, ?, ?);`,
-      [
-        asset.id,
-        asset.projectId,
-        asset.folderId ?? null,
-        JSON.stringify(asset),
-      ]
+      [asset.id, asset.projectId, folderId, JSON.stringify(normalizedAsset)]
     );
   } catch (error) {
     console.error("Error upserting offline asset:", error);
@@ -468,5 +593,3 @@ export async function getOfflineAssetById(assetId: string): Promise<any | null> 
     return null;
   }
 }
-
-

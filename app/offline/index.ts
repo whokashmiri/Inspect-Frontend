@@ -28,11 +28,13 @@ export {
   getDownloadedProject,
   getOfflineContents,
   getAllDownloadedProjects,
+  getDownloadedProjectsByCompany,
   upsertOfflineFolder,
   upsertOfflineAsset,
   getOfflineAssetById,
   updatePayload,
 } from "./storage";
+
 
 export { useIsOnline } from "./network";
 

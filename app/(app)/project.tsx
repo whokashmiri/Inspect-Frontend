@@ -11,12 +11,15 @@ import {
   Modal,
 } from "react-native";
 import { useRouter } from "expo-router";
+
+
 import { useAuth } from "../../api/AuthContext";
 import { projectApi, Project, ApiError } from "../../api/api";
 import { PendingItem } from "../offline/types";
 import {
   safeApiCall,
   getPending,
+  getDownloadedProjectsByCompany,
   getAllDownloadedProjects,
   isProjectDownloaded,
   clearOfflineProject,
@@ -39,13 +42,16 @@ function getProjectStatusLabel(project: Project) {
 }
 
 export default function ProjectScreen() {
+
+
+
   const [loaded] = useFonts({
     ...fonts.poppins,
     ...fonts.inter,
   });
 
   const router = useRouter();
-  const { user } = useAuth();
+ const { user, isOnline, selectedCompanyId } = useAuth();
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [filter, setFilter] = useState<FilterType>("New");
@@ -63,8 +69,8 @@ export default function ProjectScreen() {
   const [removingProjectId, setRemovingProjectId] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchProjects();
-  }, []);
+  fetchProjects();
+}, [isOnline, selectedCompanyId]);
 
   const refreshPendingProjects = useCallback(async () => {
     const pending = await getPending("pending");
@@ -72,24 +78,27 @@ export default function ProjectScreen() {
   }, []);
 
   const refreshDownloadedProjects = useCallback(async () => {
-    const downloaded = await getAllDownloadedProjects();
-    const ids = downloaded.map((project) => project.id);
-    setDownloadedProjectIds(ids);
+  const downloaded = selectedCompanyId
+    ? await getDownloadedProjectsByCompany(selectedCompanyId)
+    : await getAllDownloadedProjects();
 
-    const counts = await Promise.all(
-      ids.map(async (id) => {
-        const count = await getPendingCountByProjectId(id);
-        return [id, count] as const;
-      })
-    );
+  const ids = downloaded.map((project) => project.id);
+  setDownloadedProjectIds(ids);
 
-    setProjectPendingMap(
-      counts.reduce<Record<string, number>>((acc, [id, count]) => {
-        acc[id] = count;
-        return acc;
-      }, {})
-    );
-  }, []);
+  const counts = await Promise.all(
+    ids.map(async (id) => {
+      const count = await getPendingCountByProjectId(id);
+      return [id, count] as const;
+    })
+  );
+
+  setProjectPendingMap(
+    counts.reduce<Record<string, number>>((acc, [id, count]) => {
+      acc[id] = count;
+      return acc;
+    }, {})
+  );
+}, [selectedCompanyId]);
 
   useEffect(() => {
     refreshPendingProjects();
@@ -103,21 +112,44 @@ export default function ProjectScreen() {
     return () => clearInterval(interval);
   }, [refreshPendingProjects, refreshDownloadedProjects]);
 
-  async function fetchProjects() {
-    setLoading(true);
-    setGlobalError(null);
+ async function fetchProjects() {
+  setLoading(true);
+  setGlobalError(null);
 
-    try {
+  try {
+    if (isOnline) {
       const res = await projectApi.list();
       setProjects(res.projects);
-    } catch (err) {
-      const msg =
-        err instanceof ApiError ? err.message : "Failed to load projects.";
-      setGlobalError(msg);
-    } finally {
-      setLoading(false);
+      return;
     }
+
+    const offlineProjects = selectedCompanyId
+      ? await getDownloadedProjectsByCompany(selectedCompanyId)
+      : await getAllDownloadedProjects();
+
+    setProjects(offlineProjects);
+  } catch (err) {
+    if (!isOnline) {
+      try {
+        const offlineProjects = selectedCompanyId
+          ? await getDownloadedProjectsByCompany(selectedCompanyId)
+          : await getAllDownloadedProjects();
+
+        setProjects(offlineProjects);
+        setGlobalError(null);
+        return;
+      } catch {
+        // fall through
+      }
+    }
+
+    const msg =
+      err instanceof ApiError ? err.message : "Failed to load projects.";
+    setGlobalError(msg);
+  } finally {
+    setLoading(false);
   }
+}
 
   async function handleCreateProject() {
     if (!projectName.trim()) {
@@ -452,50 +484,7 @@ export default function ProjectScreen() {
         )}
       </ScrollView>
 
-      {/* <Modal
-        visible={showCreateModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowCreateModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Create New Projecttt</Text>
-
-            <TextInput
-              value={projectName}
-              onChangeText={setProjectName}
-              placeholder="Enter project name"
-              placeholderTextColor="#666"
-              style={styles.modalInput}
-            />
-
-            <View style={styles.modalActions}>
-              <Pressable
-                style={styles.cancelBtn}
-                onPress={() => {
-                  setShowCreateModal(false);
-                  setProjectName("");
-                }}
-              >
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </Pressable>
-
-              <Pressable
-                style={[styles.saveBtn, creating && styles.btnDisabled]}
-                onPress={handleCreateProject}
-                disabled={creating}
-              >
-                {creating ? (
-                  <ActivityIndicator color="#000" />
-                ) : (
-                  <Text style={styles.saveBtnText}>Save</Text>
-                )}
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal> */}
+   
     </View>
   );
 }

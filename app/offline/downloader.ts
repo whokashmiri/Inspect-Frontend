@@ -1,6 +1,9 @@
-
-//offline/downloader.ts
-import { Project, FolderItem, AssetItem, projectContentApi } from "../../api/api";
+import {
+  Project,
+  FolderItem,
+  AssetItem,
+  projectContentApi,
+} from "../../api/api";
 import {
   clearOfflineProject,
   saveProjectOffline,
@@ -13,6 +16,20 @@ type DownloadedProjectTree = {
   folders: FolderItem[];
   assets: AssetItem[];
 };
+
+function normalizeFolder(folder: any): FolderItem {
+  return {
+    ...folder,
+    parentId: folder.parentId ?? folder.parent ?? null,
+  };
+}
+
+function normalizeAsset(asset: any): AssetItem {
+  return {
+    ...asset,
+    folderId: asset.folderId ?? asset.parent ?? null,
+  };
+}
 
 async function collectProjectTree(
   projectId: string,
@@ -27,11 +44,11 @@ async function collectProjectTree(
   const contents = await projectContentApi.listContents(projectId, parentId);
 
   if (contents.folders?.length) {
-    bucket.folders.push(...contents.folders);
+    bucket.folders.push(...contents.folders.map(normalizeFolder));
   }
 
   if (contents.assets?.length) {
-    bucket.assets.push(...contents.assets);
+    bucket.assets.push(...contents.assets.map(normalizeAsset));
   }
 
   for (const folder of contents.folders ?? []) {
