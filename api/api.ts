@@ -139,8 +139,8 @@ export interface AuthTokens {
 export interface User {
   id: string;
   username: string;
-  companyName: string | null;
-  role: "Manager" | "Inspector" | "Valuator" | "company_admin" | null;
+  companyName: string;
+  role: "Manager" | "Inspector" | "Valuator" | "company_admin"  ;
   isBlocked?: boolean;
 }
 
@@ -459,22 +459,37 @@ export const projectContentApi = {
   },
 
   listContents: (
-    projectId: string,
-    parentId?: string | null,
-    filter?: "all" | "done" | "incomplete",
-    search?: string
-  ) => {
-    let qs = "";
+  projectId: string,
+  parentId?: string | null,
+  filter?: "all" | "done" | "incomplete",
+  search?: string
+) => {
+  const params = new URLSearchParams();
 
-    if (parentId) qs += `?parentId=${encodeURIComponent(parentId)}`;
-    if (filter) qs += `${qs ? "&" : "?"}filter=${filter}`;
-    if (search) qs += `${qs ? "&" : "?"}search=${encodeURIComponent(search)}`;
+  const cleanSearch = search?.trim();
 
-    return request<ProjectContentsResponse>(`/projects/${projectId}/contents${qs}`, {
+  // Search whole project, not current folder
+  if (!cleanSearch && parentId) {
+    params.set("parentId", parentId);
+  }
+
+  if (filter && filter !== "all") {
+    params.set("filter", filter);
+  }
+
+  if (cleanSearch) {
+    params.set("search", cleanSearch);
+  }
+
+  const qs = params.toString();
+
+  return request<ProjectContentsResponse>(
+    `/projects/${projectId}/contents${qs ? `?${qs}` : ""}`,
+    {
       method: "GET",
-    });
-  },
-
+    }
+  );
+},
   toggleAssetDone: (projectId: string, assetId: string, isDone: boolean) =>
     request(`/projects/${projectId}/assets/${assetId}/toggle-done`, {
       method: "PATCH",

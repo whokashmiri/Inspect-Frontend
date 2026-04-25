@@ -20,8 +20,8 @@ export default function AppLayout() {
       <AppHeader
         isAuthenticated={isAuthenticated}
         user={{
-          fullName: user.fullName,
-          email: user.email,
+          // fullName: user.fullName,
+          username: user.username,
           companyName: user.companyName,
           role: user.role,
         }}

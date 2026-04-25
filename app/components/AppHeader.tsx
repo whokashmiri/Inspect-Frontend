@@ -19,16 +19,17 @@ const SURFACE = "#111111";
 const BORDER = "#232323";
 
 export type HeaderUser = {
-  fullName?: string;
-  email?: string;
+  username?: string;
+  
   companyName?: string;
-  role?: "Manager" | "Inspector" | "Valuator" | string;
+  role?: "Manager" | "Inspector" | "Valuator" | "company_admin" ;
 };
 
 type AppHeaderProps = {
   isAuthenticated?: boolean;
   user?: HeaderUser | null;
   title?: string;
+  // role?: string;
   onLogout?: () => void | Promise<void>;
 };
 
@@ -94,14 +95,14 @@ const toggleLanguage = useCallback(() => {
   }, [onLogout, loggingOut]);
 
   const initials = useMemo(() => {
-    const name = user?.fullName?.trim();
+    const name = user?.username?.trim();
     if (!name) return "U";
 
     const parts = name.split(/\s+/).filter(Boolean);
     if (parts.length === 1) return parts[0][0]?.toUpperCase() || "U";
 
     return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
-  }, [user?.fullName]);
+  }, [user?.username]);
 
   return (
     <>
@@ -165,7 +166,7 @@ const toggleLanguage = useCallback(() => {
 
                 <View style={styles.profileTextWrap}>
                   <Text style={styles.profileName}>
-                    {user?.fullName || "User"}
+                    {user?.username || "User"}
                   </Text>
                   <Text style={styles.profileRole}>{user?.role || "Member"}</Text>
                 </View>
@@ -182,9 +183,10 @@ const toggleLanguage = useCallback(() => {
             </View>
 
             <View style={styles.infoGrid}>
-              <InfoRow label="Email" value={user?.email} icon="mail-outline" />
+              <InfoRow label="Username" value={user?.username} icon="mail-outline" />
               <InfoRow
                 label="Company"
+
                 value={user?.companyName}
                 icon="business-outline"
               />
