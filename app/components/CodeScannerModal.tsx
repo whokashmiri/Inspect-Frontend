@@ -32,7 +32,7 @@ export default function CodeScannerModal({
   onClose,
   onDetected,
 }: Props) {
-  const device = useCameraDevice("back");
+  const device:any = useCameraDevice("back");
   const { hasPermission, requestPermission } = useCameraPermission();
   const lockedRef = useRef(false);
   const allowScanRef = useRef(createCodeDeduper(2000));

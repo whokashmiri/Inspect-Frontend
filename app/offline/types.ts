@@ -65,7 +65,7 @@ export interface CachedUser {
   id: string;
   username: string;
   companyName: string | null;
-  role: AppRole | null;
+  role: AppRole | string;
   isBlocked?: boolean;
   [key: string]: any;
 }
