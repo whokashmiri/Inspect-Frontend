@@ -11,7 +11,7 @@ import {
   Modal,
 } from "react-native";
 import { useRouter } from "expo-router";
-
+import { Ionicons } from "@expo/vector-icons";
 
 import { useAuth } from "../../api/AuthContext";
 import { projectApi, Project, ApiError } from "../../api/api";
@@ -413,12 +413,13 @@ export default function ProjectScreen() {
                     </View>
 
                     {!isOfflineCreated && (
-                      <View style={styles.projectActionsColumn}>
+                      <View style={styles.projectActionsRow}>
                         {!isDownloaded ? (
                           <Pressable
                             style={[
-                              styles.downloadBtn,
-                              isDownloading && styles.downloadBtnDisabled,
+                              styles.iconBtn,
+                              styles.downloadIconBtn,
+                              isDownloading && styles.iconBtnDisabled,
                             ]}
                             onPress={(e) => {
                               e.stopPropagation();
@@ -429,15 +430,16 @@ export default function ProjectScreen() {
                             {isDownloading ? (
                               <ActivityIndicator size="small" color="#000" />
                             ) : (
-                              <Text style={styles.downloadBtnText}>Download</Text>
+                              <Ionicons name="cloud-download-outline" size={20} color="#000" />
                             )}
                           </Pressable>
                         ) : (
                           <>
                             <Pressable
                               style={[
-                                styles.refreshBtn,
-                                isDownloading && styles.downloadBtnDisabled,
+                                styles.iconBtn,
+                                styles.refreshIconBtn,
+                                isDownloading && styles.iconBtnDisabled,
                               ]}
                               onPress={(e) => {
                                 e.stopPropagation();
@@ -448,15 +450,16 @@ export default function ProjectScreen() {
                               {isDownloading ? (
                                 <ActivityIndicator size="small" color={ACC} />
                               ) : (
-                                <Text style={styles.refreshBtnText}>Refresh</Text>
+                                <Ionicons name="refresh-outline" size={20} color={ACC} />
                               )}
                             </Pressable>
 
                             <Pressable
                               style={[
-                                styles.removeOfflineBtn,
+                                styles.iconBtn,
+                                styles.removeIconBtn,
                                 (isRemoving || pendingForProject > 0) &&
-                                  styles.downloadBtnDisabled,
+                                  styles.iconBtnDisabled,
                               ]}
                               onPress={(e) => {
                                 e.stopPropagation();
@@ -465,11 +468,9 @@ export default function ProjectScreen() {
                               disabled={isRemoving || pendingForProject > 0}
                             >
                               {isRemoving ? (
-                                <ActivityIndicator size="small" color="#fff" />
+                                <ActivityIndicator size="small" color="#ff8b8b" />
                               ) : (
-                                <Text style={styles.removeOfflineBtnText}>
-                                  Remove Offline
-                                </Text>
+                                <Ionicons name="trash-outline" size={20} color="#ff8b8b" />
                               )}
                             </Pressable>
                           </>
@@ -609,6 +610,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.inter.semiBold as unknown as string,
     flex: 1,
     marginRight: 10,
+    textTransform: "uppercase",
   },
   statusPill: {
     backgroundColor: "rgba(200, 241, 53, 0.15)",
@@ -625,6 +627,7 @@ const styles = StyleSheet.create({
     color: "#777",
     fontSize: 8,
     marginTop: 8,
+    textTransform: "uppercase",
   },
   projectFooterRow: {
     marginTop: 14,
@@ -637,9 +640,33 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 8,
   },
-  projectActionsColumn: {
-    minWidth: 120,
+  projectActionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
+  },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  downloadIconBtn: {
+    backgroundColor: ACC,
+  },
+  refreshIconBtn: {
+    backgroundColor: "#1a1a1a",
+    borderWidth: 1,
+    borderColor: ACC,
+  },
+  removeIconBtn: {
+    backgroundColor: "#2a1111",
+    borderWidth: 1,
+    borderColor: "#ff6b6b",
+  },
+  iconBtnDisabled: {
+    opacity: 0.5,
   },
   offlineReadyBadge: {
     backgroundColor: "rgba(200, 241, 53, 0.12)",
@@ -669,55 +696,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: fonts.inter.medium as unknown as string,
   },
-  downloadBtn: {
-    backgroundColor: ACC,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    minWidth: 110,
-  },
-  refreshBtn: {
-    backgroundColor: "#1a1a1a",
-    borderWidth: 1,
-    borderColor: ACC,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    minWidth: 110,
-  },
-  refreshBtnText: {
-    color: ACC,
-    fontSize: 12,
-    fontFamily: fonts.inter.semiBold as unknown as string,
-  },
-  removeOfflineBtn: {
-    backgroundColor: "#2a1111",
-    borderWidth: 1,
-    borderColor: "#ff6b6b",
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    minWidth: 110,
-  },
-  removeOfflineBtnText: {
-    color: "#ff8b8b",
-    fontSize: 12,
-    fontFamily: fonts.inter.semiBold as unknown as string,
-  },
-  downloadBtnDisabled: {
-    opacity: 0.6,
-  },
-  downloadBtnText: {
-    color: "#000",
-    fontSize: 12,
-    fontFamily: fonts.inter.semiBold as unknown as string,
-  },
+
 
   modalOverlay: {
     flex: 1,

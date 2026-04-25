@@ -35,7 +35,7 @@ const handleRTL = async (lng) => {
     I18nManager.forceRTL(isRTL);
 
     // 🚀 reload immediately
-    await Updates.reloadAsync();
+    // await Updates.reloadAsync();
   }
 };
 

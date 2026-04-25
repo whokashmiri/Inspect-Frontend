@@ -65,7 +65,7 @@ type Props = {
 const ACC = "#D4FF00";
 const NUM_COLUMNS = 3;
 const SCREEN_WIDTH = Dimensions.get("window").width;
-const HORIZONTAL_PADDING = 15 * 2;
+const HORIZONTAL_PADDING = 10;
 const GRID_GAP = 5;
 const ITEM_SIZE =
   (SCREEN_WIDTH - HORIZONTAL_PADDING * 2 - GRID_GAP * (NUM_COLUMNS - 1)) /
@@ -1045,14 +1045,14 @@ const styles = StyleSheet.create({
   subtitle: {
     color: "#2a2828",
     marginTop: 0,
-    marginBottom: 10,
+    marginBottom: 8,
     fontSize: 15,
   },
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 4,
   },
   dashboardBtn: {
     backgroundColor: ACC,
@@ -1172,7 +1172,6 @@ const styles = StyleSheet.create({
   gridItem: {
     width: ITEM_SIZE,
     marginBottom: GRID_GAP,
-    marginRight: GRID_GAP,
   },
   gridCard: {
     width: "100%",
