@@ -635,7 +635,7 @@ const itemsWithPlaceholders = useMemo(() => {
         <View style={styles.headerRow}>
           <View>
             <Text style={styles.title}>{projectName}</Text>
-            <Text style={styles.subtitle}>Folders & Assets</Text>
+            <Text style={styles.subtitle}>All Folders & Assets of the Project</Text>
           </View>
 
           <TouchableOpacity
@@ -1041,12 +1041,13 @@ const styles = StyleSheet.create({
     fontWeight: "400",
     color: "#090808",
     marginTop: 4,
+    textTransform:"uppercase"
   },
   subtitle: {
     color: "#2a2828",
     marginTop: 0,
-    marginBottom: 8,
-    fontSize: 15,
+    marginBottom: 4,
+    fontSize: 10,
   },
   headerRow: {
     flexDirection: "row",
