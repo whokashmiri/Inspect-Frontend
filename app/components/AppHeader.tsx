@@ -22,7 +22,7 @@ export type HeaderUser = {
   username?: string;
   
   companyName?: string;
-  role?: "Manager" | "Inspector" | "Valuator" | "company_admin" ;
+  role?: "Manager" | "Inspector" | "Valuator" | "company_admin" |string ;
 };
 
 type AppHeaderProps = {

@@ -140,7 +140,7 @@ export interface User {
   id: string;
   username: string;
   companyName: string;
-  role: "Manager" | "Inspector" | "Valuator" | "company_admin"  ;
+  role: "Manager" | "Inspector" | "Valuator" | "company_admin" |string ;
   isBlocked?: boolean;
 }
 
