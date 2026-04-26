@@ -64,6 +64,7 @@ type Props = {
 
 const ACC = "#D4FF00";
 const NUM_COLUMNS = 3;
+const FLAT_COLUMNS = 1;
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const HORIZONTAL_PADDING = 10;
 const GRID_GAP = 5;
@@ -74,6 +75,18 @@ const ITEM_SIZE =
 export default function FolderAndAssetScreen({ route }: Props) {
 
 
+
+const [rawDataKeys, setRawDataKeys] = useState<string[]>([]);
+const [selectedRawDataKey, setSelectedRawDataKey] = useState<string | null>(null);
+const [advancedSearchResults, setAdvancedSearchResults] = useState<AssetItem[]>([]);
+const [advancedSearchLoading, setAdvancedSearchLoading] = useState(false);
+const [advancedSearchPage, setAdvancedSearchPage] = useState(1);
+const [advancedSearchHasMore, setAdvancedSearchHasMore] = useState(true);
+const [rawKeyModalVisible, setRawKeyModalVisible] = useState(false);
+
+
+const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+const SEARCH_PAGE_SIZE = 15;
 
 
 const handleBackPress = async () => {
@@ -149,6 +162,31 @@ const [codeLookupLoading, setCodeLookupLoading] = useState(false);
   const [filter, setFilter] = useState<'all' | 'done' | 'incomplete'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
+
+  useEffect(() => {
+  const loadRawDataKeys = async () => {
+    if (projectId.startsWith("offline_")) return;
+
+    try {
+      const result = await projectContentApi.advancedGetRawDataKeys(projectId);
+      setRawDataKeys(result.keys || []);
+    } catch (error) {
+      console.log("RAW DATA KEYS ERROR:", error);
+    }
+  };
+
+  loadRawDataKeys();
+}, [projectId]);
+
+
+useEffect(() => {
+  const timer = setTimeout(() => {
+    setDebouncedSearchQuery(searchQuery.trim());
+  }, 350);
+
+  return () => clearTimeout(timer);
+}, [searchQuery]);
+
   useEffect(() => {
     const interval = setInterval(async () => {
       const count = await getPendingCount();
@@ -180,6 +218,8 @@ const [codeLookupLoading, setCodeLookupLoading] = useState(false);
     };
   }, []);
 
+
+
   const showSnackbar = (
     message: string,
     type: "success" | "error" | "info" = "success"
@@ -191,6 +231,85 @@ const [codeLookupLoading, setCodeLookupLoading] = useState(false);
     setSnackbar({ message, type });
     snackbarTimeout.current = setTimeout(() => setSnackbar(null), 3000);
   };
+
+
+
+  const runAdvancedSearch = useCallback(
+  async (page = 1, append = false) => {
+    const query = debouncedSearchQuery.trim();
+
+    if (!query) {
+      setAdvancedSearchResults([]);
+      setAdvancedSearchPage(1);
+      setAdvancedSearchHasMore(true);
+      return;
+    }
+
+    try {
+      setAdvancedSearchLoading(true);
+
+      const result = await projectContentApi.advancedSearchContents(
+        projectId,
+        selectedRawDataKey,
+        query,
+        filter,
+        page,
+        SEARCH_PAGE_SIZE
+      );
+
+      const nextAssets = result.assets || [];
+
+      setAdvancedSearchResults((prev) =>
+        append ? [...prev, ...nextAssets] : nextAssets
+      );
+
+      setAdvancedSearchPage(page);
+      setAdvancedSearchHasMore(nextAssets.length === SEARCH_PAGE_SIZE);
+    } catch (error: any) {
+      Alert.alert("Search Error", error?.message || "Advanced search failed");
+    } finally {
+      setAdvancedSearchLoading(false);
+    }
+  },
+  [projectId, selectedRawDataKey, debouncedSearchQuery, filter]
+);
+
+
+  useEffect(() => {
+  runAdvancedSearch(1, false);
+}, [runAdvancedSearch]);
+
+
+
+const loadMoreAdvancedResults = () => {
+  if (
+    advancedSearchLoading ||
+    !advancedSearchHasMore ||
+    !debouncedSearchQuery.trim()
+  ) {
+    return;
+  }
+
+  runAdvancedSearch(advancedSearchPage + 1, true);
+};
+
+
+const getAssetLocationText = (asset: AssetItem) => {
+  if (!asset.parent) return projectName;
+
+  return `${projectName} / Folder`;
+};
+
+
+
+const isAdvancedSearching = debouncedSearchQuery.trim().length > 0;
+
+const advancedSearchListItems = useMemo(() => {
+  return advancedSearchResults.map((asset) => ({
+    ...asset,
+    itemType: "advancedAsset" as const,
+  }));
+}, [advancedSearchResults]);
 
 
 const handleDetectedAssetCode = async (rawCode: string) => {
@@ -695,14 +814,28 @@ const itemsWithPlaceholders = useMemo(() => {
           </TouchableOpacity>
         </View>
 
-       <View >
+ <View style={styles.advancedSearchRow}>
   <TextInput
     value={searchQuery}
     onChangeText={setSearchQuery}
-    placeholder="Search Assets"
+    placeholder={
+      selectedRawDataKey
+        ? `Search ${selectedRawDataKey} value`
+        : "Search all raw data values"
+    }
     placeholderTextColor="#666"
-    style={styles.searchInput}
+    style={styles.advancedSearchInput}
   />
+
+  <TouchableOpacity
+    style={styles.rawKeyPicker}
+   onPress={() => setRawKeyModalVisible(true)}
+  >
+    <Text style={styles.rawKeyPickerText} numberOfLines={1}>
+      {selectedRawDataKey || "All"}
+    </Text>
+    <Ionicons name="chevron-down" size={14} color="#000" />
+  </TouchableOpacity>
 </View>
 
         {loading || contentLoading ? (
@@ -719,6 +852,87 @@ const itemsWithPlaceholders = useMemo(() => {
                 </Text>
               </View>
             )}
+
+
+
+
+{isAdvancedSearching ? (
+  <FlatList
+  key={`cols-${FLAT_COLUMNS}`}
+    data={advancedSearchListItems}
+    keyExtractor={(item) => `advanced-${item.id} +- ${item.updatedAt}`}
+    numColumns={FLAT_COLUMNS}
+    onEndReached={loadMoreAdvancedResults}
+    onEndReachedThreshold={0.4}
+    refreshControl={
+      <RefreshControl
+        refreshing={advancedSearchLoading}
+        onRefresh={() => runAdvancedSearch(1, false)}
+      />
+    }
+    contentContainerStyle={[
+      styles.searchListContent,
+      { paddingBottom: 120 + insets.bottom },
+    ]}
+    ListFooterComponent={
+      advancedSearchLoading ? (
+        <ActivityIndicator color={ACC} style={{ marginVertical: 18 }} />
+      ) : null
+    }
+    ListEmptyComponent={
+      !advancedSearchLoading ? (
+        <View style={styles.emptyWrap}>
+          <Text style={styles.emptyTitle}>No matching assets</Text>
+          <Text style={styles.emptyText}>
+            Try another value or select a different field.
+          </Text>
+        </View>
+      ) : null
+    }
+    renderItem={({ item }) => (
+      <TouchableOpacity
+        style={styles.searchResultCard}
+        onPress={() => openEditAsset(item)}
+        activeOpacity={0.85}
+      >
+        {item.images?.length ? (
+          <Image
+            source={{ uri: item.images[0].url }}
+            style={styles.searchResultImage}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={styles.searchResultIcon}>
+            <Ionicons name="cube-outline" size={28} color="#fff" />
+          </View>
+        )}
+
+        <View style={styles.searchResultBody}>
+          <Text style={styles.searchResultTitle} numberOfLines={1}>
+            {item.name}
+          </Text>
+
+          <Text style={styles.searchResultLocation} numberOfLines={2}>
+            {getAssetLocationText(item)}
+          </Text>
+
+          {selectedRawDataKey && (
+            <Text style={styles.searchResultMeta} numberOfLines={1}>
+              Field: {selectedRawDataKey}
+            </Text>
+          )}
+        </View>
+
+        <Ionicons name="chevron-forward" size={20} color="#777" />
+      </TouchableOpacity>
+    )}
+  />
+) : (
+
+
+
+
+
 
             <FlatList
               data={itemsWithPlaceholders}
@@ -820,6 +1034,8 @@ const itemsWithPlaceholders = useMemo(() => {
               );
             }}
           />
+          
+            )}
           </>
         )}
 
@@ -872,6 +1088,9 @@ const itemsWithPlaceholders = useMemo(() => {
             </TouchableOpacity>
           </View>
         )}
+
+
+
 
         <Modal
           visible={folderModalVisible}
@@ -933,6 +1152,51 @@ const itemsWithPlaceholders = useMemo(() => {
             </View>
           </TouchableWithoutFeedback>
         </Modal>
+
+
+        <Modal
+  visible={rawKeyModalVisible}
+  animationType="fade"
+  transparent
+  onRequestClose={() => setRawKeyModalVisible(false)}
+>
+  <TouchableWithoutFeedback onPress={() => setRawKeyModalVisible(false)}>
+    <View style={styles.modalOverlay}>
+      <TouchableWithoutFeedback>
+        <View style={styles.rawKeyModalCard}>
+          <Text style={styles.modalTitle}>Select Search Field</Text>
+
+          <TouchableOpacity
+            style={styles.rawKeyOption}
+            onPress={() => {
+              setSelectedRawDataKey(null);
+              setRawKeyModalVisible(false);
+            }}
+          >
+            <Text style={styles.rawKeyOptionText}>All Values</Text>
+          </TouchableOpacity>
+
+          <FlatList
+            data={rawDataKeys}
+            keyExtractor={(item) => item}
+            style={{ maxHeight: 360 }}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.rawKeyOption}
+                onPress={() => {
+                  setSelectedRawDataKey(item);
+                  setRawKeyModalVisible(false);
+                }}
+              >
+                <Text style={styles.rawKeyOptionText}>{item}</Text>
+              </TouchableOpacity>
+            )}
+          />
+        </View>
+      </TouchableWithoutFeedback>
+    </View>
+  </TouchableWithoutFeedback>
+</Modal>
 
 
         <CodeScannerModal
@@ -1267,13 +1531,16 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
+  backgroundColor: "rgba(0,0,0,0.6)",
+  justifyContent: "center",   
+  // alignItems: "center",       
   },
   modalKeyboardWrap: {
     flex: 1,
     justifyContent: "flex-end",
   },
   modalCard: {
+    // width: "90%",
     backgroundColor: "#111",
     padding: 15,
     paddingBottom: 18,
@@ -1392,9 +1659,131 @@ backButton: {
   zIndex: 20,
 },
 
+rawKeyModalCard: {
+  width: "85%",
+  maxHeight: "70%",
+  backgroundColor: "#111",
+  borderRadius: 20,
+  padding: 18,
+  borderWidth: 1,
+  borderColor: "#222",
+  // alignItems: "center",
+  alignSelf: "center",
+  justifyContent: "center",
+  
+
+},
+
+rawKeyOption: {
+  paddingVertical: 14,
+  borderBottomWidth: 1,
+  borderBottomColor: "#222",
+},
+
+rawKeyOptionText: {
+  color: "#fff",
+  fontSize: 15,
+  fontWeight: "600",
+},
+
 backText: {
   fontSize: 16,
   fontWeight: "600",
   color: "#111",
+},
+
+
+advancedSearchRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 8,
+  marginBottom: 12,
+},
+
+advancedSearchInput: {
+  flex: 1,
+  height: 44,
+  borderRadius: 14,
+  backgroundColor: "#111",
+  borderWidth: 1,
+  borderColor: "#222",
+  color: "#fff",
+  paddingHorizontal: 14,
+  fontSize: 14,
+},
+
+rawKeyPicker: {
+  height: 44,
+  minWidth: 96,
+  maxWidth: 140,
+  borderRadius: 14,
+  backgroundColor: ACC,
+  paddingHorizontal: 10,
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 4,
+},
+
+rawKeyPickerText: {
+  color: "#000",
+  fontWeight: "800",
+  fontSize: 12,
+  maxWidth: 95,
+},
+
+searchListContent: {
+  paddingTop: 4,
+},
+
+searchResultCard: {
+  flexDirection: "row",
+  alignItems: "center",
+  backgroundColor: "#111",
+  borderRadius: 16,
+  padding: 10,
+  marginBottom: 10,
+  borderWidth: 1,
+  borderColor: "#222",
+},
+
+searchResultImage: {
+  width: 54,
+  height: 54,
+  borderRadius: 12,
+  backgroundColor: "#222",
+},
+
+searchResultIcon: {
+  width: 54,
+  height: 54,
+  borderRadius: 12,
+  backgroundColor: "#222",
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+searchResultBody: {
+  flex: 1,
+  marginLeft: 12,
+},
+
+searchResultTitle: {
+  color: "#fff",
+  fontSize: 14,
+  fontWeight: "800",
+},
+
+searchResultLocation: {
+  color: "#999",
+  fontSize: 12,
+  marginTop: 3,
+},
+
+searchResultMeta: {
+  color: ACC,
+  fontSize: 11,
+  marginTop: 4,
+  fontWeight: "700",
 },
 });

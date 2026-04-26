@@ -330,6 +330,10 @@ export interface UploadFileInput {
   type: string;
 }
 
+export interface AdvancedRawDataKeysResponse {
+  keys: string[];
+}
+
 const normalizeAssetType = (
   assetType?: "vehicle" | "other" | "Vehicle" | "Other"
 ): "vehicle" | "other" | undefined => {
@@ -591,4 +595,48 @@ export const projectContentApi = {
       }
     );
   },
+
+
+ advancedGetRawDataKeys: (projectId: string) => {
+  return request<AdvancedRawDataKeysResponse>(
+    `/projects/${projectId}/contents/advanced-keys`,
+    { method: "GET" }
+  );
+},
+
+advancedSearchContents: (
+  projectId: string,
+  key?: string | null,
+  search?: string,
+  filter?: "all" | "done" | "incomplete",
+  page = 1,
+  limit = 15
+) => {
+  const params = new URLSearchParams();
+
+  if (key) {
+    params.set("key", key);
+  }
+
+  const cleanSearch = search?.trim();
+
+  if (cleanSearch) {
+    params.set("search", cleanSearch);
+  }
+
+  if (filter && filter !== "all") {
+    params.set("filter", filter);
+  }
+
+  params.set("page", String(page));
+  params.set("limit", String(limit));
+
+  return request<ProjectContentsResponse>(
+    `/projects/${projectId}/contents/advanced-search?${params.toString()}`,
+    {
+      method: "GET",
+    }
+  );
+},
+
 };
