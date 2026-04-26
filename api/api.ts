@@ -280,6 +280,7 @@ export interface AssetItem {
   createdAt: string;
   updatedAt: string;
   code: string | null;
+  rawData: Record<string, any> | null;
 
   condition: "" | "New" | "Used" | "Damaged" | "Good" | null;
   assetType: "vehicle" | "other";

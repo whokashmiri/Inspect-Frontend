@@ -15,6 +15,7 @@ export type AssetDraft = {
   name: string;
   writtenDescription: string;
   code?: string; 
+  rawData?: Record<string, any> | null;
   voiceNotes: UploadFileInput[];
   condition?: AssetCondition;
   assetType?: AssetType;

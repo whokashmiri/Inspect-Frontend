@@ -85,6 +85,17 @@ const [advancedSearchHasMore, setAdvancedSearchHasMore] = useState(true);
 const [rawKeyModalVisible, setRawKeyModalVisible] = useState(false);
 
 
+
+const getRawDataValue = (rawData: any, key: string) => {
+  if (!rawData || !key) return null;
+
+  return key.split(".").reduce((acc, k) => {
+    if (acc === null || acc === undefined) return null;
+    return acc[k];
+  }, rawData);
+};
+
+
 const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
 const SEARCH_PAGE_SIZE = 15;
 
@@ -510,6 +521,7 @@ const buildLocalAsset = (draft: AssetDraft): AssetItem => {
     name: draft.name,
     writtenDescription: draft.writtenDescription || null,
     parent: currentFolderId ?? null,
+    rawData: draft.rawData || null,
     projectId,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -531,6 +543,9 @@ const buildLocalAsset = (draft: AssetDraft): AssetItem => {
     voiceNotes: [],
   };
 };
+
+
+
 
 
 const createAssetAsync = async (draft: AssetDraft) => {
@@ -917,10 +932,10 @@ const itemsWithPlaceholders = useMemo(() => {
           </Text>
 
           {selectedRawDataKey && (
-            <Text style={styles.searchResultMeta} numberOfLines={1}>
-              Field: {selectedRawDataKey}
-            </Text>
-          )}
+  <Text style={styles.searchResultMeta} numberOfLines={1}>
+    {getRawDataValue(item.rawData, selectedRawDataKey) ?? "—"}
+  </Text>
+)}
         </View>
 
         <Ionicons name="chevron-forward" size={20} color="#777" />
