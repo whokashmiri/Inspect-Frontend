@@ -1,3 +1,6 @@
+
+
+//offline/storage.ts
 import * as SQLite from "expo-sqlite";
 import { Platform } from "react-native";
 import {
@@ -40,6 +43,159 @@ function normalizeAssetFolder(asset: any): string | null {
   return asset.folderId ?? asset.parent ?? null;
 }
 
+
+function getNestedRawDataValue(rawData: any, key?: string | null) {
+  if (!rawData || !key) return rawData;
+
+  return key.split(".").reduce((acc, part) => {
+    if (acc === null || acc === undefined) return undefined;
+    return acc[part];
+  }, rawData);
+}
+
+function rawDataValueMatches(value: any, search: string): boolean {
+  if (value === null || value === undefined) return false;
+
+  const needle = search.trim().toLowerCase();
+  if (!needle) return true;
+
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return String(value).toLowerCase().includes(needle);
+  }
+
+  if (Array.isArray(value)) {
+    return value.some((item) => rawDataValueMatches(item, search));
+  }
+
+  if (typeof value === "object") {
+    return Object.values(value).some((item) =>
+      rawDataValueMatches(item, search)
+    );
+  }
+
+  return false;
+}
+
+function extractRawDataKeys(obj: any, prefix = "", keys = new Set<string>()) {
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return keys;
+
+  for (const key of Object.keys(obj)) {
+    const fullKey = prefix ? `${prefix}.${key}` : key;
+    keys.add(fullKey);
+
+    const value = obj[key];
+
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      extractRawDataKeys(value, fullKey, keys);
+    }
+  }
+
+  return keys;
+}
+
+
+export async function getOfflineRawDataKeys(projectId: string): Promise<string[]> {
+  await initStorage();
+
+  const rows = await db.getAllAsync<{ data: string }>(
+    `SELECT data FROM offline_assets WHERE projectId = ?;`,
+    [projectId]
+  );
+
+  const keys = new Set<string>();
+
+  for (const row of rows) {
+    try {
+      const asset = JSON.parse(row.data);
+      extractRawDataKeys(asset.rawData, "", keys);
+    } catch {
+      // ignore malformed row
+    }
+  }
+
+  return Array.from(keys).sort();
+}
+
+
+export async function advancedSearchOfflineAssets({
+  projectId,
+  key,
+  search,
+  filter = "all",
+  page = 1,
+  limit = 15,
+}: {
+  projectId: string;
+  key?: string | null;
+  search: string;
+  filter?: "all" | "done" | "incomplete";
+  page?: number;
+  limit?: number;
+}): Promise<{
+  folders: any[];
+  assets: any[];
+  page: number;
+  limit: number;
+  total: number;
+  hasMore: boolean;
+}> {
+  await initStorage();
+
+  const rows = await db.getAllAsync<{ data: string }>(
+    `SELECT data FROM offline_assets
+     WHERE projectId = ?
+     ORDER BY id DESC;`,
+    [projectId]
+  );
+
+  let assets = rows
+    .map((row) => {
+      try {
+        return JSON.parse(row.data);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+
+  if (filter === "done") {
+    assets = assets.filter((asset) => asset.isDone === true);
+  }
+
+  if (filter === "incomplete") {
+    assets = assets.filter((asset) => asset.isDone !== true);
+  }
+
+  const query = search.trim();
+
+  if (query) {
+    assets = assets.filter((asset) => {
+      const value = key
+        ? getNestedRawDataValue(asset.rawData, key)
+        : asset.rawData;
+
+      return rawDataValueMatches(value, query);
+    });
+  }
+
+  const safePage = Math.max(1, page);
+  const safeLimit = Math.max(1, limit);
+  const start = (safePage - 1) * safeLimit;
+  const paginatedAssets = assets.slice(start, start + safeLimit);
+
+  return {
+    folders: [],
+    assets: paginatedAssets,
+    page: safePage,
+    limit: safeLimit,
+    total: assets.length,
+    hasMore: start + safeLimit < assets.length,
+  };
+}
 export async function initStorage(): Promise<void> {
   if (initialized) return;
 

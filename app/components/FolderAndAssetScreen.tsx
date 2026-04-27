@@ -43,6 +43,8 @@ import {
   upsertOfflineFolder,
   upsertOfflineAsset,
   getOfflineAssetById,
+  getOfflineRawDataKeys,
+  advancedSearchOfflineAssets,
 } from "../offline";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -72,6 +74,8 @@ const ITEM_SIZE =
   (SCREEN_WIDTH - HORIZONTAL_PADDING * 2 - GRID_GAP * (NUM_COLUMNS - 1)) /
   NUM_COLUMNS;
 
+  
+
 export default function FolderAndAssetScreen({ route }: Props) {
 
 
@@ -85,6 +89,64 @@ const [advancedSearchHasMore, setAdvancedSearchHasMore] = useState(true);
 const [rawKeyModalVisible, setRawKeyModalVisible] = useState(false);
 
 
+
+const getNestedRawDataValue = (rawData: any, key?: string | null) => {
+  if (!rawData || !key) return rawData;
+
+  return key.split(".").reduce((acc, part) => {
+    if (acc === null || acc === undefined) return undefined;
+    return acc[part];
+  }, rawData);
+};
+
+const rawDataValueMatches = (value: any, search: string): boolean => {
+  if (value === null || value === undefined) return false;
+
+  const needle = search.trim().toLowerCase();
+  if (!needle) return true;
+
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return String(value).toLowerCase().includes(needle);
+  }
+
+  if (Array.isArray(value)) {
+    return value.some((item) => rawDataValueMatches(item, search));
+  }
+
+  if (typeof value === "object") {
+    return Object.values(value).some((item) =>
+      rawDataValueMatches(item, search)
+    );
+  }
+
+  return false;
+};
+
+
+
+const extractRawDataKeys = (
+  obj: any,
+  prefix = "",
+  keys = new Set<string>()
+) => {
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return keys;
+
+  Object.keys(obj).forEach((key) => {
+    const fullKey = prefix ? `${prefix}.${key}` : key;
+    keys.add(fullKey);
+
+    const value = obj[key];
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      extractRawDataKeys(value, fullKey, keys);
+    }
+  });
+
+  return keys;
+};
 
 const getRawDataValue = (rawData: any, key: string) => {
   if (!rawData || !key) return null;
@@ -174,11 +236,40 @@ const [codeLookupLoading, setCodeLookupLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
 
-  useEffect(() => {
+ useEffect(() => {
   const loadRawDataKeys = async () => {
     if (projectId.startsWith("offline_")) return;
 
     try {
+      const shouldUseOfflineCache =
+        downloadedOffline && (isOnline === false || isOnline === null);
+
+      if (shouldUseOfflineCache) {
+        const keys = await getOfflineRawDataKeys(projectId);
+        if (shouldUseOfflineCache) {
+          // const keys = await getOfflineRawDataKeys(projectId);
+            setRawDataKeys(keys);
+            return;
+          }
+
+        const scanFolder = async (parentId: string | null) => {
+          const data = await getOfflineContents(projectId, parentId);
+
+          for (const asset of data.assets || []) {
+            extractRawDataKeys((asset as any).rawData);
+          }
+
+          for (const folder of data.folders || []) {
+            await scanFolder(folder.id);
+          }
+        };
+
+        await scanFolder(null);
+
+        setRawDataKeys(Array.from(keys).sort());
+        return;
+      }
+
       const result = await projectContentApi.advancedGetRawDataKeys(projectId);
       setRawDataKeys(result.keys || []);
     } catch (error) {
@@ -187,7 +278,7 @@ const [codeLookupLoading, setCodeLookupLoading] = useState(false);
   };
 
   loadRawDataKeys();
-}, [projectId]);
+}, [projectId, downloadedOffline, isOnline]);
 
 
 useEffect(() => {
@@ -245,7 +336,7 @@ useEffect(() => {
 
 
 
-  const runAdvancedSearch = useCallback(
+const runAdvancedSearch = useCallback(
   async (page = 1, append = false) => {
     const query = debouncedSearchQuery.trim();
 
@@ -258,6 +349,52 @@ useEffect(() => {
 
     try {
       setAdvancedSearchLoading(true);
+
+      const shouldUseOfflineCache =
+        downloadedOffline && (isOnline === false || isOnline === null);
+
+      if (shouldUseOfflineCache) {
+        const allAssets: AssetItem[] = [];
+
+        const collectAssets = async (parentId: string | null) => {
+          const data = await getOfflineContents(projectId, parentId);
+
+          allAssets.push(...((data.assets || []) as AssetItem[]));
+
+          for (const folder of data.folders || []) {
+            await collectAssets(folder.id);
+          }
+        };
+
+        await collectAssets(null);
+
+        let matchedAssets = allAssets.filter((asset: any) => {
+          const value = selectedRawDataKey
+            ? getNestedRawDataValue(asset.rawData, selectedRawDataKey)
+            : asset.rawData;
+
+          return rawDataValueMatches(value, query);
+        });
+
+        if (filter === "done") {
+          matchedAssets = matchedAssets.filter((asset) => asset.isDone);
+        }
+
+        if (filter === "incomplete") {
+          matchedAssets = matchedAssets.filter((asset) => !asset.isDone);
+        }
+
+        const start = (page - 1) * SEARCH_PAGE_SIZE;
+        const nextAssets = matchedAssets.slice(start, start + SEARCH_PAGE_SIZE);
+
+        setAdvancedSearchResults((prev) =>
+          append ? [...prev, ...nextAssets] : nextAssets
+        );
+
+        setAdvancedSearchPage(page);
+        setAdvancedSearchHasMore(start + SEARCH_PAGE_SIZE < matchedAssets.length);
+        return;
+      }
 
       const result = await projectContentApi.advancedSearchContents(
         projectId,
@@ -275,22 +412,31 @@ useEffect(() => {
       );
 
       setAdvancedSearchPage(page);
-      setAdvancedSearchHasMore(nextAssets.length === SEARCH_PAGE_SIZE);
+      setAdvancedSearchHasMore(
+        typeof (result as any).hasMore === "boolean"
+          ? (result as any).hasMore
+          : nextAssets.length === SEARCH_PAGE_SIZE
+      );
     } catch (error: any) {
       Alert.alert("Search Error", error?.message || "Advanced search failed");
     } finally {
       setAdvancedSearchLoading(false);
     }
   },
-  [projectId, selectedRawDataKey, debouncedSearchQuery, filter]
+  [
+    projectId,
+    selectedRawDataKey,
+    debouncedSearchQuery,
+    filter,
+    downloadedOffline,
+    isOnline,
+  ]
 );
 
 
-  useEffect(() => {
+useEffect(() => {
   runAdvancedSearch(1, false);
 }, [runAdvancedSearch]);
-
-
 
 const loadMoreAdvancedResults = () => {
   if (
@@ -521,7 +667,7 @@ const buildLocalAsset = (draft: AssetDraft): AssetItem => {
     name: draft.name,
     writtenDescription: draft.writtenDescription || null,
     parent: currentFolderId ?? null,
-    rawData: draft.rawData || null,
+   rawData: (draft as any).rawData ?? {},
     projectId,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -565,6 +711,7 @@ const createAssetAsync = async (draft: AssetDraft) => {
     name: draft.name,
     writtenDescription: draft.writtenDescription || null,
     parent: currentFolderId || undefined,
+    rawData: (draft as any).rawData ?? {},
     images: newImages,
     voiceNotes: newVoiceNotes,
     condition: draft.condition || null,
@@ -624,6 +771,7 @@ const updateAssetAsync = async (draft: AssetDraft) => {
     writtenDescription: draft.writtenDescription || null,
     images: newImages,
     voiceNotes: newVoiceNotes,
+    rawData: (draft as any).rawData ?? {},
     code: draft.code || null,
     condition: draft.condition || null,
     assetType: normalizedAssetType,
@@ -650,6 +798,7 @@ const updateAssetAsync = async (draft: AssetDraft) => {
         ...existingOfflineAsset,
         name: draft.name,
         writtenDescription: draft.writtenDescription || null,
+        rawData: (draft as any).rawData ?? (existingOfflineAsset as any).rawData ?? {},
         condition: draft.condition || null,
         code: draft.code ?? existingOfflineAsset.code ?? null,
         assetType: normalizedAssetType,

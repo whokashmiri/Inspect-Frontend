@@ -33,6 +33,8 @@ export {
   upsertOfflineAsset,
   getOfflineAssetById,
   updatePayload,
+  advancedSearchOfflineAssets,
+  getOfflineRawDataKeys,
 } from "./storage";
 
 
