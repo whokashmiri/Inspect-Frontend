@@ -1244,7 +1244,7 @@ const itemsWithPlaceholders = useMemo(() => {
 
 <TouchableOpacity
   onPress={handleBackPress}
-  activeOpacity={0.8}
+  activeOpacity={1}
   style={[
     styles.backButton,
     { bottom: Math.max(insets.bottom, 0) + 46 },
@@ -1864,7 +1864,10 @@ syncTickBadge: {
     fontWeight: "600",
   },
 
-backButton: {
+backButton : {
+  backgroundColor: "#D4FF00",
+  borderRadius: 10,
+  padding: 8,
   position: "absolute",
   left: 20,
   zIndex: 20,
