@@ -202,6 +202,7 @@ const handleBackPress = async () => {
   const insets = useSafeAreaInsets();
 
   const { projectId, projectName } = route.params;
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const [folders, setFolders] = useState<FolderItem[]>([]);
   const [assets, setAssets] = useState<AssetItem[]>([]);
@@ -557,16 +558,17 @@ const handleDetectedAssetCode = async (rawCode: string) => {
     loadContents(currentFolderId);
   }, [loadContents, currentFolderId, filter, searchQuery]);
 
-  const onRefresh = async () => {
-    setRefreshing(true);
+ const onRefresh = async () => {
+  setRefreshing(true);
 
-    if (isOnline) {
-      await syncQueue();
-    }
+  if (isOnline) {
+    setIsSyncing(true);
+    await syncQueue();
+    setIsSyncing(false);
+  }
 
-    await loadContents(currentFolderId);
-  };
-
+  await loadContents(currentFolderId);
+};
   const openFolder = async (folder: FolderItem) => {
     if (navigatingFolderId) return;
 
@@ -934,14 +936,32 @@ const itemsWithPlaceholders = useMemo(() => {
   <Text style={styles.offlineModeText}>OFFLINE</Text>
 )}
 
-        {pendingCount > 0 && (
-          <View style={styles.pendingBadge}>
-            <Text style={styles.pendingText}>⏳ {pendingCount} offline items</Text>
-            <TouchableOpacity onPress={syncQueue} style={styles.syncBtn}>
-              <Text style={styles.syncBtnText}>Sync Now</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        <View style={styles.pendingBadge}>
+  <View style={{ flex: 1 }}>
+    <Text style={styles.pendingText}>
+      ⏳ {pendingCount} asset{pendingCount !== 1 ? "s" : ""} to sync
+    </Text>
+  </View>
+  <TouchableOpacity
+    onPress={async () => {
+      setIsSyncing(true);
+      await syncQueue();
+      setIsSyncing(false);
+      await loadContents(currentFolderId);
+    }}
+    style={styles.syncBtn}
+    disabled={isSyncing}
+  >
+    {isSyncing ? (
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <ActivityIndicator size="small" color="#000" />
+        <Text style={styles.syncBtnText}> Your Assets are being synced</Text>
+      </View>
+    ) : (
+      <Text style={styles.syncBtnText}>Sync Now</Text>
+    )}
+  </TouchableOpacity>
+</View>
 
         <View style={styles.breadcrumbRow}>
           {path.map((crumb, index) => (
@@ -1193,6 +1213,14 @@ const itemsWithPlaceholders = useMemo(() => {
                         <Text style={styles.photoCountText}>{item.images.length}</Text>
                       </View>
                     )}
+
+                    <View style={styles.syncTickBadge}>
+                      <Ionicons
+                        name={item.id?.startsWith("offline_") ? "checkmark" : "checkmark-done"}
+                        size={12}
+                        color={item.id?.startsWith("offline_") ? "#fff" : "#D4FF00"}
+                      />
+                    </View>
                   </TouchableOpacity>
                 </View>
               );
@@ -1505,7 +1533,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   offlineModeText: {
-    color: ACC,
+    color: "#222",
     fontSize: 12,
   },
   pendingBadge: {
@@ -1516,6 +1544,25 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     alignItems: "center",
   },
+
+
+  syncingSubText: {
+  color: "#aaa",
+  fontSize: 10,
+  marginTop: 2,
+},
+syncTickBadge: {
+  position: "absolute",
+  bottom: 6,
+  right: 6,
+  backgroundColor: "rgba(0,0,0,0.55)",
+  borderRadius: 8,
+  width: 20,
+  height: 20,
+  alignItems: "center",
+  justifyContent: "center",
+  zIndex: 15,
+},
   pendingText: {
     color: "#D4FF00",
     fontSize: 12,
