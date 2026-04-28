@@ -478,7 +478,14 @@ const handleDetectedAssetCode = async (rawCode: string) => {
   try {
     setCodeLookupLoading(true);
 
-    const result = await projectContentApi.advancedSearchContents(projectId, code);
+    const shouldUseOffline = offlineMode || (downloadedOffline && (isOnline === false || isOnline === null));
+
+    let result;
+    if (shouldUseOffline) {
+      result = await advancedSearchOfflineAssets({ projectId, search: code });
+    } else {
+      result = await projectContentApi.advancedSearchContents(projectId, code);
+    }
 
     setCodeScannerVisible(false);
     setEditingAsset(result.assets && result.assets.length > 0 ? result.assets[0] : null);
