@@ -51,6 +51,7 @@ import { Ionicons } from "@expo/vector-icons";
 type RouteParams = {
   projectId: string;
   projectName: string;
+  offlineMode?: boolean;
 };
 
 type FolderPathItem = {
@@ -201,7 +202,7 @@ const handleBackPress = async () => {
   });
   const insets = useSafeAreaInsets();
 
-  const { projectId, projectName } = route.params;
+  const { projectId, projectName , offlineMode } = route.params;
   const [isSyncing, setIsSyncing] = useState(false);
 
   const [folders, setFolders] = useState<FolderItem[]>([]);
@@ -477,10 +478,10 @@ const handleDetectedAssetCode = async (rawCode: string) => {
   try {
     setCodeLookupLoading(true);
 
-    const result = await projectContentApi.getAssetByCode(projectId, code);
+    const result = await projectContentApi.advancedSearchContents(projectId, code);
 
     setCodeScannerVisible(false);
-    setEditingAsset(result.asset);
+    setEditingAsset(result.assets && result.assets.length > 0 ? result.assets[0] : null);
     setAssetModalVisible(true);
   } catch (error: any) {
     Alert.alert("Not found", error?.message || "Asset not found for this code");
@@ -488,7 +489,7 @@ const handleDetectedAssetCode = async (rawCode: string) => {
     setCodeLookupLoading(false);
   }
 };
- const loadContents = useCallback(
+const loadContents = useCallback(
   async (
     parent: string | null,
     options?: { showSkeleton?: boolean }
@@ -499,15 +500,6 @@ const handleDetectedAssetCode = async (rawCode: string) => {
       setAssets((offlineData.assets || []) as AssetItem[]);
     };
 
-    if (projectId.startsWith("offline_")) {
-      setFolders([]);
-      setAssets([]);
-      setLoading(false);
-      setRefreshing(false);
-      setContentLoading(false);
-      return;
-    }
-
     try {
       if (options?.showSkeleton) {
         setContentLoading(true);
@@ -515,35 +507,48 @@ const handleDetectedAssetCode = async (rawCode: string) => {
         setAssets([]);
       }
 
-      const shouldUseOfflineCache =
-        downloadedOffline && (isOnline === false || isOnline === null);
-
-      if (shouldUseOfflineCache) {
-        await readOffline();
+      // ✅ 1. HARD STOP for offline-created projects
+      if (projectId.startsWith("offline_")) {
+        setFolders([]);
+        setAssets([]);
         return;
       }
 
-      const data = await projectContentApi.listContents(projectId, parent, filter, searchQuery);
+      // ✅ 2. NEW: respect explicit offlineMode
+      const shouldUseOffline =
+        offlineMode || // ← from params (IMPORTANT)
+        (downloadedOffline && (isOnline === false || isOnline === null));
+
+      if (shouldUseOffline) {
+        await readOffline();
+        return; // 🚀 prevents API call → no network error
+      }
+
+      // ✅ 3. Only reach here if ONLINE
+      const data = await projectContentApi.listContents(
+        projectId,
+        parent,
+        filter,
+        searchQuery
+      );
+
       setFolders(data.folders || []);
       setAssets(data.assets || []);
     } catch (error: any) {
       console.log("LOAD ERROR:", error);
 
-      if (downloadedOffline) {
+      // ✅ 4. Silent fallback (NO ALERT unless critical)
+      if (downloadedOffline || offlineMode) {
         try {
           await readOffline();
           return;
         } catch (offlineError: any) {
           console.log("OFFLINE FALLBACK ERROR:", offlineError);
-          Alert.alert(
-            "Offline Error",
-            String(offlineError?.message || offlineError || "Offline fallback failed")
-          );
-          return;
         }
       }
 
-      Alert.alert("Error", String(error?.message || "Unable to load project"));
+      // ❌ Avoid harsh alert for UX
+      console.error (error?.message || "Failed to load data");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -551,7 +556,7 @@ const handleDetectedAssetCode = async (rawCode: string) => {
       setNavigatingFolderId(null);
     }
   },
-  [projectId, isOnline, downloadedOffline, filter, searchQuery]
+  [projectId, isOnline, downloadedOffline, filter, searchQuery, offlineMode]
 );
 
   useEffect(() => {

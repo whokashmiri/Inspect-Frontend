@@ -1,11 +1,12 @@
-// (app)/FolderAndAssetScreen.tsx  ← NEW FILE (this becomes the actual route)
+// (app)/FolderAndAssetScreen.tsx
 import { useLocalSearchParams } from "expo-router";
 import FolderAndAssetScreen from "../components/FolderAndAssetScreen";
 
 export default function FolderAndAssetRoute() {
-  const { projectId, projectName } = useLocalSearchParams<{
+  const { projectId, projectName, offlineMode } = useLocalSearchParams<{
     projectId: string;
     projectName: string;
+    offlineMode?: string;
   }>();
 
   return (
@@ -14,6 +15,7 @@ export default function FolderAndAssetRoute() {
         params: {
           projectId: projectId ?? "",
           projectName: projectName ?? "",
+          offlineMode: offlineMode === "true",
         },
       }}
     />

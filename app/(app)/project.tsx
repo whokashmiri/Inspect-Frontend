@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import home from "./home";
 
 import { useAuth } from "../../api/AuthContext";
 import { projectApi, Project, ApiError } from "../../api/api";
@@ -324,7 +325,7 @@ export default function ProjectScreen() {
         )}
 
         <View style={styles.actionRow}>
-          <Pressable style={styles.switchBtn} onPress={() => router.back()}>
+          <Pressable style={styles.switchBtn} onPress={() => router.replace("home")}>
             <Text style={styles.switchBtnText}>Switch Company</Text>
           </Pressable>
 
