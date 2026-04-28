@@ -581,6 +581,26 @@ const loadContents = useCallback(
 
   await loadContents(currentFolderId);
 };
+
+const handleSyncNow = async () => {
+  const offlineState = isOnline === false || isOnline === null;
+
+  if (offlineState) {
+    Alert.alert("Offline", "You are offline");
+    return;
+  }
+
+  if (pendingCount <= 0) {
+    Alert.alert("Sync", "All assets are synced");
+    return;
+  }
+
+  setIsSyncing(true);
+  await syncQueue();
+  setIsSyncing(false);
+  await loadContents(currentFolderId);
+};
+
   const openFolder = async (folder: FolderItem) => {
     if (navigatingFolderId) return;
 
@@ -949,18 +969,19 @@ const itemsWithPlaceholders = useMemo(() => {
 )}
 
         <View style={styles.pendingBadge}>
+  <Ionicons
+    name="ellipse"
+    size={12}
+    color={isOnline ? "#4CAF50" : "#888"}
+    style={styles.networkIndicator}
+  />
   <View style={{ flex: 1 }}>
     <Text style={styles.pendingText}>
       ⏳ {pendingCount} asset{pendingCount !== 1 ? "s" : ""} to sync
     </Text>
   </View>
   <TouchableOpacity
-    onPress={async () => {
-      setIsSyncing(true);
-      await syncQueue();
-      setIsSyncing(false);
-      await loadContents(currentFolderId);
-    }}
+    onPress={handleSyncNow}
     style={styles.syncBtn}
     disabled={isSyncing}
   >
@@ -1556,7 +1577,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     alignItems: "center",
   },
-
+  networkIndicator: {
+    marginRight: 8,
+  },
 
   syncingSubText: {
   color: "#aaa",
