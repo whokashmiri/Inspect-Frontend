@@ -56,7 +56,6 @@
       "new": "جديد"
     }
   },
-
   "folderAssetScreen": {
     "header": {
       "subtitle": "جميع المجلدات والأصول في المشروع",
@@ -210,8 +209,100 @@
   },
   "commonT": {
     "cancel": "إلغاء"
+  },
+  "scanner": {
+    "close": "إغلاق",
+    "flash": "الفلاش",
+    "flash_on": "تشغيل",
+    "flash_off": "إيقاف",
+
+    "title": "ماسح متعدد بدون إنترنت",
+
+    "modes": {
+      "barcode": "QR / باركود",
+      "generalText": "نص عام",
+      "numbersOnly": "أرقام فقط",
+      "carPlate": "لوحة سيارة"
+    },
+
+    "active": "النشط",
+    "none": "لا يوجد",
+
+    "extractedResults": "النتائج المستخرجة",
+    "processing": "جارٍ المعالجة بدون إنترنت...",
+
+    "noResults": "لا توجد نتائج بعد. امسح مباشرة للباركود أو التقط صورة للنص.",
+
+    "capture": "التقاط",
+    "save": "حفظ",
+
+    "alerts": {
+      "selectModeTitle": "اختر وضع المسح",
+      "selectModeDesc": "يرجى تفعيل خيار واحد على الأقل.",
+
+      "noTextTitle": "لم يتم العثور على نص",
+      "noTextDesc": "حاول مرة أخرى بإضاءة أفضل أو بثبات أكبر.",
+
+      "failedTitle": "فشل المسح",
+      "failedDesc": "تعذر معالجة الصورة. حاول مرة أخرى.",
+
+      "noResultsTitle": "لا توجد نتائج",
+      "noResultsDesc": "لا يوجد شيء للحفظ بعد."
+    }
+  },
+  "codeScanner": {
+    "title": "مسح رمز الأصل",
+    "subtitle": "ضع الباركود أو رمز QR داخل الإطار.",
+    "permissionRequired": "مطلوب إذن الكاميرا",
+    "loadingCamera": "جارٍ تحميل الكاميرا...",
+    "lookingUp": "جارٍ البحث عن الأصل...",
+    "helper": "يتم الاكتشاف تلقائيًا. لا حاجة لزر الالتقاط."
+  
+},
+  "login": {
+    "title": "مرحبًا بعودتك",
+    "subtitle": "سجّل الدخول للمتابعة",
+
+    "username": "اسم المستخدم",
+    "password": "كلمة المرور",
+
+    "usernamePlaceholder": "اسم المستخدم",
+    "passwordPlaceholder": "كلمة المرور",
+
+    "forgotPassword": "هل نسيت كلمة المرور؟",
+    "signIn": "تسجيل الدخول",
+
+    "togglePassword": "إظهار أو إخفاء كلمة المرور",
+
+    "failedTitle": "فشل تسجيل الدخول",
+
+    "errors": {
+      "usernameRequired": "اسم المستخدم مطلوب.",
+      "passwordRequired": "كلمة المرور مطلوبة."
+    }
+  },
+
+  "commonL": {
+    "somethingWentWrong": "حدث خطأ ما."
+  },
+  "header": {
+    "username": "اسم المستخدم",
+    "company": "الشركة",
+    "role": "الدور",
+    "logout": "تسجيل الخروج",
+    "member": "عضو",
+    "userFallback": "مستخدم"
+  },
+  "roles": {
+    "Manager": "مدير",
+    "Inspector": "مفتش",
+    "Valuator": "مقيّم",
+    "company_admin": "مدير الشركة"
   }
 }
+
+
+
 
 
 

@@ -15,6 +15,7 @@ import {
   useCameraPermission,
   useCodeScanner,
 } from "react-native-vision-camera";
+import { useTranslation } from "react-i18next";
 import { createCodeDeduper, normalizeCode } from "../components/utils/codeScannerUtils";
 
 type Props = {
@@ -36,6 +37,7 @@ export default function CodeScannerModal({
   const { hasPermission, requestPermission } = useCameraPermission();
   const lockedRef = useRef(false);
   const allowScanRef = useRef(createCodeDeduper(2000));
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (visible && !hasPermission) {
@@ -90,14 +92,14 @@ export default function CodeScannerModal({
           <TouchableWithoutFeedback>
             <View style={styles.card}>
               <View style={styles.header}>
-                <Text style={styles.title}>Scan Asset Code</Text>
+                <Text style={styles.title}>{t("codeScanner.title")}</Text>
                 <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
                   <Text style={styles.closeText}>✕</Text>
                 </TouchableOpacity>
               </View>
 
               <Text style={styles.subtitle}>
-                Center the barcode or QR inside the frame.
+                {t("codeScanner.subtitle")}
               </Text>
 
               <View style={styles.cameraShell}>
@@ -110,11 +112,11 @@ export default function CodeScannerModal({
                   />
                 ) : (
                   <View style={styles.placeholder}>
-                    <Text style={styles.placeholderText}>
-                      {!hasPermission
-                        ? "Camera permission required"
-                        : "Loading camera..."}
-                    </Text>
+                   <Text style={styles.placeholderText}>
+                    {!hasPermission
+                   ? t("codeScanner.permissionRequired")
+                  : t("codeScanner.loadingCamera")}
+                  </Text>
                   </View>
                 )}
 
@@ -122,13 +124,15 @@ export default function CodeScannerModal({
                 {loading && (
                   <View style={styles.loadingOverlay}>
                     <ActivityIndicator size="small" color={ACC} />
-                    <Text style={styles.loadingText}>Looking up asset...</Text>
+                    <Text style={styles.loadingText}>
+                   {t("codeScanner.lookingUp")}
+                  </Text>
                   </View>
                 )}
               </View>
 
               <Text style={styles.helper}>
-                Detection is automatic. No shutter button needed.
+                {t("codeScanner.helper")}
               </Text>
             </View>
           </TouchableWithoutFeedback>

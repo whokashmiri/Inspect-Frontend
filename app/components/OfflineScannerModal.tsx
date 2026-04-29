@@ -1,4 +1,6 @@
+//OfflineScannerModal.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Modal,
   View,
@@ -47,6 +49,7 @@ export default function OfflineScannerModal({
   const device = useCameraDevice("back");
   const { hasPermission, requestPermission } = useCameraPermission();
   const camera = useRef<Camera>(null);
+  const { t } = useTranslation();
 
   const [flash, setFlash] = useState<"off" | "on">("off");
   const [toggles, setToggles] = useState<ScanToggles>(defaultToggles);
@@ -92,7 +95,10 @@ export default function OfflineScannerModal({
   const captureAndProcess = async () => {
     if (!camera.current) return;
     if (!toggles.barcode && !toggles.generalText && !toggles.numbersOnly && !toggles.carPlate) {
-      Alert.alert("Select a scan mode", "Please enable at least one scan option.");
+     Alert.alert(
+        t("scanner.alerts.selectModeTitle"),
+        t("scanner.alerts.selectModeDesc")
+      );
       return;
     }
 
@@ -111,20 +117,29 @@ export default function OfflineScannerModal({
       const ocrResults = await processCapturedImage(uri);
 
       if (!ocrResults.length) {
-        Alert.alert("No text found", "Try again with better light or a steadier shot.");
+       Alert.alert(
+      t("scanner.alerts.noTextTitle"),
+      t("scanner.alerts.noTextDesc")
+      );
         return;
       }
 
       setResults(ocrResults);
     } catch (error) {
       console.log("captureAndProcess error", error);
-      Alert.alert("Scan failed", "Could not process the image. Please try again.");
+      Alert.alert(
+        t("scanner.alerts.failedTitle"),
+        t("scanner.alerts.failedDesc")
+        );
     }
   };
 
   const handleSave = () => {
     if (!results.length) {
-      Alert.alert("No results", "Nothing to save yet.");
+      Alert.alert(
+        t("scanner.alerts.noResultsTitle"),
+        t("scanner.alerts.noResultsDesc")
+      );
       return;
     }
 
@@ -167,54 +182,59 @@ export default function OfflineScannerModal({
 
         <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
           <TouchableOpacity style={styles.topBtn} onPress={onClose}>
-            <Text style={styles.topBtnText}>Close</Text>
+           <Text style={styles.topBtnText}>{t("scanner.close")}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.topBtn}
             onPress={() => setFlash((p) => (p === "off" ? "on" : "off"))}
           >
-            <Text style={styles.topBtnText}>Flash: {flash}</Text>
+            <Text style={styles.topBtnText}>
+            {t("scanner.flash")}: {t(`scanner.flash_${flash}`)}
+            </Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.panel}>
-          <Text style={styles.title}>Offline Multi Scanner</Text>
+         <Text style={styles.title}>{t("scanner.title")}</Text>
 
           <View style={styles.toggleWrap}>
             <ToggleChip
-              label="QR / Barcode"
+               label={t("scanner.modes.barcode")}
               active={toggles.barcode}
               onPress={() => toggleMode("barcode")}
             />
             <ToggleChip
-              label="General Text"
+              label={t("scanner.modes.generalText")}
               active={toggles.generalText}
               onPress={() => toggleMode("generalText")}
             />
             <ToggleChip
-              label="Numbers Only"
+               label={t("scanner.modes.numbersOnly")}
               active={toggles.numbersOnly}
               onPress={() => toggleMode("numbersOnly")}
             />
             <ToggleChip
-              label="Car Plate"
+                label={t("scanner.modes.carPlate")}
               active={toggles.carPlate}
               onPress={() => toggleMode("carPlate")}
             />
           </View>
 
           <Text style={styles.subText}>
-            Active: {selectedModes.length ? selectedModes.join(", ") : "None"}
-          </Text>
+          {t("scanner.active")}:{" "}
+          {selectedModes.length
+            ? selectedModes.map((m) => t(`scanner.modes.${m}`)).join(", ")
+        : t("scanner.none")}
+        </Text>
 
           <View style={styles.resultBox}>
-            <Text style={styles.resultTitle}>Extracted Results</Text>
+            <Text style={styles.resultTitle}>{t("scanner.extractedResults")}</Text>
 
             {isProcessing ? (
               <View style={styles.loadingRow}>
                 <ActivityIndicator />
-                <Text style={styles.loadingText}>Processing offline...</Text>
+                <Text style={styles.loadingText}> {t("scanner.processing")}</Text>
               </View>
             ) : results.length ? (
               <ScrollView style={{ maxHeight: 160 }}>
@@ -227,18 +247,18 @@ export default function OfflineScannerModal({
               </ScrollView>
             ) : (
               <Text style={styles.emptyText}>
-                No results yet. Scan live for barcode or capture for OCR.
+                 {t("scanner.noResults")}
               </Text>
             )}
           </View>
 
           <View style={styles.bottomActions}>
             <TouchableOpacity style={styles.captureBtn} onPress={captureAndProcess}>
-              <Text style={styles.captureBtnText}>Capture</Text>
+              <Text style={styles.captureBtnText}> {t("scanner.capture")}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-              <Text style={styles.saveBtnText}>Save</Text>
+              <Text style={styles.saveBtnText}> {t("scanner.save")}</Text>
             </TouchableOpacity>
           </View>
         </View>

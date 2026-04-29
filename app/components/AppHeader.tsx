@@ -172,9 +172,12 @@ const toggleLanguage = useCallback(async () => {
 
                 <View style={styles.profileTextWrap}>
                   <Text style={styles.profileName}>
-                    {user?.username || "User"}
-                  </Text>
-                  <Text style={styles.profileRole}>{user?.role || "Member"}</Text>
+               {user?.username || t("header.userFallback")}
+              </Text>
+
+            <Text style={styles.profileRole}>
+              {user?.role ? t(`${user.role}`) : t("header.member")} 
+            </Text>
                 </View>
               </View>
 
@@ -189,23 +192,18 @@ const toggleLanguage = useCallback(async () => {
             </View>
 
             <View style={styles.infoGrid}>
-              <InfoRow label="Username" value={user?.username} icon="mail-outline" />
+              <InfoRow   label={t("header.username")} value={user?.username} icon="mail-outline" />
               <InfoRow
-                label="Company"
-
+                label={t("header.company")}
                 value={user?.companyName}
                 icon="business-outline"
               />
               <InfoRow
-                label="Role"
+                label={t("header.role")}
                 value={user?.role}
                 icon="shield-checkmark-outline"
               />
-              {/* <InfoRow
-                label="Status"
-                value="Authenticated"
-                icon="checkmark-circle-outline"
-              /> */}
+          
             </View>
 
             {onLogout ? (
@@ -223,7 +221,7 @@ const toggleLanguage = useCallback(async () => {
                 ) : (
                   <>
                     <Ionicons name="log-out-outline" size={18} color="#000" />
-                    <Text style={styles.logoutButtonText}>Logout</Text>
+                    <Text style={styles.logoutButtonText}> {t("header.logout")}</Text>
                   </>
                 )}
               </TouchableOpacity>

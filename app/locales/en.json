@@ -51,14 +51,12 @@
       "new": "New",
       "done": "Done"
     },
-
     "filters": {
       
       "recent": "Recent",
       "new": "New"
     }
-  },
-       
+  },    
   "folderAssetScreen": {
     "header": {
       "subtitle": "All Folders & Assets of the Project",
@@ -212,6 +210,97 @@
   },
   "commonT": {
     "cancel": "Cancel"
+  },
+  "scanner": {
+    "close": "Close",
+    "flash": "Flash",
+    "flash_on": "On",
+    "flash_off": "Off",
+
+    "title": "Offline Multi Scanner",
+
+    "modes": {
+      "barcode": "QR / Barcode",
+      "generalText": "General Text",
+      "numbersOnly": "Numbers Only",
+      "carPlate": "Car Plate"
+    },
+
+    "active": "Active",
+    "none": "None",
+
+    "extractedResults": "Extracted Results",
+    "processing": "Processing offline...",
+
+    "noResults": "No results yet. Scan live for barcode or capture for OCR.",
+
+    "capture": "Capture",
+    "save": "Save",
+
+    "alerts": {
+      "selectModeTitle": "Select a scan mode",
+      "selectModeDesc": "Please enable at least one scan option.",
+
+      "noTextTitle": "No text found",
+      "noTextDesc": "Try again with better light or a steadier shot.",
+
+      "failedTitle": "Scan failed",
+      "failedDesc": "Could not process the image. Please try again.",
+
+      "noResultsTitle": "No results",
+      "noResultsDesc": "Nothing to save yet."
+    }
+  },
+  "codeScanner": {
+    "title": "Scan Asset Code",
+    "subtitle": "Center the barcode or QR inside the frame.",
+    "permissionRequired": "Camera permission required",
+    "loadingCamera": "Loading camera...",
+    "lookingUp": "Looking up asset...",
+    "helper": "Detection is automatic. No shutter button needed."
+  
+},
+  "login": {
+    "title": "Welcome Back",
+    "subtitle": "Sign in to continue",
+
+    "username": "Username",
+    "password": "Password",
+
+    "usernamePlaceholder": "Username",
+    "passwordPlaceholder": "Your password",
+
+    "forgotPassword": "Forgot password?",
+    "signIn": "Sign in",
+
+    "togglePassword": "Toggle password visibility",
+
+    "failedTitle": "Login failed",
+
+    "errors": {
+      "usernameRequired": "Username is required.",
+      "passwordRequired": "Password is required."
+    }
+  },
+
+  "commonL": {
+    "somethingWentWrong": "Something went wrong."
+  },
+  "header": {
+    "username": "Username",
+    "company": "Company",
+    "role": "Role",
+    "logout": "Logout",
+    "member": "Member",
+    "userFallback": "User"
+  },
+  "roles": {
+    "Manager": "Manager",
+    "Inspector": "Inspector",
+    "Valuator": "Valuator",
+    "company_admin": "Company Admin"
   }
 }
+
+
 

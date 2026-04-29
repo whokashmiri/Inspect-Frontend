@@ -16,13 +16,14 @@ import  fonts  from '../fonts/fonts';
 import { useRouter } from "expo-router";
 import { useAuth } from "../../api/AuthContext";
 import { ApiError } from "../../api/api";
+import { useTranslation } from "react-i18next";
 
 export default function LoginScreen() {
       const [loaded] = useFonts({
     ...fonts.poppins,
     ...fonts.inter,
   });
-
+const { t } = useTranslation();
   const router = useRouter();
   const { login } = useAuth();
 
@@ -37,8 +38,8 @@ export default function LoginScreen() {
   // ── Validation ────────────────────────────────────────────────────────────
   function validate() {
     const e: typeof errors = {};
-    if (!username.trim()) e.username = "Username is required.";
-    if (!password) e.password = "Password is required.";
+    if (!username.trim()) e.username = t("login.errors.usernameRequired");
+    if (!password) e.password = t("login.errors.passwordRequired");
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -51,9 +52,12 @@ export default function LoginScreen() {
       await login(username.trim().toLowerCase(), password);
       // Navigation is handled by the root layout based on auth state
     } catch (err) {
-      const msg =
-        err instanceof ApiError ? err.message : "Something went wrong.";
-      Alert.alert("Login failed", msg);
+     const msg =
+      err instanceof ApiError
+    ? err.message
+    : t("common.somethingWentWrong");
+
+    Alert.alert(t("login.failedTitle"), msg);
     } finally {
       setLoading(false);
     }
@@ -73,18 +77,18 @@ export default function LoginScreen() {
           <View style={styles.logoMark}>
             <View style={styles.logoInner} />
           </View>
-          <Text style={styles.title}>Welcome Back</Text>
-          <Text style={styles.subtitle}>Sign in to continue</Text>
+          <Text style={styles.title}>{t("login.title")}</Text>
+          <Text style={styles.subtitle}>{t("login.subtitle")}</Text>
         </View>
 
         {/* ── Form ── */}
         <View style={styles.form}>
           {/* Username */}
           <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Username</Text>
+            <Text style={styles.label}>{t("login.username")}</Text>
             <TextInput
               style={[styles.input, errors.username && styles.inputError]}
-              placeholder="Username"
+              placeholder={t("login.usernamePlaceholder")}
               placeholderTextColor="#555"
               value={username}
               onChangeText={(t) => {
@@ -103,13 +107,13 @@ export default function LoginScreen() {
 
           {/* Password */}
           <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Password</Text>
+            <Text style={styles.label}>{t("login.password")}</Text>
             <View
               style={[styles.inputRow, errors.password && styles.inputError]}
             >
               <TextInput
                 style={styles.inputInner}
-                placeholder="Your password"
+              placeholder={t("login.passwordPlaceholder")}
                 placeholderTextColor="#555"
                 value={password}
                 onChangeText={(t) => {
@@ -135,7 +139,9 @@ export default function LoginScreen() {
 
           {/* Forgot */}
           <TouchableOpacity style={styles.forgotWrap}>
-            <Text style={styles.forgotText}>Forgot password?</Text>
+            <Text style={styles.forgotText}>
+          {t("login.forgotPassword")}
+        </Text>
           </TouchableOpacity>
 
           {/* CTA */}
@@ -148,18 +154,11 @@ export default function LoginScreen() {
             {loading ? (
               <ActivityIndicator color="#000" />
             ) : (
-              <Text style={styles.btnText}>Sign in</Text>
+              <Text style={styles.btnText}>{t("login.signIn")}</Text>
             )}
           </TouchableOpacity>
         </View>
 
-        {/* ── Footer ── */}
-        {/* <View style={styles.footer}>
-          <Text style={styles.footerText}>Don't have an account? </Text>
-          <TouchableOpacity onPress={() => router.push("/signup")}>
-            <Text style={styles.footerLink}>Create One</Text>
-          </TouchableOpacity>
-        </View> */}
       </ScrollView>
     </KeyboardAvoidingView>
   );
