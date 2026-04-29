@@ -5,9 +5,6 @@
         "longDescription": " We’ll keep this space clean until new features arrive.",
         "header":"Asset Inspection Platform"
     },
- 
-    
-
   "projectPage": {
     "title": "Your Company",
     "description": "Manage your company projects",
@@ -59,7 +56,8 @@
       
       "recent": "Recent",
       "new": "New"
-    },
+    }
+  },
        
   "folderAssetScreen": {
     "header": {
@@ -136,8 +134,6 @@
       "defaultMessage": "Advanced search failed"
     }
   },
-
-
   "common": {
     "error": "Error",
     "validation": "Validation",
@@ -196,9 +192,26 @@
     "playbackNotAvailable": "Playback not available",
     "remoteVoicePlaybackMessage": "Voice notes from saved assets cannot be played in the editor. You can listen to them after saving the asset.",
     "couldNotPlayVoiceNote": "Could not play voice note."
-  
+},
+  "camera": {
+    "close": "Close",
+    "scanMode": "Scan Mode",
+    "photoMode": "Photo Mode",
+    "extractedText": "Extracted Text",
+    "processing": "Processing image...",
+    "scanPlaceholder": "Capture an image to scan and append text into Step 3 description.",
+    "captureAgain": "You can capture again.",
+    "doneWithCount": "Done ({{count}})",
+    "useResult": "Use Result",
+    "scan": "Scan",
+    "noTextDetected": "Nothing detected. Try again with better light or move closer.",
+    "extractFailed": "Could not extract text or barcode from this image.",
+    "captureFailed": "Could not capture image. Please try again.",
+    "codeDetected": "Code: {{value}}",
+    "scanError": "Something went wrong"
+  },
+  "commonT": {
+    "cancel": "Cancel"
+  }
 }
 
-
-}
-}

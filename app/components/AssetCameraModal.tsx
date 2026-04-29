@@ -233,7 +233,7 @@ const lastScannedAtRef = useRef<number>(0);
     lastScannedAtRef.current = now;
 
     setScanError("");
-    setScanText(`Code: ${value}`);
+   setScanText(t("camera.codeDetected", { value }));
     setHasLiveCodeResult(true);
   },
 });
@@ -273,21 +273,21 @@ const lastScannedAtRef = useRef<number>(0);
       const cleaned = extracted?.trim() ?? "";
 
       if (!cleaned) {
-        setScanError("Nothing detected. Try again with better light or move closer.");
+        setScanError(t("camera.noTextDetected"));
         return;
       }
 
       setScanText(cleaned);
     } catch (error) {
       console.log("Scan processing error:", error);
-      setScanError("Could not extract text or barcode from this image.");
+      setScanError(t("camera.extractFailed"));
     } finally {
       setIsProcessingScan(false);
     }
   } catch (error) {
     console.log("Take photo error:", error);
     if (mode === "scan") {
-      setScanError("Could not capture image. Please try again.");
+     setScanError(t("camera.captureFailed"));
     }
   }
 };
@@ -409,30 +409,34 @@ const lastScannedAtRef = useRef<number>(0);
               <View style={styles.processingRow}>
                 <ActivityIndicator color={ACC} />
                 <Text style={styles.processingText}>
-  {t("camera.processing")}
-</Text>
+                {t("camera.processing")}
+                </Text>
               </View>
             ) : scanText ? (
               <Text numberOfLines={5} style={styles.scanPreviewText}>
                 {scanText}
               </Text>
             ) : scanError ? (
-              <Text style={styles.scanErrorText}>{scanError}</Text>
+              <Text style={styles.scanErrorText}>
+              {scanError || t("camera.scanError")}
+              </Text>
             ) : (
               <Text style={styles.scanPlaceholderText}>
-                Capture an image to scan and append text into Step 3 description.
-              </Text>
+            {t("camera.scanPlaceholder")}
+            </Text>
             )}
 
             {!!lastCapturedScanPath && !scanText && !isProcessingScan && (
-              <Text style={styles.scanHintText}>You can capture again.</Text>
+              <Text style={styles.scanHintText}>
+              {t("camera.captureAgain")}
+              </Text>
             )}
           </View>
         )}
 
         <View style={[styles.bottomBar, { bottom: insets.bottom + 10 }]}>
           <TouchableOpacity style={styles.smallBtn} onPress={handleDismiss}>
-            <Text style={styles.btnText}>Cancel</Text>
+            <Text style={styles.btnText}>{t("commonT.cancel")}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -451,13 +455,14 @@ const lastScannedAtRef = useRef<number>(0);
             onPress={handlePrimaryDone}
             disabled={doneDisabled}
           >
-            <Text style={[styles.btnText, doneDisabled && styles.btnTextDisabled]}>
-              {mode === "photos"
-              ? `Done (${photos.length})`
+            <Text
+            style={[styles.btnText, doneDisabled && styles.btnTextDisabled]}>
+            {mode === "photos"
+            ? t("camera.doneWithCount", { count: photos.length })
               : scanText
-              ? "Use Result"
-              : "Scan"}
-            </Text>
+              ? t("camera.useResult")
+              : t("camera.scan")}
+              </Text>
           </TouchableOpacity>
         </View>
       </View>

@@ -5,19 +5,16 @@
     "longDescription": "سنحافظ على هذه المساحة فارغة حتى تتوفر ميزات جديدة.",
     "header": "منصة فحص الأصول"
   },
-
   "projectPage": {
     "title": "شركتك",
     "description": "إدارة مشاريع الشركة",
     "switchCompany": "تبديل الشركة",
     "header": "منصة فحص الأصول"
   },
-
   "filters": {
     "recent": "الأحدث",
     "new": "جديد"
   },
-
   "projectScreen": {
     "empty": "لا توجد مشاريع.",
     "createdBy": "تم الإنشاء بواسطة: {{name}}",
@@ -193,8 +190,29 @@
     "playbackNotAvailable": "التشغيل غير متاح",
     "remoteVoicePlaybackMessage": "لا يمكن تشغيل الملاحظات الصوتية المحفوظة داخل شاشة التعديل. يمكنك الاستماع إليها بعد حفظ الأصل.",
     "couldNotPlayVoiceNote": "تعذر تشغيل الملاحظة الصوتية."
+  },
+  "camera": {
+    "close": "إغلاق",
+    "scanMode": "وضع المسح",
+    "photoMode": "وضع التصوير",
+    "extractedText": "النص المستخرج",
+    "processing": "جارٍ معالجة الصورة...",
+    "scanPlaceholder": "التقط صورة لمسح النص وإضافته إلى وصف الخطوة 3.",
+    "captureAgain": "يمكنك الالتقاط مرة أخرى.",
+    "doneWithCount": "تم ({{count}})",
+    "useResult": "استخدام النتيجة",
+    "scan": "مسح",
+    "noTextDetected": "لم يتم اكتشاف شيء. حاول مرة أخرى بإضاءة أفضل أو اقترب أكثر.",
+    "extractFailed": "تعذر استخراج النص أو الرمز من هذه الصورة.",
+    "captureFailed": "تعذر التقاط الصورة. حاول مرة أخرى.",
+    "codeDetected": "الكود: {{value}}",
+    "scanError": "حدث خطأ ما"
+  },
+  "commonT": {
+    "cancel": "إلغاء"
   }
 }
+
 
 
 
