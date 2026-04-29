@@ -12,6 +12,7 @@ const KEYS = {
   accessToken: "auth.accessToken",
   refreshToken: "auth.refreshToken",
   sessionMeta: "auth.sessionMeta",
+  preferredLanguage: "app.preferredLanguage",
 };
 
 const OFFLINE_AUTH_DAYS = 14;
@@ -224,4 +225,18 @@ export async function clearOfflineAuthState() {
   await clearCachedUser();
   await clearSelectedCompany(cachedUser?.id);
   await clearCachedCompanies(cachedUser?.id);
+}
+
+/* ✅ LANGUAGE PREFERENCE STORAGE */
+export async function saveLanguagePreference(language: "ar" | "en") {
+  await SecureStore.setItemAsync(KEYS.preferredLanguage, language);
+}
+
+export async function getLanguagePreference(): Promise<"ar" | "en"> {
+  const language = await SecureStore.getItemAsync(KEYS.preferredLanguage);
+  return (language as "ar" | "en") || "ar"; // Default to Arabic
+}
+
+export async function clearLanguagePreference() {
+  await SecureStore.deleteItemAsync(KEYS.preferredLanguage);
 }

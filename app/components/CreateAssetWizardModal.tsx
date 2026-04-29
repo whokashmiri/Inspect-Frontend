@@ -6,7 +6,6 @@ import {
   Text,
   TouchableOpacity,
   TextInput,
-  StyleSheet,
   Alert,
   Image,
   ScrollView,
@@ -16,11 +15,13 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
   LayoutChangeEvent,
+  StyleSheet
 } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import * as ImagePicker from "expo-image-picker";
 import { Audio } from "expo-av";
 import { MaterialIcons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import AssetCameraModal from "./AssetCameraModal";
 import { AssetDraft } from "./utils/types";
 import { AudioModule, RecordingPresets, useAudioRecorder } from "expo-audio";
@@ -74,18 +75,23 @@ export default function CreateAssetWizardModal({
   initialData,
   disableAssetName = false,
 }: Props) {
+  const { t } = useTranslation();
+
   const [step, setStep] = useState(1);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
 
   const { width } = useWindowDimensions();
   const isSmallScreen = width < 380;
+
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
+
   const soundObjectRef = useRef<any>(null);
   const [playingIndex, setPlayingIndex] = useState<number | null>(null);
 
   const scrollRef = useRef<ScrollView>(null);
+  const fieldPositions = useRef<Record<string, number>>({});
 
   const [draft, setDraft] = useState<ExtendedAssetDraft>(
     getInitialDraft(initialData)
@@ -102,68 +108,12 @@ export default function CreateAssetWizardModal({
     }
   }, [visible, initialData]);
 
-  const playVoiceNote = async (uri: string, index: number) => {
-    try {
-      // Check if this is a remote URL (Cloudinary)
-      if (uri.startsWith('http') || uri.startsWith('//')) {
-        Alert.alert("Playback not available", "Voice notes from saved assets cannot be played in the editor. You can listen to them after saving the asset.");
-        return;
-      }
-
-      if (playingIndex === index && soundObjectRef.current) {
-        await soundObjectRef.current.pauseAsync();
-        setPlayingIndex(null);
-        return;
-      }
-
-      if (soundObjectRef.current) {
-        await soundObjectRef.current.unloadAsync();
-      }
-
-      // Ensure URI is properly formatted for expo-av
-      const formattedUri = uri.startsWith('file://') ? uri : `file://${uri}`;
-
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: formattedUri },
-        { shouldPlay: true }
-      );
-      soundObjectRef.current = sound;
-      setPlayingIndex(index);
-
-      sound.setOnPlaybackStatusUpdate((status: any) => {
-        if (status.didJustFinish) {
-          setPlayingIndex(null);
-        }
-      });
-    } catch (error) {
-      console.error("Error playing voice note:", error);
-      Alert.alert("Error", "Could not play voice note.");
-    }
-  };
-
-  const stopVoicePlayback = async () => {
-    try {
-      if (soundObjectRef.current) {
-        await soundObjectRef.current.unloadAsync();
-        soundObjectRef.current = null;
-      }
-      setPlayingIndex(null);
-    } catch (error) {
-      console.error("Error stopping playback:", error);
-    }
-  };
-
-  const next = () => setStep((s) => Math.min(s + 1, 3));
-  const back = () => setStep((s) => Math.max(s - 1, 1));
-
   const previewSize = useMemo(() => {
     const horizontalPadding = 40;
     const gridGapTotal = 4 * 8;
     const available = width - horizontalPadding - gridGapTotal;
     return Math.max(48, Math.floor(available / 5));
   }, [width]);
-
-  const fieldPositions = useRef<Record<string, number>>({});
 
   const setFieldPosition = (key: string) => (e: LayoutChangeEvent) => {
     fieldPositions.current[key] = e.nativeEvent.layout.y;
@@ -179,6 +129,9 @@ export default function CreateAssetWizardModal({
       });
     }, 120);
   };
+
+  const next = () => setStep((s) => Math.min(s + 1, 3));
+  const back = () => setStep((s) => Math.max(s - 1, 1));
 
   const openPhotoCamera = () => {
     setCameraMode("photos");
@@ -214,7 +167,10 @@ export default function CreateAssetWizardModal({
         await ImagePicker.requestMediaLibraryPermissionsAsync();
 
       if (!permission.granted) {
-        Alert.alert("Permission required", "Please allow photo library access.");
+        Alert.alert(
+          t("asset.permissionRequired"),
+          t("asset.photoPermissionMessage")
+        );
         return;
       }
 
@@ -238,7 +194,7 @@ export default function CreateAssetWizardModal({
         images: [...prev.images, ...mapped],
       }));
     } catch {
-      Alert.alert("Error", "Unable to pick images from phone.");
+      Alert.alert(t("common.error"), t("asset.unablePickImages"));
     }
   };
 
@@ -247,7 +203,10 @@ export default function CreateAssetWizardModal({
       const status = await AudioModule.requestRecordingPermissionsAsync();
 
       if (!status.granted) {
-        Alert.alert("Permission required", "Microphone permission is required.");
+        Alert.alert(
+          t("asset.permissionRequired"),
+          t("asset.microphonePermissionMessage")
+        );
         return;
       }
 
@@ -256,7 +215,7 @@ export default function CreateAssetWizardModal({
       setIsRecording(true);
     } catch (error) {
       console.error("Start recording failed:", error);
-      Alert.alert("Error", "Could not start recording.");
+      Alert.alert(t("common.error"), t("asset.couldNotStartRecording"));
     }
   };
 
@@ -282,7 +241,63 @@ export default function CreateAssetWizardModal({
       }
     } catch (error) {
       console.error("Stop recording failed:", error);
-      Alert.alert("Error", "Could not stop recording.");
+      Alert.alert(t("common.error"), t("asset.couldNotStopRecording"));
+    }
+  };
+
+  const playVoiceNote = async (uri: string, index: number) => {
+    try {
+      const isRemote = uri.startsWith("http") || uri.startsWith("//");
+
+      if (isRemote) {
+        Alert.alert(
+          t("asset.playbackNotAvailable"),
+          t("asset.remoteVoicePlaybackMessage")
+        );
+        return;
+      }
+
+      if (playingIndex === index && soundObjectRef.current) {
+        await soundObjectRef.current.pauseAsync();
+        setPlayingIndex(null);
+        return;
+      }
+
+      if (soundObjectRef.current) {
+        await soundObjectRef.current.unloadAsync();
+      }
+
+      const formattedUri = uri.startsWith("file://") ? uri : `file://${uri}`;
+
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: formattedUri },
+        { shouldPlay: true }
+      );
+
+      soundObjectRef.current = sound;
+      setPlayingIndex(index);
+
+      sound.setOnPlaybackStatusUpdate((status: any) => {
+        if (status.didJustFinish) {
+          setPlayingIndex(null);
+        }
+      });
+    } catch (error) {
+      console.error("Error playing voice note:", error);
+      Alert.alert(t("common.error"), t("asset.couldNotPlayVoiceNote"));
+    }
+  };
+
+  const stopVoicePlayback = async () => {
+    try {
+      if (soundObjectRef.current) {
+        await soundObjectRef.current.unloadAsync();
+        soundObjectRef.current = null;
+      }
+
+      setPlayingIndex(null);
+    } catch (error) {
+      console.error("Error stopping playback:", error);
     }
   };
 
@@ -301,7 +316,6 @@ export default function CreateAssetWizardModal({
   };
 
   const handleClose = async () => {
-    // Stop any ongoing recording before closing
     if (isRecording) {
       try {
         await stopRecording();
@@ -311,37 +325,44 @@ export default function CreateAssetWizardModal({
     }
 
     await stopVoicePlayback();
+
     setStep(1);
     setIsRecording(false);
     setCameraMode("photos");
+
     Keyboard.dismiss();
     onClose();
   };
 
   const handleFinish = async () => {
     if (!draft.name?.trim()) {
-      Alert.alert("Validation", "Asset Name is required");
+      Alert.alert(t("common.validation"), t("asset.assetNameRequired"));
       return;
     }
 
-    // Check if recording is in progress
     if (isRecording) {
       Alert.alert(
-        "Recording in Progress",
-        "Please stop the voice recording before saving the asset.",
+        t("asset.recordingInProgress"),
+        t("asset.stopRecordingBeforeSaving"),
         [
-          { text: "Stop Recording & Save", onPress: async () => {
-            try {
-              await stopRecording();
-              // After stopping, proceed with save
-              handleFinish();
-            } catch (error) {
-              Alert.alert("Error", "Failed to stop recording. Please try again.");
-            }
-          }},
-          { text: "Cancel", style: "cancel" }
+          {
+            text: t("asset.stopRecordingAndSave"),
+            onPress: async () => {
+              try {
+                await stopRecording();
+                handleFinish();
+              } catch {
+                Alert.alert(t("common.error"), t("asset.couldNotStopRecording"));
+              }
+            },
+          },
+          {
+            text: t("common.cancel"),
+            style: "cancel",
+          },
         ]
       );
+
       return;
     }
 
@@ -350,14 +371,20 @@ export default function CreateAssetWizardModal({
     try {
       submitPromise = Promise.resolve(onSubmit(draft));
     } catch (error: any) {
-      Alert.alert("Error", error?.message || "Failed to save asset");
+      Alert.alert(
+        t("common.error"),
+        error?.message || t("asset.failedToSaveAsset")
+      );
       return;
     }
 
     handleClose();
 
     submitPromise.catch((error) => {
-      Alert.alert("Error", error?.message || "Failed to save asset");
+      Alert.alert(
+        t("common.error"),
+        error?.message || t("asset.failedToSaveAsset")
+      );
     });
   };
 
@@ -385,8 +412,11 @@ export default function CreateAssetWizardModal({
                 >
                   <View style={styles.header}>
                     <Text style={styles.title}>
-                      {mode === "edit" ? "Edit Asset" : "Create Asset"}
+                      {mode === "edit"
+                        ? t("asset.editAsset")
+                        : t("asset.createAsset")}
                     </Text>
+
                     <TouchableOpacity
                       onPress={handleClose}
                       style={styles.closeBtn}
@@ -396,7 +426,9 @@ export default function CreateAssetWizardModal({
                     </TouchableOpacity>
                   </View>
 
-                  <Text style={styles.step}>Step {step} of 3</Text>
+                  <Text style={styles.step}>
+                    {t("asset.stepOf", { step, total: 3 })}
+                  </Text>
 
                   <ScrollView
                     ref={scrollRef}
@@ -411,7 +443,9 @@ export default function CreateAssetWizardModal({
                   >
                     {step === 1 && (
                       <>
-                        <Text style={styles.label}>Upload Images</Text>
+                        <Text style={styles.label}>
+                          {t("asset.uploadImages")}
+                        </Text>
 
                         <View style={styles.imageActionRow}>
                           <TouchableOpacity
@@ -419,7 +453,9 @@ export default function CreateAssetWizardModal({
                             onPress={openPhotoCamera}
                             activeOpacity={0.85}
                           >
-                            <Text style={styles.primaryText}>Open Camera</Text>
+                            <Text style={styles.primaryText}>
+                              {t("asset.openCamera")}
+                            </Text>
                           </TouchableOpacity>
 
                           <TouchableOpacity
@@ -428,7 +464,7 @@ export default function CreateAssetWizardModal({
                             activeOpacity={0.85}
                           >
                             <Text style={styles.darkBtnText}>
-                              Upload from Phone
+                              {t("asset.uploadFromPhone")}
                             </Text>
                           </TouchableOpacity>
 
@@ -438,17 +474,16 @@ export default function CreateAssetWizardModal({
                             activeOpacity={0.85}
                           >
                             <Text style={styles.darkBtnText}>
-                              Scan Text
+                              {t("asset.scanText")}
                             </Text>
                           </TouchableOpacity>
                         </View>
 
                         <Text style={styles.helper}>
-                          {draft.images.length} image
-                          {draft.images.length === 1 ? "" : "s"} selected
+                          {t("asset.imagesSelected", {
+                            count: draft.images.length,
+                          })}
                         </Text>
-
-                        
 
                         {draft.images.length > 0 && (
                           <View style={styles.previewGrid}>
@@ -467,6 +502,7 @@ export default function CreateAssetWizardModal({
                                   source={{ uri: img.uri }}
                                   style={styles.previewImage}
                                 />
+
                                 <TouchableOpacity
                                   style={styles.removeBadge}
                                   onPress={() => removeImage(index)}
@@ -475,45 +511,55 @@ export default function CreateAssetWizardModal({
                                 </TouchableOpacity>
                               </View>
                             ))}
-
                           </View>
                         )}
 
+                        <View style={styles.row}>
+                          <TouchableOpacity
+                            onPress={() =>
+                              setDraft((prev) => ({
+                                ...prev,
+                                isPresent: !prev.isPresent,
+                              }))
+                            }
+                            style={[
+                              styles.checkboxIsPresent,
+                              draft.isPresent && styles.checkboxActive,
+                            ]}
+                          >
+                            {draft.isPresent && (
+                              <Text style={styles.checkmarkIsPresent}>✓</Text>
+                            )}
+                          </TouchableOpacity>
 
-  <View style={styles.row}>
-  <TouchableOpacity
-    onPress={() => setDraft(prev => ({ ...prev, isPresent: !prev.isPresent }))}
-    style={[
-      styles.checkboxIsPresent,
-      draft.isPresent && styles.checkboxActive
-    ]}
-  >
-    {draft.isPresent && <Text style={styles.checkmarkIsPresent}>✓</Text>}
-  </TouchableOpacity>
-
-  <Text style={styles.checkboxLabelIsPresent}>
-    Asset is present
-  </Text>
-</View>
-
+                          <Text style={styles.checkboxLabelIsPresent}>
+                            {t("asset.assetIsPresent")}
+                          </Text>
+                        </View>
                       </>
-
-                      
                     )}
 
                     {step === 2 && (
                       <>
-                        <Text style={styles.label}>Asset Details</Text>
+                        <Text style={styles.label}>
+                          {t("asset.assetDetails")}
+                        </Text>
 
                         <View onLayout={setFieldPosition("name")}>
-                          <Text style={styles.fieldLabel}>Asset Name</Text>
+                          <Text style={styles.fieldLabel}>
+                            {t("asset.assetName")}
+                          </Text>
+
                           <TextInput
-                            placeholder="Asset Name"
+                            placeholder={t("asset.assetName")}
                             placeholderTextColor="#666"
                             value={draft.name}
-                            onChangeText={(t) => {
+                            onChangeText={(text) => {
                               if (!disableAssetName) {
-                                setDraft((prev) => ({ ...prev, name: t }));
+                                setDraft((prev) => ({
+                                  ...prev,
+                                  name: text,
+                                }));
                               }
                             }}
                             editable={!disableAssetName}
@@ -528,7 +574,10 @@ export default function CreateAssetWizardModal({
                           />
                         </View>
 
-                        <Text style={styles.fieldLabel}>Condition</Text>
+                        <Text style={styles.fieldLabel}>
+                          {t("asset.condition")}
+                        </Text>
+
                         <View style={styles.pickerWrap}>
                           <Picker
                             selectedValue={draft.condition}
@@ -541,14 +590,29 @@ export default function CreateAssetWizardModal({
                             dropdownIconColor="#fff"
                             style={styles.picker}
                           >
-                            <Picker.Item label="Good" value="Good" />
-                            <Picker.Item label="New" value="New" />
-                            <Picker.Item label="Used" value="Used" />
-                            <Picker.Item label="Damaged" value="Damaged" />
+                            <Picker.Item
+                              label={t("asset.conditionGood")}
+                              value="Good"
+                            />
+                            <Picker.Item
+                              label={t("asset.conditionNew")}
+                              value="New"
+                            />
+                            <Picker.Item
+                              label={t("asset.conditionUsed")}
+                              value="Used"
+                            />
+                            <Picker.Item
+                              label={t("asset.conditionDamaged")}
+                              value="Damaged"
+                            />
                           </Picker>
                         </View>
 
-                        <Text style={styles.fieldLabel}>Asset Type</Text>
+                        <Text style={styles.fieldLabel}>
+                          {t("asset.assetType")}
+                        </Text>
+
                         <View style={styles.pickerWrap}>
                           <Picker
                             selectedValue={draft.assetType}
@@ -561,21 +625,33 @@ export default function CreateAssetWizardModal({
                             dropdownIconColor="#fff"
                             style={styles.picker}
                           >
-                            <Picker.Item label="Other" value="Other" />
-                            <Picker.Item label="Vehicle" value="Vehicle" />
+                            <Picker.Item
+                              label={t("asset.typeOther")}
+                              value="Other"
+                            />
+                            <Picker.Item
+                              label={t("asset.typeVehicle")}
+                              value="Vehicle"
+                            />
                           </Picker>
                         </View>
 
                         {draft.assetType === "Vehicle" && (
                           <>
                             <View onLayout={setFieldPosition("brand")}>
-                              <Text style={styles.fieldLabel}>Brand</Text>
+                              <Text style={styles.fieldLabel}>
+                                {t("asset.brand")}
+                              </Text>
+
                               <TextInput
-                                placeholder="Brand"
+                                placeholder={t("asset.brand")}
                                 placeholderTextColor="#666"
                                 value={draft.brand}
-                                onChangeText={(t) =>
-                                  setDraft((prev) => ({ ...prev, brand: t }))
+                                onChangeText={(text) =>
+                                  setDraft((prev) => ({
+                                    ...prev,
+                                    brand: text,
+                                  }))
                                 }
                                 style={styles.input}
                                 returnKeyType="next"
@@ -585,13 +661,19 @@ export default function CreateAssetWizardModal({
                             </View>
 
                             <View onLayout={setFieldPosition("model")}>
-                              <Text style={styles.fieldLabel}>Model</Text>
+                              <Text style={styles.fieldLabel}>
+                                {t("asset.model")}
+                              </Text>
+
                               <TextInput
-                                placeholder="Model"
+                                placeholder={t("asset.model")}
                                 placeholderTextColor="#666"
                                 value={draft.model}
-                                onChangeText={(t) =>
-                                  setDraft((prev) => ({ ...prev, model: t }))
+                                onChangeText={(text) =>
+                                  setDraft((prev) => ({
+                                    ...prev,
+                                    model: text,
+                                  }))
                                 }
                                 style={[styles.input, styles.modelInput]}
                                 returnKeyType="next"
@@ -600,42 +682,56 @@ export default function CreateAssetWizardModal({
                               />
                             </View>
 
-                            <View onLayout={setFieldPosition("manufactureYear")}>
-                              <Text style={styles.fieldLabel}>Manufacture Year</Text>
+                            <View
+                              onLayout={setFieldPosition("manufactureYear")}
+                            >
+                              <Text style={styles.fieldLabel}>
+                                {t("asset.manufactureYear")}
+                              </Text>
+
                               <TextInput
-                                placeholder="Manufacture Year"
+                                placeholder={t("asset.manufactureYear")}
                                 placeholderTextColor="#666"
                                 value={draft.manufactureYear}
-                                onChangeText={(t) =>
+                                onChangeText={(text) =>
                                   setDraft((prev) => ({
                                     ...prev,
-                                    manufactureYear: t,
+                                    manufactureYear: text,
                                   }))
                                 }
                                 keyboardType="numeric"
                                 style={styles.input}
                                 returnKeyType="next"
                                 blurOnSubmit={false}
-                                onFocus={() => scrollToField("manufactureYear")}
+                                onFocus={() =>
+                                  scrollToField("manufactureYear")
+                                }
                               />
                             </View>
 
-                            <View onLayout={setFieldPosition("kilometersDriven")}>
-                              <Text style={styles.fieldLabel}>Kilometers Driven / Hours Used</Text>
+                            <View
+                              onLayout={setFieldPosition("kilometersDriven")}
+                            >
+                              <Text style={styles.fieldLabel}>
+                                {t("asset.kilometersDriven")}
+                              </Text>
+
                               <TextInput
-                                placeholder="Kilometers Driven / Hours Used"
+                                placeholder={t("asset.kilometersDriven")}
                                 placeholderTextColor="#666"
                                 value={draft.kilometersDriven}
-                                onChangeText={(t) =>
+                                onChangeText={(text) =>
                                   setDraft((prev) => ({
                                     ...prev,
-                                    kilometersDriven: t,
+                                    kilometersDriven: text,
                                   }))
                                 }
                                 keyboardType="numeric"
                                 style={styles.input}
                                 returnKeyType="done"
-                                onFocus={() => scrollToField("kilometersDriven")}
+                                onFocus={() =>
+                                  scrollToField("kilometersDriven")
+                                }
                               />
                             </View>
                           </>
@@ -646,42 +742,51 @@ export default function CreateAssetWizardModal({
                     {step === 3 && (
                       <>
                         <View style={styles.descriptionHeader}>
-                          <Text style={styles.label}>Description</Text>
+                          <Text style={styles.label}>
+                            {t("asset.description")}
+                          </Text>
 
                           <TouchableOpacity
                             style={styles.scanBtn}
                             onPress={openScanCamera}
                             activeOpacity={0.85}
                           >
-                            <Text style={styles.scanBtnText}>Scan Text</Text>
+                            <Text style={styles.scanBtnText}>
+                              {t("asset.scanText")}
+                            </Text>
                           </TouchableOpacity>
                         </View>
 
-                        <View onLayout={setFieldPosition("writtenDescription")} style={styles.descriptionInputWrapper}>
+                        <View
+                          onLayout={setFieldPosition("writtenDescription")}
+                          style={styles.descriptionInputWrapper}
+                        >
                           <TextInput
-                            placeholder="Write something..."
+                            placeholder={t("asset.writeSomething")}
                             placeholderTextColor="#666"
                             value={draft.writtenDescription}
-                            onChangeText={(t) =>
+                            onChangeText={(text) =>
                               setDraft((prev) => ({
                                 ...prev,
-                                writtenDescription: t,
+                                writtenDescription: text,
                               }))
                             }
                             style={[styles.input, styles.textArea]}
                             multiline
-                            scrollEnabled={true}
+                            scrollEnabled
                             textAlignVertical="top"
-                            onFocus={() => scrollToField("writtenDescription")}
+                            onFocus={() =>
+                              scrollToField("writtenDescription")
+                            }
                           />
                         </View>
 
                         <Text style={styles.helper}>
-                          Scanned text will be appended here automatically.
+                          {t("asset.scannedTextHelper")}
                         </Text>
 
                         <Text style={[styles.label, { marginTop: 8 }]}>
-                          Voice Notes
+                          {t("asset.voiceNotes")}
                         </Text>
 
                         <TouchableOpacity
@@ -689,7 +794,9 @@ export default function CreateAssetWizardModal({
                           onPress={isRecording ? stopRecording : startRecording}
                         >
                           <Text style={styles.primaryText}>
-                            {isRecording ? "Stop Recording" : "Record Voice Note"}
+                            {isRecording
+                              ? t("asset.stopRecording")
+                              : t("asset.recordVoiceNote")}
                           </Text>
                         </TouchableOpacity>
 
@@ -709,43 +816,78 @@ export default function CreateAssetWizardModal({
                               draft.isDone && styles.checkboxChecked,
                             ]}
                           >
-                            {draft.isDone && <Text style={styles.checkmark}>✓</Text>}
+                            {draft.isDone && (
+                              <Text style={styles.checkmark}>✓</Text>
+                            )}
                           </View>
-                          <Text style={styles.checkboxLabel}>Mark as Done</Text>
+
+                          <Text style={styles.checkboxLabel}>
+                            {t("asset.markAsDone")}
+                          </Text>
                         </TouchableOpacity>
 
                         <Text style={styles.helper}>
-                          {(draft.voiceNotes || []).length} voice note
-                          {(draft.voiceNotes || []).length === 1 ? "" : "s"} added
+                          {t("asset.voiceNotesAdded", {
+                            count: draft.voiceNotes?.length || 0,
+                          })}
                         </Text>
 
                         {(draft.voiceNotes || []).map((note, index) => {
-                          const isRemote = note.uri.startsWith('http') || note.uri.startsWith('//');
+                          const isRemote =
+                            note.uri.startsWith("http") ||
+                            note.uri.startsWith("//");
                           const canPlay = !isRemote;
 
                           return (
-                            <View key={`${note.uri}-${index}`} style={styles.voiceItem}>
+                            <View
+                              key={`${note.uri}-${index}`}
+                              style={styles.voiceItem}
+                            >
                               <View style={styles.voiceActionsLeft}>
-                                <TouchableOpacity onPress={() => removeVoiceNote(index)} activeOpacity={0.7}>
-                                  <MaterialIcons name="delete-outline" size={20} color="#ff6b6b" />
+                                <TouchableOpacity
+                                  onPress={() => removeVoiceNote(index)}
+                                  activeOpacity={0.7}
+                                >
+                                  <MaterialIcons
+                                    name="delete-outline"
+                                    size={20}
+                                    color="#ff6b6b"
+                                  />
                                 </TouchableOpacity>
                               </View>
 
                               <View style={styles.voiceTextContainer}>
-                                <Text style={styles.voiceText} numberOfLines={1}>
-                                  {note.name || `Voice Note ${index + 1}`}
-                                  {isRemote && <Text style={styles.voiceRemoteText}> (saved)</Text>}
+                                <Text
+                                  style={styles.voiceText}
+                                  numberOfLines={1}
+                                >
+                                  {note.name ||
+                                    t("asset.voiceNoteNumber", {
+                                      number: index + 1,
+                                    })}
+                                  {isRemote && (
+                                    <Text style={styles.voiceRemoteText}>
+                                      {" "}
+                                      ({t("asset.saved")})
+                                    </Text>
+                                  )}
                                 </Text>
                               </View>
 
                               <View style={styles.voiceActionsRight}>
                                 {canPlay && (
                                   <TouchableOpacity
-                                    onPress={() => playVoiceNote(note.uri, index)}
+                                    onPress={() =>
+                                      playVoiceNote(note.uri, index)
+                                    }
                                     activeOpacity={0.7}
                                   >
                                     <MaterialIcons
-                                      name={playingIndex === index ? "pause-circle-filled" : "play-circle-filled"}
+                                      name={
+                                        playingIndex === index
+                                          ? "pause-circle-filled"
+                                          : "play-circle-filled"
+                                      }
                                       size={24}
                                       color={ACC}
                                     />
@@ -767,7 +909,9 @@ export default function CreateAssetWizardModal({
                           onPress={back}
                           activeOpacity={0.8}
                         >
-                          <Text style={styles.secondaryText}>Back</Text>
+                          <Text style={styles.secondaryText}>
+                            {t("asset.back")}
+                          </Text>
                         </TouchableOpacity>
                       ) : (
                         <View />
@@ -781,7 +925,9 @@ export default function CreateAssetWizardModal({
                           onPress={next}
                           activeOpacity={0.85}
                         >
-                          <Text style={styles.primaryText}>Next</Text>
+                          <Text style={styles.primaryText}>
+                            {t("asset.next")}
+                          </Text>
                         </TouchableOpacity>
                       ) : (
                         <TouchableOpacity
@@ -790,7 +936,9 @@ export default function CreateAssetWizardModal({
                           activeOpacity={0.85}
                         >
                           <Text style={styles.primaryText}>
-                            {mode === "edit" ? "Save Changes" : "Finish"}
+                            {mode === "edit"
+                              ? t("asset.saveChanges")
+                              : t("asset.finish")}
                           </Text>
                         </TouchableOpacity>
                       )}
@@ -810,9 +958,11 @@ export default function CreateAssetWizardModal({
         onDone={(photos: any[]) => {
           if (cameraMode !== "photos") return;
 
-          const mapped = photos.map((p: any, i: number) => ({
-            uri: "file://" + p.path,
-            name: `photo_${Date.now()}_${i}.jpg`,
+          const mapped = photos.map((photo: any, index: number) => ({
+            uri: photo.path?.startsWith("file://")
+              ? photo.path
+              : `file://${photo.path}`,
+            name: `photo_${Date.now()}_${index}.jpg`,
             type: "image/jpeg",
           }));
 
@@ -823,6 +973,7 @@ export default function CreateAssetWizardModal({
         }}
         onScanText={(text: string) => {
           if (cameraMode !== "scan") return;
+
           appendScannedTextToDescription(text);
           setCameraOpen(false);
         }}

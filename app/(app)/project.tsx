@@ -13,6 +13,7 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import home from "./home";
+import { useTranslation } from "react-i18next";
 
 import { useAuth } from "../../api/AuthContext";
 import { projectApi, Project, ApiError } from "../../api/api";
@@ -30,21 +31,19 @@ import { downloadProjectForOffline } from "../offline/downloader";
 import { useFonts } from "expo-font";
 import fonts from "../fonts/fonts";
 
-type FilterType = "Recent" | "New";
+type FilterType = "recent" | "new";
 
 const ACC = "#C6FF00";
 
-function getProjectStatusLabel(project: Project) {
+function getProjectStatusLabel(project: Project, t: (key: string) => string) {
   const raw = (project.workflowStatus ?? "").toLowerCase();
-
-  if (raw === "new") return "New";
-  if (raw === "done") return "Done";
-  return project.workflowStatus || "New";
+  if (raw === "new") return t("projectScreen.status.new");
+  if (raw === "done") return t("projectScreen.status.done");
+  return project.workflowStatus || t("projectScreen.status.new");
 }
 
 export default function ProjectScreen() {
-
-
+  const { t } = useTranslation();
 
   const [loaded] = useFonts({
     ...fonts.poppins,
@@ -52,10 +51,10 @@ export default function ProjectScreen() {
   });
 
   const router = useRouter();
- const { user, isOnline, selectedCompanyId } = useAuth();
+  const { user, isOnline, selectedCompanyId } = useAuth();
 
   const [projects, setProjects] = useState<Project[]>([]);
-  const [filter, setFilter] = useState<FilterType>("New");
+  const [filter, setFilter] = useState<FilterType>("new");
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
@@ -70,8 +69,8 @@ export default function ProjectScreen() {
   const [removingProjectId, setRemovingProjectId] = useState<string | null>(null);
 
   useEffect(() => {
-  fetchProjects();
-}, [isOnline, selectedCompanyId]);
+    fetchProjects();
+  }, [isOnline, selectedCompanyId]);
 
   const refreshPendingProjects = useCallback(async () => {
     const pending = await getPending("pending");
@@ -79,27 +78,27 @@ export default function ProjectScreen() {
   }, []);
 
   const refreshDownloadedProjects = useCallback(async () => {
-  const downloaded = selectedCompanyId
-    ? await getDownloadedProjectsByCompany(selectedCompanyId)
-    : await getAllDownloadedProjects();
+    const downloaded = selectedCompanyId
+      ? await getDownloadedProjectsByCompany(selectedCompanyId)
+      : await getAllDownloadedProjects();
 
-  const ids = downloaded.map((project) => project.id);
-  setDownloadedProjectIds(ids);
+    const ids = downloaded.map((project) => project.id);
+    setDownloadedProjectIds(ids);
 
-  const counts = await Promise.all(
-    ids.map(async (id) => {
-      const count = await getPendingCountByProjectId(id);
-      return [id, count] as const;
-    })
-  );
+    const counts = await Promise.all(
+      ids.map(async (id) => {
+        const count = await getPendingCountByProjectId(id);
+        return [id, count] as const;
+      })
+    );
 
-  setProjectPendingMap(
-    counts.reduce<Record<string, number>>((acc, [id, count]) => {
-      acc[id] = count;
-      return acc;
-    }, {})
-  );
-}, [selectedCompanyId]);
+    setProjectPendingMap(
+      counts.reduce<Record<string, number>>((acc, [id, count]) => {
+        acc[id] = count;
+        return acc;
+      }, {})
+    );
+  }, [selectedCompanyId]);
 
   useEffect(() => {
     refreshPendingProjects();
@@ -113,48 +112,50 @@ export default function ProjectScreen() {
     return () => clearInterval(interval);
   }, [refreshPendingProjects, refreshDownloadedProjects]);
 
- async function fetchProjects() {
-  setLoading(true);
-  setGlobalError(null);
+  async function fetchProjects() {
+    setLoading(true);
+    setGlobalError(null);
 
-  try {
-    if (isOnline) {
-      const res = await projectApi.list();
-      setProjects(res.projects);
-      return;
-    }
-
-    const offlineProjects = selectedCompanyId
-      ? await getDownloadedProjectsByCompany(selectedCompanyId)
-      : await getAllDownloadedProjects();
-
-    setProjects(offlineProjects);
-  } catch (err) {
-    if (!isOnline) {
-      try {
-        const offlineProjects = selectedCompanyId
-          ? await getDownloadedProjectsByCompany(selectedCompanyId)
-          : await getAllDownloadedProjects();
-
-        setProjects(offlineProjects);
-        setGlobalError(null);
+    try {
+      if (isOnline) {
+        const res = await projectApi.list();
+        setProjects(res.projects);
         return;
-      } catch {
-        // fall through
       }
-    }
 
-    const msg =
-      err instanceof ApiError ? err.message : "Failed to load projects.";
-    setGlobalError(msg);
-  } finally {
-    setLoading(false);
+      const offlineProjects = selectedCompanyId
+        ? await getDownloadedProjectsByCompany(selectedCompanyId)
+        : await getAllDownloadedProjects();
+
+      setProjects(offlineProjects);
+    } catch (err) {
+      if (!isOnline) {
+        try {
+          const offlineProjects = selectedCompanyId
+            ? await getDownloadedProjectsByCompany(selectedCompanyId)
+            : await getAllDownloadedProjects();
+
+          setProjects(offlineProjects);
+          setGlobalError(null);
+          return;
+        } catch {
+          // fall through
+        }
+      }
+
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : t("projectScreen.errors.loadFailed");
+      setGlobalError(msg);
+    } finally {
+      setLoading(false);
+    }
   }
-}
 
   async function handleCreateProject() {
     if (!projectName.trim()) {
-      setGlobalError("Project name is required.");
+      setGlobalError(t("projectScreen.errors.nameRequired"));
       return;
     }
 
@@ -170,17 +171,19 @@ export default function ProjectScreen() {
       );
 
       if ("offline" in result) {
-        Alert.alert("Offline", result.message);
+        Alert.alert(t("projectScreen.offline.title"), result.message);
       } else {
         setProjects((prev) => [result.project, ...prev]);
       }
 
       setProjectName("");
       setShowCreateModal(false);
-      setFilter("New");
+      setFilter("new");
     } catch (err) {
       const msg =
-        err instanceof ApiError ? err.message : "Failed to create project.";
+        err instanceof ApiError
+          ? err.message
+          : t("projectScreen.errors.createFailed");
       setGlobalError(msg);
     } finally {
       setCreating(false);
@@ -195,8 +198,8 @@ export default function ProjectScreen() {
 
       if (alreadyDownloaded && !forceRefresh) {
         Alert.alert(
-          "Already downloaded",
-          "This project is already available offline."
+          t("projectScreen.download.alreadyTitle"),
+          t("projectScreen.download.alreadyMessage")
         );
         return;
       }
@@ -205,13 +208,19 @@ export default function ProjectScreen() {
       await refreshDownloadedProjects();
 
       Alert.alert(
-        forceRefresh ? "Offline copy refreshed" : "Download complete",
-        `${project.name} is now available offline.\n\nFolders: ${result.folderCount}\nAssets: ${result.assetCount}`
+        forceRefresh
+          ? t("projectScreen.download.refreshTitle")
+          : t("projectScreen.download.successTitle"),
+        t("projectScreen.download.successMessage", {
+          name: project.name,
+          folders: result.folderCount,
+          assets: result.assetCount,
+        })
       );
     } catch (error: any) {
       Alert.alert(
-        "Download failed",
-        error?.message || "Could not download this project for offline use."
+        t("projectScreen.download.failTitle"),
+        error?.message || t("projectScreen.download.failMessage")
       );
     } finally {
       setDownloadingProjectId(null);
@@ -226,8 +235,8 @@ export default function ProjectScreen() {
 
       if (pendingCount > 0) {
         Alert.alert(
-          "Sync required",
-          "This project has unsynced offline changes. Sync before removing offline data."
+          t("projectScreen.remove.syncRequiredTitle"),
+          t("projectScreen.remove.syncRequiredMessage")
         );
         return;
       }
@@ -236,13 +245,13 @@ export default function ProjectScreen() {
       await refreshDownloadedProjects();
 
       Alert.alert(
-        "Offline copy removed",
-        `${project.name} was removed from offline storage.`
+        t("projectScreen.remove.successTitle"),
+        t("projectScreen.remove.successMessage", { name: project.name })
       );
     } catch (error: any) {
       Alert.alert(
-        "Remove failed",
-        error?.message || "Could not remove offline project data."
+        t("projectScreen.remove.failTitle"),
+        error?.message || t("projectScreen.remove.failMessage")
       );
     } finally {
       setRemovingProjectId(null);
@@ -262,10 +271,9 @@ export default function ProjectScreen() {
   const offlineProjectEntries = useMemo<Project[]>(() => {
     return pendingProjects.map((item) => {
       const payload = item.payload as { name?: string };
-
       return {
         id: item.id,
-        name: payload.name ?? "Offline project",
+        name: payload.name ?? t("projectScreen.offline.projectName"),
         createdAt: new Date(item.createdAt).toISOString(),
         updatedAt: new Date(item.createdAt).toISOString(),
         workflowStatus: "new",
@@ -273,7 +281,7 @@ export default function ProjectScreen() {
         userId: user?.id ?? "offline-user",
         company: {
           id: "offline-company",
-          name: user?.companyName ?? "Offline project",
+          name: user?.companyName ?? t("projectScreen.offline.projectName"),
         },
         user: {
           id: user?.id ?? "offline-user",
@@ -282,26 +290,24 @@ export default function ProjectScreen() {
         },
       };
     });
-  }, [pendingProjects, user]);
+  }, [pendingProjects, user, t]);
 
   const combinedProjects = useMemo(() => {
     return [...offlineProjectEntries, ...projects];
   }, [offlineProjectEntries, projects]);
 
   const filteredProjects = useMemo(() => {
-    if (filter === "Recent") {
+    if (filter === "recent") {
       return [...combinedProjects].sort(
         (a, b) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
     }
-
-    if (filter === "New") {
+    if (filter === "new") {
       return combinedProjects.filter(
         (p) => (p.workflowStatus ?? "").toLowerCase() === "new"
       );
     }
-
     return combinedProjects;
   }, [combinedProjects, filter]);
 
@@ -310,35 +316,40 @@ export default function ProjectScreen() {
   return (
     <View style={styles.flex}>
       <ScrollView contentContainerStyle={styles.scroll}>
+
+        {/* ── Header ── */}
         <View style={styles.header}>
           <Text style={styles.title}>
-            Your Company:{" "}
-            <Text style={styles.companyName}>{user?.companyName ?? "Company"}</Text>
+            {t("projectPage.title")}:{" "}
+            <Text style={styles.companyName}>
+              {user?.companyName ?? "Company"}
+            </Text>
           </Text>
-          <Text style={styles.subtitle}>Manage your company projects</Text>
+          <Text style={styles.subtitle}>{t("projectPage.description")}</Text>
         </View>
 
+        {/* ── Error banner ── */}
         {globalError && (
           <View style={styles.errorBanner}>
             <Text style={styles.errorBannerText}>{globalError}</Text>
           </View>
         )}
 
+        {/* ── Action row ── */}
         <View style={styles.actionRow}>
-          <Pressable style={styles.switchBtn} onPress={() => router.replace("home")}>
-            <Text style={styles.switchBtnText}>Switch Company</Text>
-          </Pressable>
-
-          {/* <Pressable
-            style={styles.createBtn}
-            onPress={() => setShowCreateModal(true)}
+          <Pressable
+            style={styles.switchBtn}
+            onPress={() => router.replace("home")}
           >
-            <Text style={styles.createBtnText}>Create New Project</Text>
-          </Pressable> */}
+            <Text style={styles.switchBtnText}>
+              {t("projectPage.switchCompany")}
+            </Text>
+          </Pressable>
         </View>
 
+        {/* ── Filter row ── */}
         <View style={styles.filterRow}>
-          {(["Recent", "New"] as FilterType[]).map((item) => (
+          {(["recent", "new"] as const).map((item) => (
             <Pressable
               key={item}
               onPress={() => setFilter(item)}
@@ -353,17 +364,18 @@ export default function ProjectScreen() {
                   filter === item && styles.filterBtnTextActive,
                 ]}
               >
-                {item}
+                {t(`filters.${item}`)}
               </Text>
             </Pressable>
           ))}
         </View>
 
+        {/* ── Content ── */}
         {loading ? (
           <ActivityIndicator color={ACC} style={{ marginTop: 30 }} />
         ) : filteredProjects.length === 0 ? (
           <View style={styles.emptyWrap}>
-            <Text style={styles.emptyText}>No projects found.</Text>
+            <Text style={styles.emptyText}>{t("projectScreen.empty")}</Text>
           </View>
         ) : (
           <View style={styles.projectList}>
@@ -384,30 +396,37 @@ export default function ProjectScreen() {
                     <Text style={styles.projectName}>{project.name}</Text>
                     <View style={styles.statusPill}>
                       <Text style={styles.statusPillText}>
-                        {getProjectStatusLabel(project)}
+                        {getProjectStatusLabel(project, t)}
                       </Text>
                     </View>
                   </View>
 
                   <Text style={styles.projectMeta}>
-                    Created by: {project.user?.username ?? "Unknown"}
+                    {t("projectScreen.createdBy", {
+                      name: project.user?.username ?? "Unknown",
+                    })}
                   </Text>
                   <Text style={styles.projectMeta}>
-                    Company: {project.company?.name ?? "Unknown"}
+                    {t("projectScreen.company", {
+                      name: project.company?.name ?? "Unknown",
+                    })}
                   </Text>
 
                   <View style={styles.projectFooterRow}>
                     <View style={styles.projectBadgeColumn}>
                       {isDownloaded && (
                         <View style={styles.offlineReadyBadge}>
-                          <Text style={styles.offlineReadyText}>Available Offline</Text>
+                          <Text style={styles.offlineReadyText}>
+                            {t("projectScreen.availableOffline")}
+                          </Text>
                         </View>
                       )}
-
                       {pendingForProject > 0 && (
                         <View style={styles.pendingSyncBadge}>
                           <Text style={styles.pendingSyncText}>
-                            Pending Sync: {pendingForProject}
+                            {t("projectScreen.pendingSync", {
+                              count: pendingForProject,
+                            })}
                           </Text>
                         </View>
                       )}
@@ -431,7 +450,11 @@ export default function ProjectScreen() {
                             {isDownloading ? (
                               <ActivityIndicator size="small" color="#000" />
                             ) : (
-                              <Ionicons name="cloud-download-outline" size={20} color="#000" />
+                              <Ionicons
+                                name="cloud-download-outline"
+                                size={20}
+                                color="#000"
+                              />
                             )}
                           </Pressable>
                         ) : (
@@ -451,7 +474,11 @@ export default function ProjectScreen() {
                               {isDownloading ? (
                                 <ActivityIndicator size="small" color={ACC} />
                               ) : (
-                                <Ionicons name="refresh-outline" size={20} color={ACC} />
+                                <Ionicons
+                                  name="refresh-outline"
+                                  size={20}
+                                  color={ACC}
+                                />
                               )}
                             </Pressable>
 
@@ -469,9 +496,16 @@ export default function ProjectScreen() {
                               disabled={isRemoving || pendingForProject > 0}
                             >
                               {isRemoving ? (
-                                <ActivityIndicator size="small" color="#ff8b8b" />
+                                <ActivityIndicator
+                                  size="small"
+                                  color="#ff8b8b"
+                                />
                               ) : (
-                                <Ionicons name="trash-outline" size={20} color="#ff8b8b" />
+                                <Ionicons
+                                  name="trash-outline"
+                                  size={20}
+                                  color="#ff8b8b"
+                                />
                               )}
                             </Pressable>
                           </>
@@ -485,8 +519,6 @@ export default function ProjectScreen() {
           </View>
         )}
       </ScrollView>
-
-   
     </View>
   );
 }

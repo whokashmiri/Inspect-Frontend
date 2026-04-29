@@ -13,6 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import i18n from "../i18n/i18n";
 import * as Updates from "expo-updates";
 import { useTranslation } from 'react-i18next';
+import { saveLanguagePreference } from "../offline/authStorage";
 
 const ACC = "#C6FF00";
 const SURFACE = "#111111";
@@ -62,10 +63,15 @@ function AppHeaderComponent({
   onLogout,
 }: AppHeaderProps) {
  const { t } = useTranslation();
- const [isRTL, setIsRTL] = useState(I18nManager.isRTL);
-const toggleLanguage = useCallback(() => {
+ const [isRTL, setIsRTL] = useState(true);
+const toggleLanguage = useCallback(async () => {
       const current = i18n.language;
-      const next = current === "en" ? "ar" : "en";
+      const next = current === "ar" ? "en" : "ar"; 
+      
+      // Save the language preference
+      await saveLanguagePreference(next);
+      
+      // Change the language
       i18n.changeLanguage(next);
       setIsRTL(next === "ar");
     }, []);

@@ -18,6 +18,7 @@
       "bundleIdentifier": "com.anonymous.batchcam"
     },
     "android": {
+      "usesCleartextTraffic": true,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_MEDIA_IMAGES",
@@ -26,7 +27,10 @@
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
         "android.permission.READ_MEDIA_VIDEO",
-        "android.permission.READ_MEDIA_AUDIO"
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
       ],
       "package": "com.anonymous.batchcam"
     },
@@ -55,7 +59,13 @@
       "expo-secure-store",
       "expo-font",
       "expo-sqlite",
-      "expo-audio"
-    ]
+      "expo-audio",
+      "expo-router"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "427a0f48-8299-47a2-8452-068726cbd2a2"
+      }
+    }
   }
 }

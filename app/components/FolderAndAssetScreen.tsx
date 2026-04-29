@@ -8,6 +8,7 @@ import { AssetDraft } from "./utils/types";
 import { mapAssetToDraft } from "./utils/assetMapper";
 import CodeScannerModal from "../components/CodeScannerModal";
 import { normalizeCode } from "../components/utils/codeScannerUtils";
+import { useTranslation } from "react-i18next"; // ← i18n
 
 import {
   Alert,
@@ -75,110 +76,82 @@ const ITEM_SIZE =
   (SCREEN_WIDTH - HORIZONTAL_PADDING * 2 - GRID_GAP * (NUM_COLUMNS - 1)) /
   NUM_COLUMNS;
 
-  
-
 export default function FolderAndAssetScreen({ route }: Props) {
+  const { t } = useTranslation(); // ← i18n hook
 
+  const [rawDataKeys, setRawDataKeys] = useState<string[]>([]);
+  const [selectedRawDataKey, setSelectedRawDataKey] = useState<string | null>(null);
+  const [advancedSearchResults, setAdvancedSearchResults] = useState<AssetItem[]>([]);
+  const [advancedSearchLoading, setAdvancedSearchLoading] = useState(false);
+  const [advancedSearchPage, setAdvancedSearchPage] = useState(1);
+  const [advancedSearchHasMore, setAdvancedSearchHasMore] = useState(true);
+  const [rawKeyModalVisible, setRawKeyModalVisible] = useState(false);
 
+  const getNestedRawDataValue = (rawData: any, key?: string | null) => {
+    if (!rawData || !key) return rawData;
+    return key.split(".").reduce((acc, part) => {
+      if (acc === null || acc === undefined) return undefined;
+      return acc[part];
+    }, rawData);
+  };
 
-const [rawDataKeys, setRawDataKeys] = useState<string[]>([]);
-const [selectedRawDataKey, setSelectedRawDataKey] = useState<string | null>(null);
-const [advancedSearchResults, setAdvancedSearchResults] = useState<AssetItem[]>([]);
-const [advancedSearchLoading, setAdvancedSearchLoading] = useState(false);
-const [advancedSearchPage, setAdvancedSearchPage] = useState(1);
-const [advancedSearchHasMore, setAdvancedSearchHasMore] = useState(true);
-const [rawKeyModalVisible, setRawKeyModalVisible] = useState(false);
-
-
-
-const getNestedRawDataValue = (rawData: any, key?: string | null) => {
-  if (!rawData || !key) return rawData;
-
-  return key.split(".").reduce((acc, part) => {
-    if (acc === null || acc === undefined) return undefined;
-    return acc[part];
-  }, rawData);
-};
-
-const rawDataValueMatches = (value: any, search: string): boolean => {
-  if (value === null || value === undefined) return false;
-
-  const needle = search.trim().toLowerCase();
-  if (!needle) return true;
-
-  if (
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "boolean"
-  ) {
-    return String(value).toLowerCase().includes(needle);
-  }
-
-  if (Array.isArray(value)) {
-    return value.some((item) => rawDataValueMatches(item, search));
-  }
-
-  if (typeof value === "object") {
-    return Object.values(value).some((item) =>
-      rawDataValueMatches(item, search)
-    );
-  }
-
-  return false;
-};
-
-
-
-const extractRawDataKeys = (
-  obj: any,
-  prefix = "",
-  keys = new Set<string>()
-) => {
-  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return keys;
-
-  Object.keys(obj).forEach((key) => {
-    const fullKey = prefix ? `${prefix}.${key}` : key;
-    keys.add(fullKey);
-
-    const value = obj[key];
-    if (value && typeof value === "object" && !Array.isArray(value)) {
-      extractRawDataKeys(value, fullKey, keys);
+  const rawDataValueMatches = (value: any, search: string): boolean => {
+    if (value === null || value === undefined) return false;
+    const needle = search.trim().toLowerCase();
+    if (!needle) return true;
+    if (
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean"
+    ) {
+      return String(value).toLowerCase().includes(needle);
     }
-  });
+    if (Array.isArray(value)) {
+      return value.some((item) => rawDataValueMatches(item, search));
+    }
+    if (typeof value === "object") {
+      return Object.values(value).some((item) => rawDataValueMatches(item, search));
+    }
+    return false;
+  };
 
-  return keys;
-};
+  const extractRawDataKeys = (
+    obj: any,
+    prefix = "",
+    keys = new Set<string>()
+  ) => {
+    if (!obj || typeof obj !== "object" || Array.isArray(obj)) return keys;
+    Object.keys(obj).forEach((key) => {
+      const fullKey = prefix ? `${prefix}.${key}` : key;
+      keys.add(fullKey);
+      const value = obj[key];
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        extractRawDataKeys(value, fullKey, keys);
+      }
+    });
+    return keys;
+  };
 
-const getRawDataValue = (rawData: any, key: string) => {
-  if (!rawData || !key) return null;
+  const getRawDataValue = (rawData: any, key: string) => {
+    if (!rawData || !key) return null;
+    return key.split(".").reduce((acc, k) => {
+      if (acc === null || acc === undefined) return null;
+      return acc[k];
+    }, rawData);
+  };
 
-  return key.split(".").reduce((acc, k) => {
-    if (acc === null || acc === undefined) return null;
-    return acc[k];
-  }, rawData);
-};
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+  const SEARCH_PAGE_SIZE = 15;
 
-
-const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
-const SEARCH_PAGE_SIZE = 15;
-
-
-const handleBackPress = async () => {
-  if (navigatingFolderId) return;
-
-  // If inside a folder, move to previous breadcrumb
-  if (path.length > 1) {
-    const previousIndex = path.length - 2;
-    await goToPathIndex(previousIndex);
-    return;
-  }
-
-  // If already at root, leave the screen
-  router.back();
-};
-
-
-
+  const handleBackPress = async () => {
+    if (navigatingFolderId) return;
+    if (path.length > 1) {
+      const previousIndex = path.length - 2;
+      await goToPathIndex(previousIndex);
+      return;
+    }
+    router.back();
+  };
 
   const folderInputRef = useRef<TextInput>(null);
   const isOnline = useIsOnline();
@@ -186,7 +159,6 @@ const handleBackPress = async () => {
   const openFolderModal = () => {
     setFolderModalVisible(true);
     setFolderName("");
-
     requestAnimationFrame(() => {
       setTimeout(() => {
         folderInputRef.current?.focus();
@@ -202,7 +174,7 @@ const handleBackPress = async () => {
   });
   const insets = useSafeAreaInsets();
 
-  const { projectId, projectName , offlineMode } = route.params;
+  const { projectId, projectName, offlineMode } = route.params;
   const [isSyncing, setIsSyncing] = useState(false);
 
   const [folders, setFolders] = useState<FolderItem[]>([]);
@@ -229,74 +201,60 @@ const handleBackPress = async () => {
   const [assetModalVisible, setAssetModalVisible] = useState(false);
   const [editingAsset, setEditingAsset] = useState<AssetItem | null>(null);
 
-const [codeScannerVisible, setCodeScannerVisible] = useState(false);
-const [codeLookupLoading, setCodeLookupLoading] = useState(false);
+  const [codeScannerVisible, setCodeScannerVisible] = useState(false);
+  const [codeLookupLoading, setCodeLookupLoading] = useState(false);
 
   const [folderName, setFolderName] = useState("");
   const [navigatingFolderId, setNavigatingFolderId] = useState<string | null>(null);
-  const [filter, setFilter] = useState<'all' | 'done' | 'incomplete'>('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [filter, setFilter] = useState<"all" | "done" | "incomplete">("all");
+  const [searchQuery, setSearchQuery] = useState("");
 
-
- useEffect(() => {
-  const loadRawDataKeys = async () => {
-    if (projectId.startsWith("offline_")) return;
-
-    try {
-      const shouldUseOfflineCache =
-        downloadedOffline && (isOnline === false || isOnline === null);
-
-      if (shouldUseOfflineCache) {
-        const keys = await getOfflineRawDataKeys(projectId);
+  useEffect(() => {
+    const loadRawDataKeys = async () => {
+      if (projectId.startsWith("offline_")) return;
+      try {
+        const shouldUseOfflineCache =
+          downloadedOffline && (isOnline === false || isOnline === null);
         if (shouldUseOfflineCache) {
-          // const keys = await getOfflineRawDataKeys(projectId);
+          const keys = await getOfflineRawDataKeys(projectId);
+          if (shouldUseOfflineCache) {
             setRawDataKeys(keys);
             return;
           }
-
-        const scanFolder = async (parentId: string | null) => {
-          const data = await getOfflineContents(projectId, parentId);
-
-          for (const asset of data.assets || []) {
-            extractRawDataKeys((asset as any).rawData);
-          }
-
-          for (const folder of data.folders || []) {
-            await scanFolder(folder.id);
-          }
-        };
-
-        await scanFolder(null);
-
-        setRawDataKeys(Array.from(keys).sort());
-        return;
+          const scanFolder = async (parentId: string | null) => {
+            const data = await getOfflineContents(projectId, parentId);
+            for (const asset of data.assets || []) {
+              extractRawDataKeys((asset as any).rawData);
+            }
+            for (const folder of data.folders || []) {
+              await scanFolder(folder.id);
+            }
+          };
+          await scanFolder(null);
+          setRawDataKeys(Array.from(keys).sort());
+          return;
+        }
+        const result = await projectContentApi.advancedGetRawDataKeys(projectId);
+        setRawDataKeys(result.keys || []);
+      } catch (error) {
+        console.log("RAW DATA KEYS ERROR:", error);
       }
+    };
+    loadRawDataKeys();
+  }, [projectId, downloadedOffline, isOnline]);
 
-      const result = await projectContentApi.advancedGetRawDataKeys(projectId);
-      setRawDataKeys(result.keys || []);
-    } catch (error) {
-      console.log("RAW DATA KEYS ERROR:", error);
-    }
-  };
-
-  loadRawDataKeys();
-}, [projectId, downloadedOffline, isOnline]);
-
-
-useEffect(() => {
-  const timer = setTimeout(() => {
-    setDebouncedSearchQuery(searchQuery.trim());
-  }, 350);
-
-  return () => clearTimeout(timer);
-}, [searchQuery]);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery.trim());
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   useEffect(() => {
     const interval = setInterval(async () => {
       const count = await getPendingCount();
       setPendingCount(count);
     }, 5000);
-
     return () => clearInterval(interval);
   }, []);
 
@@ -306,11 +264,9 @@ useEffect(() => {
         setDownloadedOffline(false);
         return;
       }
-
       const downloaded = await isProjectDownloaded(projectId);
       setDownloadedOffline(downloaded);
     };
-
     checkDownloaded();
   }, [projectId]);
 
@@ -322,8 +278,6 @@ useEffect(() => {
     };
   }, []);
 
-
-
   const showSnackbar = (
     message: string,
     type: "success" | "error" | "info" = "success"
@@ -331,539 +285,425 @@ useEffect(() => {
     if (snackbarTimeout.current) {
       clearTimeout(snackbarTimeout.current);
     }
-
     setSnackbar({ message, type });
     snackbarTimeout.current = setTimeout(() => setSnackbar(null), 3000);
   };
 
-
-
-const runAdvancedSearch = useCallback(
-  async (page = 1, append = false) => {
-    const query = debouncedSearchQuery.trim();
-
-    if (!query) {
-      setAdvancedSearchResults([]);
-      setAdvancedSearchPage(1);
-      setAdvancedSearchHasMore(true);
-      return;
-    }
-
-    try {
-      setAdvancedSearchLoading(true);
-
-      const shouldUseOfflineCache =
-        downloadedOffline && (isOnline === false || isOnline === null);
-
-      if (shouldUseOfflineCache) {
-        const allAssets: AssetItem[] = [];
-
-        const collectAssets = async (parentId: string | null) => {
-          const data = await getOfflineContents(projectId, parentId);
-
-          allAssets.push(...((data.assets || []) as AssetItem[]));
-
-          for (const folder of data.folders || []) {
-            await collectAssets(folder.id);
-          }
-        };
-
-        await collectAssets(null);
-
-        let matchedAssets = allAssets.filter((asset: any) => {
-          const value = selectedRawDataKey
-            ? getNestedRawDataValue(asset.rawData, selectedRawDataKey)
-            : asset.rawData;
-
-          return rawDataValueMatches(value, query);
-        });
-
-        if (filter === "done") {
-          matchedAssets = matchedAssets.filter((asset) => asset.isDone);
+  const runAdvancedSearch = useCallback(
+    async (page = 1, append = false) => {
+      const query = debouncedSearchQuery.trim();
+      if (!query) {
+        setAdvancedSearchResults([]);
+        setAdvancedSearchPage(1);
+        setAdvancedSearchHasMore(true);
+        return;
+      }
+      try {
+        setAdvancedSearchLoading(true);
+        const shouldUseOfflineCache =
+          downloadedOffline && (isOnline === false || isOnline === null);
+        if (shouldUseOfflineCache) {
+          const allAssets: AssetItem[] = [];
+          const collectAssets = async (parentId: string | null) => {
+            const data = await getOfflineContents(projectId, parentId);
+            allAssets.push(...((data.assets || []) as AssetItem[]));
+            for (const folder of data.folders || []) {
+              await collectAssets(folder.id);
+            }
+          };
+          await collectAssets(null);
+          let matchedAssets = allAssets.filter((asset: any) => {
+            const value = selectedRawDataKey
+              ? getNestedRawDataValue(asset.rawData, selectedRawDataKey)
+              : asset.rawData;
+            return rawDataValueMatches(value, query);
+          });
+          if (filter === "done") matchedAssets = matchedAssets.filter((a) => a.isDone);
+          if (filter === "incomplete") matchedAssets = matchedAssets.filter((a) => !a.isDone);
+          const start = (page - 1) * SEARCH_PAGE_SIZE;
+          const nextAssets = matchedAssets.slice(start, start + SEARCH_PAGE_SIZE);
+          setAdvancedSearchResults((prev) => (append ? [...prev, ...nextAssets] : nextAssets));
+          setAdvancedSearchPage(page);
+          setAdvancedSearchHasMore(start + SEARCH_PAGE_SIZE < matchedAssets.length);
+          return;
         }
-
-        if (filter === "incomplete") {
-          matchedAssets = matchedAssets.filter((asset) => !asset.isDone);
-        }
-
-        const start = (page - 1) * SEARCH_PAGE_SIZE;
-        const nextAssets = matchedAssets.slice(start, start + SEARCH_PAGE_SIZE);
-
-        setAdvancedSearchResults((prev) =>
-          append ? [...prev, ...nextAssets] : nextAssets
+        const result = await projectContentApi.advancedSearchContents(
+          projectId,
+          selectedRawDataKey,
+          query,
+          filter,
+          page,
+          SEARCH_PAGE_SIZE
         );
-
+        const nextAssets = result.assets || [];
+        setAdvancedSearchResults((prev) => (append ? [...prev, ...nextAssets] : nextAssets));
         setAdvancedSearchPage(page);
-        setAdvancedSearchHasMore(start + SEARCH_PAGE_SIZE < matchedAssets.length);
-        return;
+        setAdvancedSearchHasMore(
+          typeof (result as any).hasMore === "boolean"
+            ? (result as any).hasMore
+            : nextAssets.length === SEARCH_PAGE_SIZE
+        );
+      } catch (error: any) {
+        Alert.alert(
+          t("folderAssetScreen.searchError.title"),
+          error?.message || t("folderAssetScreen.searchError.defaultMessage")
+        );
+      } finally {
+        setAdvancedSearchLoading(false);
       }
+    },
+    [projectId, selectedRawDataKey, debouncedSearchQuery, filter, downloadedOffline, isOnline, t]
+  );
 
-      const result = await projectContentApi.advancedSearchContents(
-        projectId,
-        selectedRawDataKey,
-        query,
-        filter,
-        page,
-        SEARCH_PAGE_SIZE
-      );
+  useEffect(() => {
+    runAdvancedSearch(1, false);
+  }, [runAdvancedSearch]);
 
-      const nextAssets = result.assets || [];
+  const loadMoreAdvancedResults = () => {
+    if (advancedSearchLoading || !advancedSearchHasMore || !debouncedSearchQuery.trim()) return;
+    runAdvancedSearch(advancedSearchPage + 1, true);
+  };
 
-      setAdvancedSearchResults((prev) =>
-        append ? [...prev, ...nextAssets] : nextAssets
-      );
+  const getAssetLocationText = (asset: AssetItem) => {
+    if (!asset.parent) return projectName;
+    return `${projectName} / Folder`;
+  };
 
-      setAdvancedSearchPage(page);
-      setAdvancedSearchHasMore(
-        typeof (result as any).hasMore === "boolean"
-          ? (result as any).hasMore
-          : nextAssets.length === SEARCH_PAGE_SIZE
-      );
-    } catch (error: any) {
-      Alert.alert("Search Error", error?.message || "Advanced search failed");
-    } finally {
-      setAdvancedSearchLoading(false);
-    }
-  },
-  [
-    projectId,
-    selectedRawDataKey,
-    debouncedSearchQuery,
-    filter,
-    downloadedOffline,
-    isOnline,
-  ]
-);
+  const isAdvancedSearching = debouncedSearchQuery.trim().length > 0;
 
+  const advancedSearchListItems = useMemo(() => {
+    return advancedSearchResults.map((asset) => ({
+      ...asset,
+      itemType: "advancedAsset" as const,
+    }));
+  }, [advancedSearchResults]);
 
-useEffect(() => {
-  runAdvancedSearch(1, false);
-}, [runAdvancedSearch]);
-
-const loadMoreAdvancedResults = () => {
-  if (
-    advancedSearchLoading ||
-    !advancedSearchHasMore ||
-    !debouncedSearchQuery.trim()
-  ) {
-    return;
-  }
-
-  runAdvancedSearch(advancedSearchPage + 1, true);
-};
-
-
-const getAssetLocationText = (asset: AssetItem) => {
-  if (!asset.parent) return projectName;
-
-  return `${projectName} / Folder`;
-};
-
-
-
-const isAdvancedSearching = debouncedSearchQuery.trim().length > 0;
-
-const advancedSearchListItems = useMemo(() => {
-  return advancedSearchResults.map((asset) => ({
-    ...asset,
-    itemType: "advancedAsset" as const,
-  }));
-}, [advancedSearchResults]);
-
-
-const handleDetectedAssetCode = async (rawCode: string) => {
-  const code = normalizeCode(rawCode);
-  if (!code) return;
-
-  try {
-    setCodeLookupLoading(true);
-
-    const shouldUseOffline = offlineMode || (downloadedOffline && (isOnline === false || isOnline === null));
-
-    let result;
-    if (shouldUseOffline) {
-      result = await advancedSearchOfflineAssets({ projectId, search: code });
-    } else {
-      result = await projectContentApi.advancedSearchContents(projectId, code);
-    }
-
-    setCodeScannerVisible(false);
-    setEditingAsset(result.assets && result.assets.length > 0 ? result.assets[0] : null);
-    setAssetModalVisible(true);
-  } catch (error: any) {
-    Alert.alert("Not found", error?.message || "Asset not found for this code");
-  } finally {
-    setCodeLookupLoading(false);
-  }
-};
-const loadContents = useCallback(
-  async (
-    parent: string | null,
-    options?: { showSkeleton?: boolean }
-  ) => {
-    const readOffline = async () => {
-      const offlineData = await getOfflineContents(projectId, parent);
-      setFolders((offlineData.folders || []) as FolderItem[]);
-      setAssets((offlineData.assets || []) as AssetItem[]);
-    };
-
+  const handleDetectedAssetCode = async (rawCode: string) => {
+    const code = normalizeCode(rawCode);
+    if (!code) return;
     try {
-      if (options?.showSkeleton) {
-        setContentLoading(true);
-        setFolders([]);
-        setAssets([]);
-      }
-
-      // ✅ 1. HARD STOP for offline-created projects
-      if (projectId.startsWith("offline_")) {
-        setFolders([]);
-        setAssets([]);
-        return;
-      }
-
-      // ✅ 2. NEW: respect explicit offlineMode
+      setCodeLookupLoading(true);
       const shouldUseOffline =
-        offlineMode || // ← from params (IMPORTANT)
-        (downloadedOffline && (isOnline === false || isOnline === null));
-
+        offlineMode || (downloadedOffline && (isOnline === false || isOnline === null));
+      let result;
       if (shouldUseOffline) {
-        await readOffline();
-        return; // 🚀 prevents API call → no network error
+        result = await advancedSearchOfflineAssets({ projectId, search: code });
+      } else {
+        result = await projectContentApi.advancedSearchContents(projectId, code);
       }
-
-      // ✅ 3. Only reach here if ONLINE
-      const data = await projectContentApi.listContents(
-        projectId,
-        parent,
-        filter,
-        searchQuery
-      );
-
-      setFolders(data.folders || []);
-      setAssets(data.assets || []);
+      setCodeScannerVisible(false);
+      setEditingAsset(result.assets && result.assets.length > 0 ? result.assets[0] : null);
+      setAssetModalVisible(true);
     } catch (error: any) {
-      console.log("LOAD ERROR:", error);
+      Alert.alert(
+        t("folderAssetScreen.codeScanner.notFoundTitle"),
+        error?.message || t("folderAssetScreen.codeScanner.notFoundMessage")
+      );
+    } finally {
+      setCodeLookupLoading(false);
+    }
+  };
 
-      // ✅ 4. Silent fallback (NO ALERT unless critical)
-      if (downloadedOffline || offlineMode) {
-        try {
+  const loadContents = useCallback(
+    async (parent: string | null, options?: { showSkeleton?: boolean }) => {
+      const readOffline = async () => {
+        const offlineData = await getOfflineContents(projectId, parent);
+        setFolders((offlineData.folders || []) as FolderItem[]);
+        setAssets((offlineData.assets || []) as AssetItem[]);
+      };
+      try {
+        if (options?.showSkeleton) {
+          setContentLoading(true);
+          setFolders([]);
+          setAssets([]);
+        }
+        if (projectId.startsWith("offline_")) {
+          setFolders([]);
+          setAssets([]);
+          return;
+        }
+        const shouldUseOffline =
+          offlineMode || (downloadedOffline && (isOnline === false || isOnline === null));
+        if (shouldUseOffline) {
           await readOffline();
           return;
-        } catch (offlineError: any) {
-          console.log("OFFLINE FALLBACK ERROR:", offlineError);
         }
+        const data = await projectContentApi.listContents(projectId, parent, filter, searchQuery);
+        setFolders(data.folders || []);
+        setAssets(data.assets || []);
+      } catch (error: any) {
+        console.log("LOAD ERROR:", error);
+        if (downloadedOffline || offlineMode) {
+          try {
+            await readOffline();
+            return;
+          } catch (offlineError: any) {
+            console.log("OFFLINE FALLBACK ERROR:", offlineError);
+          }
+        }
+        console.error(error?.message || "Failed to load data");
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+        setContentLoading(false);
+        setNavigatingFolderId(null);
       }
-
-      // ❌ Avoid harsh alert for UX
-      console.error (error?.message || "Failed to load data");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-      setContentLoading(false);
-      setNavigatingFolderId(null);
-    }
-  },
-  [projectId, isOnline, downloadedOffline, filter, searchQuery, offlineMode]
-);
+    },
+    [projectId, isOnline, downloadedOffline, filter, searchQuery, offlineMode]
+  );
 
   useEffect(() => {
     loadContents(currentFolderId);
   }, [loadContents, currentFolderId, filter, searchQuery]);
 
- const onRefresh = async () => {
-  setRefreshing(true);
+  const onRefresh = async () => {
+    setRefreshing(true);
+    if (isOnline) {
+      setIsSyncing(true);
+      await syncQueue();
+      setIsSyncing(false);
+    }
+    await loadContents(currentFolderId);
+  };
 
-  if (isOnline) {
+  const handleSyncNow = async () => {
+    const offlineState = isOnline === false || isOnline === null;
+    if (offlineState) {
+      Alert.alert(
+        t("folderAssetScreen.sync.offlineAlert"),
+        t("folderAssetScreen.sync.offlineMessage")
+      );
+      return;
+    }
+    if (pendingCount <= 0) {
+      Alert.alert(
+        t("folderAssetScreen.sync.allSyncedAlert"),
+        t("folderAssetScreen.sync.allSyncedMessage")
+      );
+      return;
+    }
     setIsSyncing(true);
     await syncQueue();
     setIsSyncing(false);
-  }
-
-  await loadContents(currentFolderId);
-};
-
-const handleSyncNow = async () => {
-  const offlineState = isOnline === false || isOnline === null;
-
-  if (offlineState) {
-    Alert.alert("Offline", "You are offline");
-    return;
-  }
-
-  if (pendingCount <= 0) {
-    Alert.alert("Sync", "All assets are synced");
-    return;
-  }
-
-  setIsSyncing(true);
-  await syncQueue();
-  setIsSyncing(false);
-  await loadContents(currentFolderId);
-};
+    await loadContents(currentFolderId);
+  };
 
   const openFolder = async (folder: FolderItem) => {
     if (navigatingFolderId) return;
-
     setNavigatingFolderId(folder.id);
     setCurrentFolderId(folder.id);
     setPath((prev) => [...prev, { id: folder.id, name: folder.name }]);
-
     await loadContents(folder.id, { showSkeleton: true });
   };
 
   const goToPathIndex = async (index: number) => {
     if (navigatingFolderId) return;
-
     const nextPath = path.slice(0, index + 1);
     const selected = nextPath[nextPath.length - 1];
     const folderId = selected.id;
-
     setPath(nextPath);
     setCurrentFolderId(folderId);
     setNavigatingFolderId(folderId ?? "root");
-
     await loadContents(folderId, { showSkeleton: true });
   };
 
-
   const buildLocalFolder = (name: string): FolderItem => ({
-  id: `offline_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-  name,
-  parentId: currentFolderId ?? null,
-  projectId,
-  createdAt: new Date().toISOString(),
-  createdBy: {
-    id: "offline-user",
-    fullName: "You",
-    email: "",
-  },
-});
-  
-
-
-const handleCreateFolder = async () => {
-  if (!folderName.trim()) {
-    Alert.alert("Validation", "Folder name is required");
-    return;
-  }
-
-  const payload = {
-    projectId,
-    name: folderName.trim(),
-    parentId: currentFolderId,
-  };
-
-  try {
-    const result = await safeApiCall(
-      () => projectContentApi.createFolder(payload),
-      payload,
-      { type: "createFolder", projectId }
-    );
-
-    if ("offline" in result) {
-      if (downloadedOffline) {
-        const localFolder = buildLocalFolder(folderName.trim());
-        localFolder.id = result.localId;
-
-        await upsertOfflineFolder(localFolder);
-      }
-
-      Alert.alert("Offline", result.message);
-    } else {
-      if (downloadedOffline) {
-        await upsertOfflineFolder(result.folder);
-      }
-
-      Alert.alert("Success", "Folder created");
-    }
-
-    setFolderName("");
-    setFolderModalVisible(false);
-    await loadContents(currentFolderId, { showSkeleton: true });
-  } catch (error: any) {
-    Alert.alert("Error", error.message || "Failed to create folder");
-  }
-}; 
-
-const normalizeAssetType = (
-  value?: "vehicle" | "other" | "Vehicle" | "Other" | null
-): "vehicle" | "other" => {
-  return String(value || "").toLowerCase() === "vehicle" ? "vehicle" : "other";
-};
-
-
-const buildLocalAsset = (draft: AssetDraft): AssetItem => {
-  const normalizedAssetType = normalizeAssetType(draft.assetType as any);
-  const isVehicle = normalizedAssetType === "vehicle";
-
-  return {
     id: `offline_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-    name: draft.name,
-    writtenDescription: draft.writtenDescription || null,
-    parent: currentFolderId ?? null,
-   rawData: (draft as any).rawData ?? {},
+    name,
+    parentId: currentFolderId ?? null,
     projectId,
     createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    condition: draft.condition || null,
-    assetType: normalizedAssetType,
-    brand: isVehicle ? draft.brand || null : null,
-    model: isVehicle ? draft.model || null : null,
-    code: draft.code || null,
-    manufactureYear: isVehicle ? draft.manufactureYear || null : null,
-    kilometersDriven: isVehicle ? draft.kilometersDriven || null : null,
-    isDone: draft.isDone ?? false,
-    isPresent: draft.isPresent ?? true,
-    createdBy: {
-      id: "offline-user",
-      fullName: "You",
-      email: "",
-    },
-    images: [],
-    voiceNotes: [],
-  };
-};
+    createdBy: { id: "offline-user", fullName: "You", email: "" },
+  });
 
-
-
-
-
-const createAssetAsync = async (draft: AssetDraft) => {
-  const newImages = (draft.images || []).filter(
-    (item: any) => item.uri && !item.uri.startsWith("http")
-  );
-
-  const newVoiceNotes = (draft.voiceNotes || []).filter(
-    (item: any) => item.uri && !item.uri.startsWith("http")
-  );
-
-  const normalizedAssetType = normalizeAssetType(draft.assetType as any);
-  const isVehicle = normalizedAssetType === "vehicle";
-
-  const payload = {
-    projectId,
-    name: draft.name,
-    writtenDescription: draft.writtenDescription || null,
-    parent: currentFolderId || undefined,
-    rawData: (draft as any).rawData ?? {},
-    images: newImages,
-    voiceNotes: newVoiceNotes,
-    condition: draft.condition || null,
-    code: draft.code || null,
-    assetType: normalizedAssetType,
-    brand: isVehicle ? draft.brand || null : null,
-    model: isVehicle ? draft.model || null : null,
-    manufactureYear: isVehicle ? draft.manufactureYear || null : null,
-    kilometersDriven: isVehicle ? draft.kilometersDriven || null : null,
-    isDone: draft.isDone ?? false,
-    isPresent: draft.isPresent ?? true,
+  const handleCreateFolder = async () => {
+    if (!folderName.trim()) {
+      Alert.alert(
+        t("folderAssetScreen.folderModal.validationTitle"),
+        t("folderAssetScreen.folderModal.validationMessage")
+      );
+      return;
+    }
+    const payload = {
+      projectId,
+      name: folderName.trim(),
+      parentId: currentFolderId,
+    };
+    try {
+      const result = await safeApiCall(
+        () => projectContentApi.createFolder(payload),
+        payload,
+        { type: "createFolder", projectId }
+      );
+      if ("offline" in result) {
+        if (downloadedOffline) {
+          const localFolder = buildLocalFolder(folderName.trim());
+          localFolder.id = result.localId;
+          await upsertOfflineFolder(localFolder);
+        }
+        Alert.alert(t("folderAssetScreen.folderModal.offlineTitle"), result.message);
+      } else {
+        if (downloadedOffline) {
+          await upsertOfflineFolder(result.folder);
+        }
+        Alert.alert(
+          t("folderAssetScreen.folderModal.successTitle"),
+          t("folderAssetScreen.folderModal.successMessage")
+        );
+      }
+      setFolderName("");
+      setFolderModalVisible(false);
+      await loadContents(currentFolderId, { showSkeleton: true });
+    } catch (error: any) {
+      Alert.alert(
+        t("folderAssetScreen.folderModal.errorTitle"),
+        error.message || t("folderAssetScreen.folderModal.errorMessage")
+      );
+    }
   };
 
-  const result = await safeApiCall(
-    () => projectContentApi.createAsset(payload),
-    payload,
-    { type: "createAsset", projectId }
-  );
-
-  if ("offline" in result) {
-    if (downloadedOffline) {
-      const localAsset = buildLocalAsset(draft);
-      localAsset.id = result.localId;
-
-      await upsertOfflineAsset(localAsset);
-    }
-
-    showSnackbar(result.message, "info");
-  } else {
-    if (downloadedOffline) {
-      await upsertOfflineAsset(result.asset);
-    }
-
-    showSnackbar("Asset created successfully", "success");
-  }
-
-  await loadContents(currentFolderId, { showSkeleton: true });
-};
-
-const updateAssetAsync = async (draft: AssetDraft) => {
-  if (!editingAsset) return;
-
-  const newImages = (draft.images || []).filter(
-    (item: any) => !item.existing && item.uri && !item.uri.startsWith("http")
-  );
-
-  const newVoiceNotes = (draft.voiceNotes || []).filter(
-    (item: any) => !item.existing && item.uri && !item.uri.startsWith("http")
-  );
-
-  const normalizedAssetType = normalizeAssetType(draft.assetType as any);
-  const isVehicle = normalizedAssetType === "vehicle";
-
-  const payload = {
-    assetId: editingAsset.id,
-    name: draft.name,
-    writtenDescription: draft.writtenDescription || null,
-    images: newImages,
-    voiceNotes: newVoiceNotes,
-    rawData: (draft as any).rawData ?? {},
-    code: draft.code || null,
-    condition: draft.condition || null,
-    assetType: normalizedAssetType,
-    brand: isVehicle ? draft.brand || null : null,
-    model: isVehicle ? draft.model || null : null,
-    manufactureYear: isVehicle ? draft.manufactureYear || null : null,
-    kilometersDriven: isVehicle ? draft.kilometersDriven || null : null,
-    isDone: draft.isDone ?? false,
-    isPresent: draft.isPresent ?? true,
+  const normalizeAssetType = (
+    value?: "vehicle" | "other" | "Vehicle" | "Other" | null
+  ): "vehicle" | "other" => {
+    return String(value || "").toLowerCase() === "vehicle" ? "vehicle" : "other";
   };
 
-  const result = await safeApiCall(
-    () => projectContentApi.updateAsset(payload),
-    payload,
-    { type: "updateAsset", projectId }
-  );
+  const buildLocalAsset = (draft: AssetDraft): AssetItem => {
+    const normalizedAssetType = normalizeAssetType(draft.assetType as any);
+    const isVehicle = normalizedAssetType === "vehicle";
+    return {
+      id: `offline_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+      name: draft.name,
+      writtenDescription: draft.writtenDescription || null,
+      parent: currentFolderId ?? null,
+      rawData: (draft as any).rawData ?? {},
+      projectId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      condition: draft.condition || null,
+      assetType: normalizedAssetType,
+      brand: isVehicle ? draft.brand || null : null,
+      model: isVehicle ? draft.model || null : null,
+      code: draft.code || null,
+      manufactureYear: isVehicle ? draft.manufactureYear || null : null,
+      kilometersDriven: isVehicle ? draft.kilometersDriven || null : null,
+      isDone: draft.isDone ?? false,
+      isPresent: draft.isPresent ?? true,
+      createdBy: { id: "offline-user", fullName: "You", email: "" },
+      images: [],
+      voiceNotes: [],
+    };
+  };
 
-  if ("offline" in result) {
-    if (downloadedOffline) {
-      const existingOfflineAsset =
-        (await getOfflineAssetById(editingAsset.id)) ?? editingAsset;
-
-      const updatedOfflineAsset: AssetItem = {
-        ...existingOfflineAsset,
-        name: draft.name,
-        writtenDescription: draft.writtenDescription || null,
-        rawData: (draft as any).rawData ?? (existingOfflineAsset as any).rawData ?? {},
-        condition: draft.condition || null,
-        code: draft.code ?? existingOfflineAsset.code ?? null,
-        assetType: normalizedAssetType,
-        brand: isVehicle ? draft.brand || null : null,
-        model: isVehicle ? draft.model || null : null,
-        manufactureYear: isVehicle ? draft.manufactureYear || null : null,
-        kilometersDriven: isVehicle ? draft.kilometersDriven || null : null,
-        isDone: draft.isDone ?? existingOfflineAsset.isDone,
-        isPresent: draft.isPresent ?? existingOfflineAsset.isPresent,
-        updatedAt: new Date().toISOString(),
-      };
-
-      await upsertOfflineAsset(updatedOfflineAsset);
+  const createAssetAsync = async (draft: AssetDraft) => {
+    const newImages = (draft.images || []).filter(
+      (item: any) => item.uri && !item.uri.startsWith("http")
+    );
+    const newVoiceNotes = (draft.voiceNotes || []).filter(
+      (item: any) => item.uri && !item.uri.startsWith("http")
+    );
+    const normalizedAssetType = normalizeAssetType(draft.assetType as any);
+    const isVehicle = normalizedAssetType === "vehicle";
+    const payload = {
+      projectId,
+      name: draft.name,
+      writtenDescription: draft.writtenDescription || null,
+      parent: currentFolderId || undefined,
+      rawData: (draft as any).rawData ?? {},
+      images: newImages,
+      voiceNotes: newVoiceNotes,
+      condition: draft.condition || null,
+      code: draft.code || null,
+      assetType: normalizedAssetType,
+      brand: isVehicle ? draft.brand || null : null,
+      model: isVehicle ? draft.model || null : null,
+      manufactureYear: isVehicle ? draft.manufactureYear || null : null,
+      kilometersDriven: isVehicle ? draft.kilometersDriven || null : null,
+      isDone: draft.isDone ?? false,
+      isPresent: draft.isPresent ?? true,
+    };
+    const result = await safeApiCall(
+      () => projectContentApi.createAsset(payload),
+      payload,
+      { type: "createAsset", projectId }
+    );
+    if ("offline" in result) {
+      if (downloadedOffline) {
+        const localAsset = buildLocalAsset(draft);
+        localAsset.id = result.localId;
+        await upsertOfflineAsset(localAsset);
+      }
+      showSnackbar(result.message, "info");
+    } else {
+      if (downloadedOffline) await upsertOfflineAsset(result.asset);
+      showSnackbar(t("folderAssetScreen.snackbar.assetCreated"), "success");
     }
+    await loadContents(currentFolderId, { showSkeleton: true });
+  };
 
-    showSnackbar(result.message, "info");
-  } else {
-    if (downloadedOffline) {
-      await upsertOfflineAsset(result.asset);
+  const updateAssetAsync = async (draft: AssetDraft) => {
+    if (!editingAsset) return;
+    const newImages = (draft.images || []).filter(
+      (item: any) => !item.existing && item.uri && !item.uri.startsWith("http")
+    );
+    const newVoiceNotes = (draft.voiceNotes || []).filter(
+      (item: any) => !item.existing && item.uri && !item.uri.startsWith("http")
+    );
+    const normalizedAssetType = normalizeAssetType(draft.assetType as any);
+    const isVehicle = normalizedAssetType === "vehicle";
+    const payload = {
+      assetId: editingAsset.id,
+      name: draft.name,
+      writtenDescription: draft.writtenDescription || null,
+      images: newImages,
+      voiceNotes: newVoiceNotes,
+      rawData: (draft as any).rawData ?? {},
+      code: draft.code || null,
+      condition: draft.condition || null,
+      assetType: normalizedAssetType,
+      brand: isVehicle ? draft.brand || null : null,
+      model: isVehicle ? draft.model || null : null,
+      manufactureYear: isVehicle ? draft.manufactureYear || null : null,
+      kilometersDriven: isVehicle ? draft.kilometersDriven || null : null,
+      isDone: draft.isDone ?? false,
+      isPresent: draft.isPresent ?? true,
+    };
+    const result = await safeApiCall(
+      () => projectContentApi.updateAsset(payload),
+      payload,
+      { type: "updateAsset", projectId }
+    );
+    if ("offline" in result) {
+      if (downloadedOffline) {
+        const existingOfflineAsset =
+          (await getOfflineAssetById(editingAsset.id)) ?? editingAsset;
+        const updatedOfflineAsset: AssetItem = {
+          ...existingOfflineAsset,
+          name: draft.name,
+          writtenDescription: draft.writtenDescription || null,
+          rawData: (draft as any).rawData ?? (existingOfflineAsset as any).rawData ?? {},
+          condition: draft.condition || null,
+          code: draft.code ?? existingOfflineAsset.code ?? null,
+          assetType: normalizedAssetType,
+          brand: isVehicle ? draft.brand || null : null,
+          model: isVehicle ? draft.model || null : null,
+          manufactureYear: isVehicle ? draft.manufactureYear || null : null,
+          kilometersDriven: isVehicle ? draft.kilometersDriven || null : null,
+          isDone: draft.isDone ?? existingOfflineAsset.isDone,
+          isPresent: draft.isPresent ?? existingOfflineAsset.isPresent,
+          updatedAt: new Date().toISOString(),
+        };
+        await upsertOfflineAsset(updatedOfflineAsset);
+      }
+      showSnackbar(result.message, "info");
+    } else {
+      if (downloadedOffline) await upsertOfflineAsset(result.asset);
+      showSnackbar(t("folderAssetScreen.snackbar.assetUpdated"), "success");
     }
+    await loadContents(currentFolderId, { showSkeleton: true });
+  };
 
-    showSnackbar("Asset updated successfully", "success");
-  }
-
-  await loadContents(currentFolderId, { showSkeleton: true });
-};
-
-  const submitAssetInBackground = async (
-    draft: AssetDraft,
-    isEdit: boolean
-  ) => {
+  const submitAssetInBackground = async (draft: AssetDraft, isEdit: boolean) => {
     setPendingAssetSaveCount((count) => count + 1);
     try {
       if (isEdit) {
@@ -872,7 +712,10 @@ const updateAssetAsync = async (draft: AssetDraft) => {
         await createAssetAsync(draft);
       }
     } catch (error: any) {
-      showSnackbar(error?.message || "Failed to save asset", "error");
+      showSnackbar(
+        error?.message || t("folderAssetScreen.snackbar.saveFailed"),
+        "error"
+      );
     } finally {
       setPendingAssetSaveCount((count) => Math.max(0, count - 1));
     }
@@ -890,48 +733,34 @@ const updateAssetAsync = async (draft: AssetDraft) => {
 
   const filteredAssets = useMemo(() => {
     let filtered = assets;
-    
-    // Apply filter
-    if (filter === 'done') {
-      filtered = filtered.filter(asset => asset.isDone);
-    } else if (filter === 'incomplete') {
-      filtered = filtered.filter(asset => !asset.isDone);
-    }
-
-    // Apply search
+    if (filter === "done") filtered = filtered.filter((a) => a.isDone);
+    else if (filter === "incomplete") filtered = filtered.filter((a) => !a.isDone);
     if (searchQuery.trim()) {
       const query = searchQuery.trim().toLowerCase();
-      filtered = filtered.filter(asset => 
-        asset.name.toLowerCase().includes(query)
-      );
+      filtered = filtered.filter((a) => a.name.toLowerCase().includes(query));
     }
-
     return filtered;
   }, [assets, filter, searchQuery]);
 
-const items = useMemo(() => {
-  const combined = [
-    ...folders.map((folder) => ({ ...folder, itemType: "folder" as const })),
-    ...filteredAssets.map((asset) => ({ ...asset, itemType: "asset" as const })),
-  ];
+  const items = useMemo(() => {
+    const combined = [
+      ...folders.map((folder) => ({ ...folder, itemType: "folder" as const })),
+      ...filteredAssets.map((asset) => ({ ...asset, itemType: "asset" as const })),
+    ];
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return combined;
+    return combined.filter((item) => item.name?.toLowerCase().includes(q));
+  }, [folders, filteredAssets, searchQuery]);
 
-  const q = searchQuery.trim().toLowerCase();
-  if (!q) return combined;
-
-  return combined.filter((item) =>
-    item.name?.toLowerCase().includes(q)
-  );
-}, [folders, filteredAssets, searchQuery]);
-
-const itemsWithPlaceholders = useMemo(() => {
-  return [
-    ...items,
-    ...Array.from({ length: pendingAssetSaveCount }, (_, index) => ({
-      itemType: "placeholder" as const,
-      id: `placeholder-${index}`,
-    })),
-  ];
-}, [items, pendingAssetSaveCount]);
+  const itemsWithPlaceholders = useMemo(() => {
+    return [
+      ...items,
+      ...Array.from({ length: pendingAssetSaveCount }, (_, index) => ({
+        itemType: "placeholder" as const,
+        id: `placeholder-${index}`,
+      })),
+    ];
+  }, [items, pendingAssetSaveCount]);
 
   const renderSkeletons = () => {
     return Array.from({ length: 12 }).map((_, index) => (
@@ -949,53 +778,69 @@ const itemsWithPlaceholders = useMemo(() => {
   return (
     <SafeAreaView style={styles.flex} edges={["left", "right", "bottom"]}>
       <View style={styles.container}>
+        {/* ── Header ── */}
         <View style={styles.headerRow}>
           <View>
             <Text style={styles.title}>{projectName}</Text>
-            <Text style={styles.subtitle}>All Folders & Assets of the Project</Text>
+            <Text style={styles.subtitle}>
+              {t("folderAssetScreen.header.subtitle")}
+            </Text>
           </View>
-
           <TouchableOpacity
             style={styles.dashboardBtn}
             onPress={() => router.push("/(app)/project")}
             activeOpacity={0.85}
           >
-            <Text style={styles.dashboardBtnText}>Dashboard</Text>
+            <Text style={styles.dashboardBtnText}>
+              {t("folderAssetScreen.header.dashboardBtn")}
+            </Text>
           </TouchableOpacity>
         </View>
 
+        {/* ── Offline badge ── */}
         {downloadedOffline && !isOnline && (
-  <Text style={styles.offlineModeText}>OFFLINE</Text>
-)}
+          <Text style={styles.offlineModeText}>
+            {t("folderAssetScreen.offline.badge")}
+          </Text>
+        )}
 
+        {/* ── Pending / sync bar ── */}
         <View style={styles.pendingBadge}>
-  <Ionicons
-    name="ellipse"
-    size={12}
-    color={isOnline ? "#4CAF50" : "#888"}
-    style={styles.networkIndicator}
-  />
-  <View style={{ flex: 1 }}>
-    <Text style={styles.pendingText}>
-      ⏳ {pendingCount} asset{pendingCount !== 1 ? "s" : ""} to sync
-    </Text>
-  </View>
-  <TouchableOpacity
-    onPress={handleSyncNow}
-    style={styles.syncBtn}
-    disabled={isSyncing}
-  >
-    {isSyncing ? (
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <ActivityIndicator size="small" color="#000" />
-        <Text style={styles.syncBtnText}> Your Assets are being synced</Text>
-      </View>
-    ) : (
-      <Text style={styles.syncBtnText}>Sync Now</Text>
-    )}
-  </TouchableOpacity>
-</View>
+          <Ionicons
+            name="ellipse"
+            size={12}
+            color={isOnline ? "#4CAF50" : "#888"}
+            style={styles.networkIndicator}
+          />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.pendingText}>
+              {t("folderAssetScreen.sync.pendingAssets", {
+                count: pendingCount,
+                plural: pendingCount !== 1 ? "s" : "",
+              })}
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={handleSyncNow}
+            style={styles.syncBtn}
+            disabled={isSyncing}
+          >
+            {isSyncing ? (
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <ActivityIndicator size="small" color="#000" />
+                <Text style={styles.syncBtnText}>
+                  {" "}{t("folderAssetScreen.sync.syncing")}
+                </Text>
+              </View>
+            ) : (
+              <Text style={styles.syncBtnText}>
+                {t("folderAssetScreen.sync.syncNow")}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
 
+        {/* ── Breadcrumb ── */}
         <View style={styles.breadcrumbRow}>
           {path.map((crumb, index) => (
             <TouchableOpacity
@@ -1010,53 +855,61 @@ const itemsWithPlaceholders = useMemo(() => {
           ))}
         </View>
 
+        {/* ── Filter row ── */}
         <View style={styles.filterRow}>
-          <TouchableOpacity 
-            style={[styles.filterBtn, filter === 'all' && styles.filterBtnActive]}
-            onPress={() => setFilter('all')}
+          {(["all", "done", "incomplete"] as const).map((f) => (
+            <TouchableOpacity
+              key={f}
+              style={[styles.filterBtn, filter === f && styles.filterBtnActive]}
+              onPress={() => setFilter(f)}
+            >
+              <Text
+                style={[
+                  styles.filterText,
+                  filter === f && styles.filterTextActive,
+                ]}
+              >
+                {t(`folderAssetScreen.filter.${f}`)}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* ── Advanced search row ── */}
+        <View style={styles.advancedSearchRow}>
+          <TextInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder={
+              selectedRawDataKey
+                ? t("folderAssetScreen.search.placeholderWithKey", {
+                    key: selectedRawDataKey,
+                  })
+                : t("folderAssetScreen.search.placeholderAll")
+            }
+            placeholderTextColor="#666"
+            style={styles.advancedSearchInput}
+          />
+          <TouchableOpacity
+            style={styles.rawKeyPicker}
+            onPress={() => setRawKeyModalVisible(true)}
           >
-            <Text style={[styles.filterText, filter === 'all' && styles.filterTextActive]}>All</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.filterBtn, filter === 'done' && styles.filterBtnActive]}
-            onPress={() => setFilter('done')}
-          >
-            <Text style={[styles.filterText, filter === 'done' && styles.filterTextActive]}>Done</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.filterBtn, filter === 'incomplete' && styles.filterBtnActive]}
-            onPress={() => setFilter('incomplete')}
-          >
-            <Text style={[styles.filterText, filter === 'incomplete' && styles.filterTextActive]}>Incomplete</Text>
+            <Text style={styles.rawKeyPickerText} numberOfLines={1}>
+              {selectedRawDataKey ||
+                t("folderAssetScreen.search.fieldPickerLabel")}
+            </Text>
+            <Ionicons name="chevron-down" size={14} color="#000" />
           </TouchableOpacity>
         </View>
 
- <View style={styles.advancedSearchRow}>
-  <TextInput
-    value={searchQuery}
-    onChangeText={setSearchQuery}
-    placeholder={
-      selectedRawDataKey
-        ? `Search ${selectedRawDataKey} value`
-        : "Search all raw data values"
-    }
-    placeholderTextColor="#666"
-    style={styles.advancedSearchInput}
-  />
-
-  <TouchableOpacity
-    style={styles.rawKeyPicker}
-   onPress={() => setRawKeyModalVisible(true)}
-  >
-    <Text style={styles.rawKeyPickerText} numberOfLines={1}>
-      {selectedRawDataKey || "All"}
-    </Text>
-    <Ionicons name="chevron-down" size={14} color="#000" />
-  </TouchableOpacity>
-</View>
-
+        {/* ── Content ── */}
         {loading || contentLoading ? (
-          <View style={[styles.listContent, { paddingBottom: 120 + insets.bottom }]}>
+          <View
+            style={[
+              styles.listContent,
+              { paddingBottom: 120 + insets.bottom },
+            ]}
+          >
             <View style={styles.gridWrap}>{renderSkeletons()}</View>
           </View>
         ) : (
@@ -1064,228 +917,264 @@ const itemsWithPlaceholders = useMemo(() => {
             {pendingAssetSaveCount > 0 && (
               <View style={styles.pendingSaveBanner}>
                 <Text style={styles.pendingSaveText}>
-                  Saving {pendingAssetSaveCount} Asset
-                  {pendingAssetSaveCount > 1 ? "s" : ""}…
+                  {t("folderAssetScreen.grid.pendingSaving", {
+                    count: pendingAssetSaveCount,
+                    plural: pendingAssetSaveCount > 1 ? "s" : "",
+                  })}
                 </Text>
               </View>
             )}
 
-
-
-
-{isAdvancedSearching ? (
-  <FlatList
-  key={`cols-${FLAT_COLUMNS}`}
-    data={advancedSearchListItems}
-    keyExtractor={(item) => `advanced-${item.id} +- ${item.updatedAt}`}
-    numColumns={FLAT_COLUMNS}
-    onEndReached={loadMoreAdvancedResults}
-    onEndReachedThreshold={0.4}
-    refreshControl={
-      <RefreshControl
-        refreshing={advancedSearchLoading}
-        onRefresh={() => runAdvancedSearch(1, false)}
-      />
-    }
-    contentContainerStyle={[
-      styles.searchListContent,
-      { paddingBottom: 120 + insets.bottom },
-    ]}
-    ListFooterComponent={
-      advancedSearchLoading ? (
-        <ActivityIndicator color={ACC} style={{ marginVertical: 18 }} />
-      ) : null
-    }
-    ListEmptyComponent={
-      !advancedSearchLoading ? (
-        <View style={styles.emptyWrap}>
-          <Text style={styles.emptyTitle}>No matching assets</Text>
-          <Text style={styles.emptyText}>
-            Try another value or select a different field.
-          </Text>
-        </View>
-      ) : null
-    }
-    renderItem={({ item }) => (
-      <TouchableOpacity
-        style={styles.searchResultCard}
-        onPress={() => openEditAsset(item)}
-        activeOpacity={0.85}
-      >
-        {item.images?.length ? (
-          <Image
-            source={{ uri: item.images[0].url }}
-            style={styles.searchResultImage}
-            resizeMode="cover"
-          />
-        ) : (
-          <View style={styles.searchResultIcon}>
-            <Ionicons name="cube-outline" size={28} color="#fff" />
-          </View>
-        )}
-
-        <View style={styles.searchResultBody}>
-          <Text style={styles.searchResultTitle} numberOfLines={1}>
-            {item.name}
-          </Text>
-
-          <Text style={styles.searchResultLocation} numberOfLines={2}>
-            {getAssetLocationText(item)}
-          </Text>
-
-          {selectedRawDataKey && (
-  <Text style={styles.searchResultMeta} numberOfLines={1}>
-    {getRawDataValue(item.rawData, selectedRawDataKey) ?? "—"}
-  </Text>
-)}
-        </View>
-
-        <Ionicons name="chevron-forward" size={20} color="#777" />
-      </TouchableOpacity>
-    )}
-  />
-) : (
-
-
-
-
-
-
-            <FlatList
-              data={itemsWithPlaceholders}
-              keyExtractor={(item) => `${item.itemType}-${item.id}`}
-            numColumns={NUM_COLUMNS}
-            columnWrapperStyle={styles.columnWrapper}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            }
-            contentContainerStyle={[
-              styles.listContentWithBottomBar,
-              { paddingBottom: 120 + insets.bottom },
-            ]}
-            ListEmptyComponent={
-              <View style={styles.emptyWrap}>
-                <Text style={styles.emptyTitle}>No contents yet</Text>
-                <Text style={styles.emptyText}>
-                  {isRootFolder
-                    ? "Open a folder to add folders or assets."
-                    : "Create a folder or add a new asset."}
-                </Text>
-              </View>
-            }
-            renderItem={({ item }) => {
-              if (item.itemType === "placeholder") {
-                return (
-                  <View style={styles.gridItem}>
-                    <View style={styles.gridCard}>
-                      <View style={styles.skeletonIconGrid} />
-                      <View style={styles.skeletonTitleGrid} />
-                    </View>
-                  </View>
-                );
-              }
-
-              if (item.itemType === "folder") {
-                const isOpening = navigatingFolderId === item.id;
-
-                return (
-                  <View style={styles.gridItem}>
-                    <TouchableOpacity
-                      style={styles.gridCard}
-                      onPress={() => openFolder(item)}
-                      disabled={!!navigatingFolderId}
-                      activeOpacity={0.85}
-                    >
-                      <View style={styles.iconWrap}>
-                        {isOpening ? (
-                          <ActivityIndicator size="small" color={ACC} />
-                        ) : (
-                          <Ionicons name="folder" size={36} color={ACC} />
-                        )}
-                      </View>
-
-                      <Text style={styles.gridTitle} numberOfLines={2}>
-                        {item.name}
+            {isAdvancedSearching ? (
+              /* ── Advanced search results list ── */
+              <FlatList
+                key={`cols-${FLAT_COLUMNS}`}
+                data={advancedSearchListItems}
+                keyExtractor={(item) =>
+                  `advanced-${item.id} +- ${item.updatedAt}`
+                }
+                numColumns={FLAT_COLUMNS}
+                onEndReached={loadMoreAdvancedResults}
+                onEndReachedThreshold={0.4}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={advancedSearchLoading}
+                    onRefresh={() => runAdvancedSearch(1, false)}
+                  />
+                }
+                contentContainerStyle={[
+                  styles.searchListContent,
+                  { paddingBottom: 120 + insets.bottom },
+                ]}
+                ListFooterComponent={
+                  advancedSearchLoading ? (
+                    <ActivityIndicator
+                      color={ACC}
+                      style={{ marginVertical: 18 }}
+                    />
+                  ) : null
+                }
+                ListEmptyComponent={
+                  !advancedSearchLoading ? (
+                    <View style={styles.emptyWrap}>
+                      <Text style={styles.emptyTitle}>
+                        {t("folderAssetScreen.advancedSearch.noResultsTitle")}
                       </Text>
-                    </TouchableOpacity>
-                  </View>
-                );
-              }
-
-              return (
-                <View style={styles.gridItem}>
+                      <Text style={styles.emptyText}>
+                        {t("folderAssetScreen.advancedSearch.noResultsText")}
+                      </Text>
+                    </View>
+                  ) : null
+                }
+                renderItem={({ item }) => (
                   <TouchableOpacity
-                    style={styles.gridCard}
+                    style={styles.searchResultCard}
                     onPress={() => openEditAsset(item)}
                     activeOpacity={0.85}
                   >
-                    {item.images && item.images.length > 0 ? (
+                    {item.images?.length ? (
                       <Image
                         source={{ uri: item.images[0].url }}
-                        style={styles.assetImageBackground}
+                        style={styles.searchResultImage}
                         resizeMode="cover"
                       />
                     ) : (
-                      <View style={styles.iconWrap}>
-                        <Ionicons name="cube-outline" size={36} color={!item.isPresent ? "#FF4444" : "#fff"} />
+                      <View style={styles.searchResultIcon}>
+                        <Ionicons
+                          name="cube-outline"
+                          size={28}
+                          color="#fff"
+                        />
                       </View>
                     )}
-
-                    {!item.isPresent && (
-                      <View style={styles.notPresentOverlay} />
-                    )}
-
-                    <View style={styles.assetNameOverlay}>
-                      <Text style={styles.gridTitleOverlay} numberOfLines={2}>
+                    <View style={styles.searchResultBody}>
+                      <Text
+                        style={styles.searchResultTitle}
+                        numberOfLines={1}
+                      >
                         {item.name}
                       </Text>
+                      <Text
+                        style={styles.searchResultLocation}
+                        numberOfLines={2}
+                      >
+                        {getAssetLocationText(item)}
+                      </Text>
+                      {selectedRawDataKey && (
+                        <Text
+                          style={styles.searchResultMeta}
+                          numberOfLines={1}
+                        >
+                          {getRawDataValue(item.rawData, selectedRawDataKey) ??
+                            "—"}
+                        </Text>
+                      )}
                     </View>
-
-                    {item.images && item.images.length > 0 && (
-                      <View style={styles.photoCountBadge}>
-                        <Text style={styles.photoCountText}>{item.images.length}</Text>
-                      </View>
-                    )}
-
-                    <View style={styles.syncTickBadge}>
-                      <Ionicons
-                        name={item.id?.startsWith("offline_") ? "checkmark" : "checkmark-done"}
-                        size={12}
-                        color={item.id?.startsWith("offline_") ? "#fff" : "#D4FF00"}
-                      />
-                    </View>
+                    <Ionicons name="chevron-forward" size={20} color="#777" />
                   </TouchableOpacity>
-                </View>
-              );
-            }}
-          />
-          
+                )}
+              />
+            ) : (
+              /* ── Grid list ── */
+              <FlatList
+                data={itemsWithPlaceholders}
+                keyExtractor={(item) => `${item.itemType}-${item.id}`}
+                numColumns={NUM_COLUMNS}
+                columnWrapperStyle={styles.columnWrapper}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={onRefresh}
+                  />
+                }
+                contentContainerStyle={[
+                  styles.listContentWithBottomBar,
+                  { paddingBottom: 120 + insets.bottom },
+                ]}
+                ListEmptyComponent={
+                  <View style={styles.emptyWrap}>
+                    <Text style={styles.emptyTitle}>
+                      {t("folderAssetScreen.empty.title")}
+                    </Text>
+                    <Text style={styles.emptyText}>
+                      {isRootFolder
+                        ? t("folderAssetScreen.empty.messageRoot")
+                        : t("folderAssetScreen.empty.messageFolder")}
+                    </Text>
+                  </View>
+                }
+                renderItem={({ item }) => {
+                  if (item.itemType === "placeholder") {
+                    return (
+                      <View style={styles.gridItem}>
+                        <View style={styles.gridCard}>
+                          <View style={styles.skeletonIconGrid} />
+                          <View style={styles.skeletonTitleGrid} />
+                        </View>
+                      </View>
+                    );
+                  }
+
+                  if (item.itemType === "folder") {
+                    const isOpening = navigatingFolderId === item.id;
+                    return (
+                      <View style={styles.gridItem}>
+                        <TouchableOpacity
+                          style={styles.gridCard}
+                          onPress={() => openFolder(item)}
+                          disabled={!!navigatingFolderId}
+                          activeOpacity={0.85}
+                        >
+                          <View style={styles.iconWrap}>
+                            {isOpening ? (
+                              <ActivityIndicator size="small" color={ACC} />
+                            ) : (
+                              <Ionicons
+                                name="folder"
+                                size={36}
+                                color={ACC}
+                              />
+                            )}
+                          </View>
+                          <Text style={styles.gridTitle} numberOfLines={2}>
+                            {item.name}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  }
+
+                  return (
+                    <View style={styles.gridItem}>
+                      <TouchableOpacity
+                        style={styles.gridCard}
+                        onPress={() => openEditAsset(item)}
+                        activeOpacity={0.85}
+                      >
+                        {item.images && item.images.length > 0 ? (
+                          <Image
+                            source={{ uri: item.images[0].url }}
+                            style={styles.assetImageBackground}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <View style={styles.iconWrap}>
+                            <Ionicons
+                              name="cube-outline"
+                              size={36}
+                              color={!item.isPresent ? "#FF4444" : "#fff"}
+                            />
+                          </View>
+                        )}
+                        {!item.isPresent && (
+                          <View style={styles.notPresentOverlay} />
+                        )}
+                        <View style={styles.assetNameOverlay}>
+                          <Text
+                            style={styles.gridTitleOverlay}
+                            numberOfLines={2}
+                          >
+                            {item.name}
+                          </Text>
+                        </View>
+                        {item.images && item.images.length > 0 && (
+                          <View style={styles.photoCountBadge}>
+                            <Text style={styles.photoCountText}>
+                              {item.images.length}
+                            </Text>
+                          </View>
+                        )}
+                        <View style={styles.syncTickBadge}>
+                          <Ionicons
+                            name={
+                              item.id?.startsWith("offline_")
+                                ? "checkmark"
+                                : "checkmark-done"
+                            }
+                            size={12}
+                            color={
+                              item.id?.startsWith("offline_")
+                                ? "#fff"
+                                : "#D4FF00"
+                            }
+                          />
+                        </View>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                }}
+              />
             )}
           </>
         )}
 
-   <TouchableOpacity
-  style={[
-    styles.scanFab,
-    { bottom: Math.max(insets.bottom, 0) + 46 },
-  ]}
-  onPress={() => setCodeScannerVisible(true)}
-  activeOpacity={0.85}
->
-  <Ionicons name="barcode-outline" size={22} color="#000" />
-</TouchableOpacity>
+        {/* ── Scan FAB ── */}
+        <TouchableOpacity
+          style={[
+            styles.scanFab,
+            { bottom: Math.max(insets.bottom, 0) + 46 },
+          ]}
+          onPress={() => setCodeScannerVisible(true)}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="barcode-outline" size={22} color="#000" />
+        </TouchableOpacity>
 
-<TouchableOpacity
-  onPress={handleBackPress}
-  activeOpacity={1}
-  style={[
-    styles.backButton,
-    { bottom: Math.max(insets.bottom, 0) + 46 },
-  ]}
->
-  <Text  style={styles.backText}>Back</Text>
-</TouchableOpacity>
+        {/* ── Back button ── */}
+        <TouchableOpacity
+          onPress={handleBackPress}
+          activeOpacity={1}
+          style={[
+            styles.backButton,
+            { bottom: Math.max(insets.bottom, 0) + 46 },
+          ]}
+        >
+          <Text style={styles.backText}>
+            {t("folderAssetScreen.actions.back")}
+          </Text>
+        </TouchableOpacity>
 
+        {/* ── Bottom action bar (inside folder only) ── */}
         {!isRootFolder && (
           <View
             style={[
@@ -1298,9 +1187,10 @@ const itemsWithPlaceholders = useMemo(() => {
               onPress={openFolderModal}
               activeOpacity={0.85}
             >
-              <Text style={styles.primaryBtnText}>New Folder</Text>
+              <Text style={styles.primaryBtnText}>
+                {t("folderAssetScreen.actions.newFolder")}
+              </Text>
             </TouchableOpacity>
-
             <TouchableOpacity
               style={styles.secondaryBtn}
               onPress={() => {
@@ -1309,14 +1199,14 @@ const itemsWithPlaceholders = useMemo(() => {
               }}
               activeOpacity={0.85}
             >
-              <Text style={styles.secondaryBtnText}>New Asset</Text>
+              <Text style={styles.secondaryBtnText}>
+                {t("folderAssetScreen.actions.newAsset")}
+              </Text>
             </TouchableOpacity>
           </View>
         )}
 
-
-
-
+        {/* ── Create folder modal ── */}
         <Modal
           visible={folderModalVisible}
           animationType="fade"
@@ -1324,9 +1214,7 @@ const itemsWithPlaceholders = useMemo(() => {
           statusBarTranslucent
           onRequestClose={() => setFolderModalVisible(false)}
           onShow={() => {
-            setTimeout(() => {
-              folderInputRef.current?.focus();
-            }, 80);
+            setTimeout(() => folderInputRef.current?.focus(), 80);
           }}
         >
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -1338,12 +1226,15 @@ const itemsWithPlaceholders = useMemo(() => {
               >
                 <TouchableWithoutFeedback>
                   <View style={styles.modalCard}>
-                    <Text style={styles.modalTitle}>Create New Folder</Text>
-
+                    <Text style={styles.modalTitle}>
+                      {t("folderAssetScreen.folderModal.title")}
+                    </Text>
                     <TextInput
                       ref={folderInputRef}
                       style={styles.input}
-                      placeholder="Folder Name"
+                      placeholder={t(
+                        "folderAssetScreen.folderModal.placeholder"
+                      )}
                       placeholderTextColor="#777"
                       value={folderName}
                       onChangeText={setFolderName}
@@ -1352,7 +1243,6 @@ const itemsWithPlaceholders = useMemo(() => {
                       showSoftInputOnFocus
                       onSubmitEditing={handleCreateFolder}
                     />
-
                     <View style={styles.modalActions}>
                       <TouchableOpacity
                         style={styles.modalCancelBtn}
@@ -1361,14 +1251,17 @@ const itemsWithPlaceholders = useMemo(() => {
                           setFolderModalVisible(false);
                         }}
                       >
-                        <Text style={styles.modalCancelText}>Cancel</Text>
+                        <Text style={styles.modalCancelText}>
+                          {t("folderAssetScreen.folderModal.cancel")}
+                        </Text>
                       </TouchableOpacity>
-
                       <TouchableOpacity
                         style={styles.modalSaveBtn}
                         onPress={handleCreateFolder}
                       >
-                        <Text style={styles.modalSaveText}>Create</Text>
+                        <Text style={styles.modalSaveText}>
+                          {t("folderAssetScreen.folderModal.create")}
+                        </Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -1378,61 +1271,64 @@ const itemsWithPlaceholders = useMemo(() => {
           </TouchableWithoutFeedback>
         </Modal>
 
-
+        {/* ── Raw key picker modal ── */}
         <Modal
-  visible={rawKeyModalVisible}
-  animationType="fade"
-  transparent
-  onRequestClose={() => setRawKeyModalVisible(false)}
->
-  <TouchableWithoutFeedback onPress={() => setRawKeyModalVisible(false)}>
-    <View style={styles.modalOverlay}>
-      <TouchableWithoutFeedback>
-        <View style={styles.rawKeyModalCard}>
-          <Text style={styles.modalTitle}>Select Search Field</Text>
+          visible={rawKeyModalVisible}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setRawKeyModalVisible(false)}
+        >
+          <TouchableWithoutFeedback onPress={() => setRawKeyModalVisible(false)}>
+            <View style={styles.modalOverlay}>
+              <TouchableWithoutFeedback>
+                <View style={styles.rawKeyModalCard}>
+                  <Text style={styles.modalTitle}>
+                    {t("folderAssetScreen.fieldModal.title")}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.rawKeyOption}
+                    onPress={() => {
+                      setSelectedRawDataKey(null);
+                      setRawKeyModalVisible(false);
+                    }}
+                  >
+                    <Text style={styles.rawKeyOptionText}>
+                      {t("folderAssetScreen.fieldModal.allValues")}
+                    </Text>
+                  </TouchableOpacity>
+                  <FlatList
+                    data={rawDataKeys}
+                    keyExtractor={(item) => item}
+                    style={{ maxHeight: 360 }}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={styles.rawKeyOption}
+                        onPress={() => {
+                          setSelectedRawDataKey(item);
+                          setRawKeyModalVisible(false);
+                        }}
+                      >
+                        <Text style={styles.rawKeyOptionText}>{item}</Text>
+                      </TouchableOpacity>
+                    )}
+                  />
+                </View>
+              </TouchableWithoutFeedback>
+            </View>
+          </TouchableWithoutFeedback>
+        </Modal>
 
-          <TouchableOpacity
-            style={styles.rawKeyOption}
-            onPress={() => {
-              setSelectedRawDataKey(null);
-              setRawKeyModalVisible(false);
-            }}
-          >
-            <Text style={styles.rawKeyOptionText}>All Values</Text>
-          </TouchableOpacity>
-
-          <FlatList
-            data={rawDataKeys}
-            keyExtractor={(item) => item}
-            style={{ maxHeight: 360 }}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.rawKeyOption}
-                onPress={() => {
-                  setSelectedRawDataKey(item);
-                  setRawKeyModalVisible(false);
-                }}
-              >
-                <Text style={styles.rawKeyOptionText}>{item}</Text>
-              </TouchableOpacity>
-            )}
-          />
-        </View>
-      </TouchableWithoutFeedback>
-    </View>
-  </TouchableWithoutFeedback>
-</Modal>
-
-
+        {/* ── Code scanner modal ── */}
         <CodeScannerModal
-  visible={codeScannerVisible}
-  loading={codeLookupLoading}
-  onClose={() => {
-    if (!codeLookupLoading) setCodeScannerVisible(false);
-  }}
-  onDetected={handleDetectedAssetCode}
-/>
+          visible={codeScannerVisible}
+          loading={codeLookupLoading}
+          onClose={() => {
+            if (!codeLookupLoading) setCodeScannerVisible(false);
+          }}
+          onDetected={handleDetectedAssetCode}
+        />
 
+        {/* ── Asset wizard modal ── */}
         <CreateAssetWizardModal
           disableAssetName={!!editingAsset}
           visible={assetModalVisible}
@@ -1442,6 +1338,7 @@ const itemsWithPlaceholders = useMemo(() => {
           initialData={editingAsset ? mapAssetToDraft(editingAsset) : undefined}
         />
 
+        {/* ── Snackbar ── */}
         {snackbar && (
           <View
             style={[
@@ -1462,35 +1359,23 @@ const itemsWithPlaceholders = useMemo(() => {
 }
 
 const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-    backgroundColor: "#ffffff",
-  },
-  container: {
-    flex: 1,
-    paddingHorizontal: 10,
-    paddingTop: 0,
-  },
-
+  flex: { flex: 1, backgroundColor: "#ffffff" },
+  container: { flex: 1, paddingHorizontal: 10, paddingTop: 0 },
   scanFab: {
-  position: "absolute",
-  right: 20,
-  width: 52,
-  height: 52,
-  borderRadius: 26,
-  backgroundColor: ACC,
-  alignItems: "center",
-  justifyContent: "center",
-  borderWidth: 1,
-  borderColor: ACC,
-  zIndex: 20,
-  elevation: 8,
-},
-  filterRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 12,
+    position: "absolute",
+    right: 20,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: ACC,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: ACC,
+    zIndex: 20,
+    elevation: 8,
   },
+  filterRow: { flexDirection: "row", gap: 8, marginBottom: 12 },
   filterBtn: {
     flex: 1,
     paddingVertical: 10,
@@ -1501,19 +1386,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#444",
   },
-  filterBtnActive: {
-    backgroundColor: ACC,
-    borderColor: ACC,
-  },
-  filterText: {
-    color: "#999",
-    fontSize: 12,
-    fontWeight: "500",
-  },
-  filterTextActive: {
-    color: "#000",
-    fontWeight: "600",
-  },
+  filterBtnActive: { backgroundColor: ACC, borderColor: ACC },
+  filterText: { color: "#999", fontSize: 12, fontWeight: "500" },
+  filterTextActive: { color: "#000", fontWeight: "600" },
   searchInput: {
     backgroundColor: "#222",
     borderWidth: 1,
@@ -1530,14 +1405,9 @@ const styles = StyleSheet.create({
     fontWeight: "400",
     color: "#090808",
     marginTop: 4,
-    textTransform:"uppercase"
+    textTransform: "uppercase",
   },
-  subtitle: {
-    color: "#2a2828",
-    marginTop: 0,
-    marginBottom: 4,
-    fontSize: 10,
-  },
+  subtitle: { color: "#2a2828", marginTop: 0, marginBottom: 4, fontSize: 10 },
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1552,11 +1422,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: ACC,
   },
-  dashboardBtnText: {
-    color: "#000",
-    fontSize: 12,
-    fontWeight: "700",
-  },
+  dashboardBtnText: { color: "#000", fontSize: 12, fontWeight: "700" },
   offlineModeBadge: {
     backgroundColor: "rgba(212,255,0,0.12)",
     borderWidth: 1,
@@ -1565,10 +1431,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 10,
   },
-  offlineModeText: {
-    color: "#222",
-    fontSize: 12,
-  },
+  offlineModeText: { color: "#222", fontSize: 12 },
   pendingBadge: {
     flexDirection: "row",
     backgroundColor: "#444",
@@ -1577,63 +1440,33 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     alignItems: "center",
   },
-  networkIndicator: {
-    marginRight: 8,
+  networkIndicator: { marginRight: 8 },
+  syncingSubText: { color: "#aaa", fontSize: 10, marginTop: 2 },
+  syncTickBadge: {
+    position: "absolute",
+    bottom: 6,
+    right: 6,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    borderRadius: 8,
+    width: 20,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 15,
   },
-
-  syncingSubText: {
-  color: "#aaa",
-  fontSize: 10,
-  marginTop: 2,
-},
-syncTickBadge: {
-  position: "absolute",
-  bottom: 6,
-  right: 6,
-  backgroundColor: "rgba(0,0,0,0.55)",
-  borderRadius: 8,
-  width: 20,
-  height: 20,
-  alignItems: "center",
-  justifyContent: "center",
-  zIndex: 15,
-},
-  pendingText: {
-    color: "#D4FF00",
-    fontSize: 12,
-    flex: 1,
-  },
+  pendingText: { color: "#D4FF00", fontSize: 12, flex: 1 },
   syncBtn: {
     backgroundColor: "#D4FF00",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6,
   },
-  syncBtnText: {
-    color: "#000",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  breadcrumbRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginBottom: 12,
-  },
-  breadcrumbText: {
-    color: "#888",
-    fontSize: 10,
-    fontWeight: "600",
-  },
-  listContent: {
-    paddingBottom: 120,
-  },
-  listContentWithBottomBar: {
-    paddingBottom: 120,
-  },
-  gridWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-  },
+  syncBtnText: { color: "#000", fontSize: 12, fontWeight: "600" },
+  breadcrumbRow: { flexDirection: "row", flexWrap: "wrap", marginBottom: 12 },
+  breadcrumbText: { color: "#888", fontSize: 10, fontWeight: "600" },
+  listContent: { paddingBottom: 120 },
+  listContentWithBottomBar: { paddingBottom: 120 },
+  gridWrap: { flexDirection: "row", flexWrap: "wrap" },
   pendingSaveBanner: {
     backgroundColor: "rgba(212,255,0,0.14)",
     borderColor: "rgba(212,255,0,0.35)",
@@ -1643,11 +1476,7 @@ syncTickBadge: {
     paddingHorizontal: 14,
     marginBottom: 12,
   },
-  pendingSaveText: {
-    color: "#090909",
-    fontSize: 12,
-    fontWeight: "600",
-  },
+  pendingSaveText: { color: "#090909", fontSize: 12, fontWeight: "600" },
   snackbar: {
     position: "absolute",
     left: 20,
@@ -1662,28 +1491,12 @@ syncTickBadge: {
     shadowRadius: 16,
     elevation: 8,
   },
-  snackbarText: {
-    color: "#000",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  snackbarSuccess: {
-    backgroundColor: "#D4FF00",
-  },
-  snackbarError: {
-    backgroundColor: "#FF6B6B",
-  },
-  snackbarInfo: {
-    backgroundColor: "#444",
-  },
-  columnWrapper: {
-    gap: GRID_GAP,
-    marginBottom: GRID_GAP,
-  },
-  gridItem: {
-    width: ITEM_SIZE,
-    marginBottom: GRID_GAP,
-  },
+  snackbarText: { color: "#000", fontSize: 13, fontWeight: "600" },
+  snackbarSuccess: { backgroundColor: "#D4FF00" },
+  snackbarError: { backgroundColor: "#FF6B6B" },
+  snackbarInfo: { backgroundColor: "#444" },
+  columnWrapper: { gap: GRID_GAP, marginBottom: GRID_GAP },
+  gridItem: { width: ITEM_SIZE, marginBottom: GRID_GAP },
   gridCard: {
     width: "100%",
     height: ITEM_SIZE,
@@ -1706,12 +1519,7 @@ syncTickBadge: {
     justifyContent: "center",
     position: "relative",
   },
-  gridTitle: {
-    color: "#fff",
-    fontSize: 12,
-    textAlign: "center",
-    lineHeight: 14,
-  },
+  gridTitle: { color: "#fff", fontSize: 12, textAlign: "center", lineHeight: 14 },
   skeletonIconGrid: {
     width: 26,
     height: 26,
@@ -1725,21 +1533,9 @@ syncTickBadge: {
     borderRadius: 6,
     backgroundColor: "#222",
   },
-  emptyWrap: {
-    paddingTop: 60,
-    alignItems: "center",
-    width: "100%",
-  },
-  emptyTitle: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  emptyText: {
-    color: "#888",
-    marginTop: 8,
-    fontSize: 10,
-  },
+  emptyWrap: { paddingTop: 60, alignItems: "center", width: "100%" },
+  emptyTitle: { color: "#fff", fontSize: 12, fontWeight: "700" },
+  emptyText: { color: "#888", marginTop: 8, fontSize: 10 },
   bottomActionBar: {
     position: "absolute",
     left: 20,
@@ -1777,16 +1573,11 @@ syncTickBadge: {
   },
   modalOverlay: {
     flex: 1,
-  backgroundColor: "rgba(0,0,0,0.6)",
-  justifyContent: "center",   
-  // alignItems: "center",       
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
   },
-  modalKeyboardWrap: {
-    flex: 1,
-    justifyContent: "flex-end",
-  },
+  modalKeyboardWrap: { flex: 1, justifyContent: "flex-end" },
   modalCard: {
-    // width: "90%",
     backgroundColor: "#111",
     padding: 15,
     paddingBottom: 18,
@@ -1795,11 +1586,7 @@ syncTickBadge: {
     borderWidth: 1,
     borderColor: "#1f1f1f",
   },
-  modalTitle: {
-    color: "#fff",
-    fontSize: 15,
-    marginBottom: 16,
-  },
+  modalTitle: { color: "#fff", fontSize: 15, marginBottom: 16 },
   input: {
     backgroundColor: "#1b1b1b",
     color: "#fff",
@@ -1811,11 +1598,7 @@ syncTickBadge: {
     borderWidth: 1,
     borderColor: "#2a2a2a",
   },
-  modalActions: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 10,
-  },
+  modalActions: { flexDirection: "row", gap: 10, marginTop: 10 },
   modalCancelBtn: {
     flex: 1,
     backgroundColor: "#222",
@@ -1823,9 +1606,7 @@ syncTickBadge: {
     alignItems: "center",
     paddingVertical: 10,
   },
-  modalCancelText: {
-    color: "#fff",
-  },
+  modalCancelText: { color: "#fff" },
   modalSaveBtn: {
     flex: 1,
     backgroundColor: ACC,
@@ -1833,10 +1614,7 @@ syncTickBadge: {
     alignItems: "center",
     paddingVertical: 10,
   },
-  modalSaveText: {
-    color: "#000",
-  },
-  // Asset image fills the entire card as background, centered
+  modalSaveText: { color: "#000" },
   assetImageBackground: {
     position: "absolute",
     top: 4,
@@ -1848,7 +1626,6 @@ syncTickBadge: {
     borderRadius: 15,
     zIndex: 1,
   },
-  // Frosted name bar pinned to bottom of card
   assetNameOverlay: {
     position: "absolute",
     bottom: 0,
@@ -1856,7 +1633,6 @@ syncTickBadge: {
     right: 0,
     paddingHorizontal: 6,
     paddingVertical: 6,
-    // backgroundColor: "rgba(0,0,0,0.55)",
     borderBottomLeftRadius: 10,
     borderBottomRightRadius: 10,
     zIndex: 10,
@@ -1893,146 +1669,100 @@ syncTickBadge: {
     gap: 2,
     zIndex: 10,
   },
-  photoCountText: {
-    color: "#fff",
-    fontSize: 10,
-    fontWeight: "600",
+  photoCountText: { color: "#fff", fontSize: 10, fontWeight: "600" },
+  backButton: {
+    backgroundColor: "#D4FF00",
+    borderRadius: 10,
+    padding: 8,
+    position: "absolute",
+    left: 20,
+    zIndex: 20,
   },
-
-backButton : {
-  backgroundColor: "#D4FF00",
-  borderRadius: 10,
-  padding: 8,
-  position: "absolute",
-  left: 20,
-  zIndex: 20,
-},
-
-rawKeyModalCard: {
-  width: "85%",
-  maxHeight: "70%",
-  backgroundColor: "#111",
-  borderRadius: 20,
-  padding: 18,
-  borderWidth: 1,
-  borderColor: "#222",
-  // alignItems: "center",
-  alignSelf: "center",
-  justifyContent: "center",
-  
-
-},
-
-rawKeyOption: {
-  paddingVertical: 14,
-  borderBottomWidth: 1,
-  borderBottomColor: "#222",
-},
-
-rawKeyOptionText: {
-  color: "#fff",
-  fontSize: 15,
-  fontWeight: "600",
-},
-
-backText: {
-  fontSize: 16,
-  fontWeight: "600",
-  color: "#111",
-},
-
-
-advancedSearchRow: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 8,
-  marginBottom: 12,
-},
-
-advancedSearchInput: {
-  flex: 1,
-  height: 44,
-  borderRadius: 14,
-  backgroundColor: "#111",
-  borderWidth: 1,
-  borderColor: "#222",
-  color: "#fff",
-  paddingHorizontal: 14,
-  fontSize: 14,
-},
-
-rawKeyPicker: {
-  height: 44,
-  minWidth: 96,
-  maxWidth: 140,
-  borderRadius: 14,
-  backgroundColor: ACC,
-  paddingHorizontal: 10,
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: 4,
-},
-
-rawKeyPickerText: {
-  color: "#000",
-  fontWeight: "800",
-  fontSize: 12,
-  maxWidth: 95,
-},
-
-searchListContent: {
-  paddingTop: 4,
-},
-
-searchResultCard: {
-  flexDirection: "row",
-  alignItems: "center",
-  backgroundColor: "#111",
-  borderRadius: 16,
-  padding: 10,
-  marginBottom: 10,
-  borderWidth: 1,
-  borderColor: "#222",
-},
-
-searchResultImage: {
-  width: 54,
-  height: 54,
-  borderRadius: 12,
-  backgroundColor: "#222",
-},
-
-searchResultIcon: {
-  width: 54,
-  height: 54,
-  borderRadius: 12,
-  backgroundColor: "#222",
-  alignItems: "center",
-  justifyContent: "center",
-},
-
-searchResultBody: {
-  flex: 1,
-  marginLeft: 12,
-},
-
-searchResultTitle: {
-  color: "#fff",
-  fontSize: 14,
-  fontWeight: "800",
-},
-
-searchResultLocation: {
-  color: "#999",
-  fontSize: 12,
-  marginTop: 3,
-},
-
-searchResultMeta: {
-  color: ACC,
-  fontSize: 11,
-  marginTop: 4,
-  fontWeight: "700",
-},
+  rawKeyModalCard: {
+    width: "85%",
+    maxHeight: "70%",
+    backgroundColor: "#111",
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: "#222",
+    alignSelf: "center",
+    justifyContent: "center",
+  },
+  rawKeyOption: {
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#222",
+  },
+  rawKeyOptionText: { color: "#fff", fontSize: 15, fontWeight: "600" },
+  backText: { fontSize: 16, fontWeight: "600", color: "#111" },
+  advancedSearchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+  },
+  advancedSearchInput: {
+    flex: 1,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: "#111",
+    borderWidth: 1,
+    borderColor: "#222",
+    color: "#fff",
+    paddingHorizontal: 14,
+    fontSize: 14,
+  },
+  rawKeyPicker: {
+    height: 44,
+    minWidth: 96,
+    maxWidth: 140,
+    borderRadius: 14,
+    backgroundColor: ACC,
+    paddingHorizontal: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
+  rawKeyPickerText: {
+    color: "#000",
+    fontWeight: "800",
+    fontSize: 12,
+    maxWidth: 95,
+  },
+  searchListContent: { paddingTop: 4 },
+  searchResultCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#111",
+    borderRadius: 16,
+    padding: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#222",
+  },
+  searchResultImage: {
+    width: 54,
+    height: 54,
+    borderRadius: 12,
+    backgroundColor: "#222",
+  },
+  searchResultIcon: {
+    width: 54,
+    height: 54,
+    borderRadius: 12,
+    backgroundColor: "#222",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  searchResultBody: { flex: 1, marginLeft: 12 },
+  searchResultTitle: { color: "#fff", fontSize: 14, fontWeight: "800" },
+  searchResultLocation: { color: "#999", fontSize: 12, marginTop: 3 },
+  searchResultMeta: {
+    color: ACC,
+    fontSize: 11,
+    marginTop: 4,
+    fontWeight: "700",
+  },
 });

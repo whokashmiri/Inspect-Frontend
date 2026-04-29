@@ -2,6 +2,203 @@
   "companyPage":{
         "title": "Your Company",
         "description": "Select A Company",
+        "longDescription": " We’ll keep this space clean until new features arrive.",
         "header":"Asset Inspection Platform"
+    },
+ 
+    
+
+  "projectPage": {
+    "title": "Your Company",
+    "description": "Manage your company projects",
+    "switchCompany": "Switch Company",
+    "header": "Asset Inspection Platform"
+  },
+  "filters": {
+    "recent": "Recent",
+    "new": "New"
+  },
+  "projectScreen": {
+    "empty": "No projects found.",
+    "createdBy": "Created by: {{name}}",
+    "company": "Company: {{name}}",
+    "availableOffline": "Available Offline",
+    "pendingSync": "Pending Sync: {{count}}",
+    "errors": {
+      "nameRequired": "Project name is required.",
+      "createFailed": "Failed to create project.",
+      "loadFailed": "Failed to load projects."
+    },
+    "offline": {
+      "title": "Offline",
+      "projectName": "Offline project"
+    },
+    "download": {
+      "alreadyTitle": "Already downloaded",
+      "alreadyMessage": "This project is already available offline.",
+      "successTitle": "Download complete",
+      "refreshTitle": "Offline copy refreshed",
+      "successMessage": "{{name}} is now available offline.\n\nFolders: {{folders}}\nAssets: {{assets}}",
+      "failTitle": "Download failed",
+      "failMessage": "Could not download this project for offline use."
+    },
+    "remove": {
+      "syncRequiredTitle": "Sync required",
+      "syncRequiredMessage": "This project has unsynced offline changes. Sync before removing offline data.",
+      "successTitle": "Offline copy removed",
+      "successMessage": "{{name}} was removed from offline storage.",
+      "failTitle": "Remove failed",
+      "failMessage": "Could not remove offline project data."
+    },
+    "status": {
+      "new": "New",
+      "done": "Done"
+    },
+
+    "filters": {
+      
+      "recent": "Recent",
+      "new": "New"
+    },
+       
+  "folderAssetScreen": {
+    "header": {
+      "subtitle": "All Folders & Assets of the Project",
+      "dashboardBtn": "Dashboard"
+    },
+    "offline": {
+      "badge": "OFFLINE"
+    },
+    "sync": {
+      "pendingAssets": "⏳ {{count}} asset{{plural}} to sync",
+      "syncNow": "Sync Now",
+      "syncing": "Your Assets are being synced",
+      "offlineAlert": "Offline",
+      "offlineMessage": "You are offline",
+      "allSyncedAlert": "Sync",
+      "allSyncedMessage": "All assets are synced"
+    },
+    "filter": {
+      "all": "All",
+      "done": "Done",
+      "incomplete": "Incomplete"
+    },
+    "search": {
+      "placeholderWithKey": "Search {{key}} value",
+      "placeholderAll": "Search all raw data values",
+      "fieldPickerLabel": "All"
+    },
+    "fieldModal": {
+      "title": "Select Search Field",
+      "allValues": "All Values"
+    },
+    "grid": {
+      "pendingSaving": "Saving {{count}} Asset{{plural}}…"
+    },
+    "empty": {
+      "title": "No contents yet",
+      "messageRoot": "Open a folder to add folders or assets.",
+      "messageFolder": "Create a folder or add a new asset."
+    },
+    "advancedSearch": {
+      "noResultsTitle": "No matching assets",
+      "noResultsText": "Try another value or select a different field."
+    },
+    "actions": {
+      "newFolder": "New Folder",
+      "newAsset": "New Asset",
+      "back": "Back"
+    },
+    "folderModal": {
+      "title": "Create New Folder",
+      "placeholder": "Folder Name",
+      "cancel": "Cancel",
+      "create": "Create",
+      "validationTitle": "Validation",
+      "validationMessage": "Folder name is required",
+      "successTitle": "Success",
+      "successMessage": "Folder created",
+      "offlineTitle": "Offline",
+      "errorTitle": "Error",
+      "errorMessage": "Failed to create folder"
+    },
+    "snackbar": {
+      "assetCreated": "Asset created successfully",
+      "assetUpdated": "Asset updated successfully",
+      "saveFailed": "Failed to save asset"
+    },
+    "codeScanner": {
+      "notFoundTitle": "Not found",
+      "notFoundMessage": "Asset not found for this code"
+    },
+    "searchError": {
+      "title": "Search Error",
+      "defaultMessage": "Advanced search failed"
     }
+  },
+
+
+  "common": {
+    "error": "Error",
+    "validation": "Validation",
+    "cancel": "Cancel"
+  },
+  "asset": {
+    "createAsset": "Create Asset",
+    "editAsset": "Edit Asset",
+    "stepOf": "Step {{step}} of {{total}}",
+    "uploadImages": "Upload Images",
+    "openCamera": "Open Camera",
+    "uploadFromPhone": "Upload from Phone",
+    "scanText": "Scan Text",
+    "imagesSelected": "{{count}} image selected",
+    "imagesSelected_plural": "{{count}} images selected",
+    "assetIsPresent": "Asset is present",
+    "assetDetails": "Asset Details",
+    "assetName": "Asset Name",
+    "assetNameRequired": "Asset Name is required",
+    "condition": "Condition",
+    "conditionGood": "Good",
+    "conditionNew": "New",
+    "conditionUsed": "Used",
+    "conditionDamaged": "Damaged",
+    "assetType": "Asset Type",
+    "typeOther": "Other",
+    "typeVehicle": "Vehicle",
+    "brand": "Brand",
+    "model": "Model",
+    "manufactureYear": "Manufacture Year",
+    "kilometersDriven": "Kilometers Driven / Hours Used",
+    "description": "Description",
+    "writeSomething": "Write something...",
+    "scannedTextHelper": "Scanned text will be appended here automatically.",
+    "voiceNotes": "Voice Notes",
+    "recordVoiceNote": "Record Voice Note",
+    "stopRecording": "Stop Recording",
+    "markAsDone": "Mark as Done",
+    "voiceNotesAdded": "{{count}} voice note added",
+    "voiceNotesAdded_plural": "{{count}} voice notes added",
+    "saved": "saved",
+    "back": "Back",
+    "next": "Next",
+    "finish": "Finish",
+    "saveChanges": "Save Changes",
+    "permissionRequired": "Permission required",
+    "photoPermissionMessage": "Please allow photo library access.",
+    "microphonePermissionMessage": "Microphone permission is required.",
+    "unablePickImages": "Unable to pick images from phone.",
+    "couldNotStartRecording": "Could not start recording.",
+    "couldNotStopRecording": "Could not stop recording.",
+    "failedToSaveAsset": "Failed to save asset",
+    "recordingInProgress": "Recording in Progress",
+    "stopRecordingBeforeSaving": "Please stop the voice recording before saving the asset.",
+    "stopRecordingAndSave": "Stop Recording & Save",
+    "playbackNotAvailable": "Playback not available",
+    "remoteVoicePlaybackMessage": "Voice notes from saved assets cannot be played in the editor. You can listen to them after saving the asset.",
+    "couldNotPlayVoiceNote": "Could not play voice note."
+  
+}
+
+
+}
 }

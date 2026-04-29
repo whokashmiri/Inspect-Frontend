@@ -1,6 +1,7 @@
 // components/AssetCameraModal.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
 import {
   Modal,
   View,
@@ -59,6 +60,7 @@ export default function AssetCameraModal({
   const device = useCameraDevice("back");
   const insets = useSafeAreaInsets();
   const { hasPermission, requestPermission } = useCameraPermission();
+  const { t } = useTranslation();
 
   const [hasLiveCodeResult, setHasLiveCodeResult] = useState(false);
 const lastScannedValueRef = useRef<string | null>(null);
@@ -245,50 +247,6 @@ const lastScannedAtRef = useRef<number>(0);
     onClose();
   };
 
-  // const takePhoto = async () => {
-  //   if (!camera.current || isProcessingScan) return;
-
-  //   try {
-  //     const photo = await camera.current.takePhoto({
-  //       enableShutterSound: false,
-  //     });
-
-  //     if (mode === "photos") {
-  //       setPhotos((prev) => [...prev, photo]);
-  //       return;
-  //     }
-
-  //     const imageUri = `file://${photo.path}`;
-  //     setLastCapturedScanPath(imageUri);
-  //     setScanError("");
-  //     setScanText("");
-  //     setIsProcessingScan(true);
-
-  //     try {
-  //       const extracted = await processOfflineScanFromImage(imageUri);
-  //       const cleaned = extracted?.trim() ?? "";
-
-  //       if (!cleaned) {
-  //         setScanError("No readable text found. Try again with better light.");
-  //         return;
-  //       }
-
-  //       setScanText(cleaned);
-  //     } catch (error) {
-  //       console.log("Scan processing error:", error);
-  //       setScanError("Could not extract text from this image.");
-  //     } finally {
-  //       setIsProcessingScan(false);
-  //     }
-  //   } catch (error) {
-  //     console.log("Take photo error:", error);
-  //     if (mode === "scan") {
-  //       setScanError("Could not capture image. Please try again.");
-  //     }
-  //   }
-  // };
-
-
 
   const takePhoto = async () => {
   if (!camera.current || isProcessingScan) return;
@@ -383,14 +341,14 @@ const lastScannedAtRef = useRef<number>(0);
 
         <View style={styles.topBar}>
           <TouchableOpacity style={styles.topBtn} onPress={handleDismiss}>
-            <Text style={styles.topBtnText}>Close</Text>
+            <Text style={styles.topBtnText}>{t("camera.close")}</Text>
           </TouchableOpacity>
 
           <View style={styles.topRightGroup}>
             <View style={styles.modeBadge}>
               <Text style={styles.modeBadgeText}>
-                {mode === "scan" ? "Scan Mode" : "Photo Mode"}
-              </Text>
+  {mode === "scan" ? t("camera.scanMode") : t("camera.photoMode")}
+</Text>
             </View>
 
             <View style={styles.zoomBadge}>
@@ -443,12 +401,16 @@ const lastScannedAtRef = useRef<number>(0);
 
         {mode === "scan" && (
           <View style={styles.scanCard}>
-            <Text style={styles.scanCardTitle}>Extracted Text</Text>
+            <Text style={styles.scanCardTitle}>
+            {t("camera.extractedText")}
+            </Text>
 
             {isProcessingScan ? (
               <View style={styles.processingRow}>
                 <ActivityIndicator color={ACC} />
-                <Text style={styles.processingText}>Processing image...</Text>
+                <Text style={styles.processingText}>
+  {t("camera.processing")}
+</Text>
               </View>
             ) : scanText ? (
               <Text numberOfLines={5} style={styles.scanPreviewText}>

@@ -2,7 +2,201 @@
   "companyPage": {
     "title": "شركتك",
     "description": "اختر شركة",
+    "longDescription": "سنحافظ على هذه المساحة فارغة حتى تتوفر ميزات جديدة.",
     "header": "منصة فحص الأصول"
+  },
 
+  "projectPage": {
+    "title": "شركتك",
+    "description": "إدارة مشاريع الشركة",
+    "switchCompany": "تبديل الشركة",
+    "header": "منصة فحص الأصول"
+  },
+
+  "filters": {
+    "recent": "الأحدث",
+    "new": "جديد"
+  },
+
+  "projectScreen": {
+    "empty": "لا توجد مشاريع.",
+    "createdBy": "تم الإنشاء بواسطة: {{name}}",
+    "company": "الشركة: {{name}}",
+    "availableOffline": "متاح بدون اتصال",
+    "pendingSync": "بانتظار المزامنة: {{count}}",
+    "errors": {
+      "nameRequired": "اسم المشروع مطلوب.",
+      "createFailed": "فشل إنشاء المشروع.",
+      "loadFailed": "فشل تحميل المشاريع."
+    },
+    "offline": {
+      "title": "بدون اتصال",
+      "projectName": "مشروع بدون اتصال"
+    },
+    "download": {
+      "alreadyTitle": "تم التحميل مسبقًا",
+      "alreadyMessage": "هذا المشروع متاح بالفعل بدون اتصال.",
+      "successTitle": "اكتمل التحميل",
+      "refreshTitle": "تم تحديث النسخة بدون اتصال",
+      "successMessage": "{{name}} متاح الآن بدون اتصال.\n\nالمجلدات: {{folders}}\nالأصول: {{assets}}",
+      "failTitle": "فشل التحميل",
+      "failMessage": "تعذر تحميل المشروع للاستخدام بدون اتصال."
+    },
+    "remove": {
+      "syncRequiredTitle": "مطلوب المزامنة",
+      "syncRequiredMessage": "هذا المشروع يحتوي على تغييرات غير متزامنة. قم بالمزامنة قبل الحذف.",
+      "successTitle": "تم حذف النسخة بدون اتصال",
+      "successMessage": "تمت إزالة {{name}} من التخزين بدون اتصال.",
+      "failTitle": "فشل الحذف",
+      "failMessage": "تعذر حذف بيانات المشروع بدون اتصال."
+    },
+    "status": {
+      "new": "جديد",
+      "done": "مكتمل"
+    },
+    "filters": {
+      "recent": "الأحدث",
+      "new": "جديد"
+    }
+  },
+
+  "folderAssetScreen": {
+    "header": {
+      "subtitle": "جميع المجلدات والأصول في المشروع",
+      "dashboardBtn": "لوحة التحكم"
+    },
+    "offline": {
+      "badge": "بدون اتصال"
+    },
+    "sync": {
+      "pendingAssets": "⏳ {{count}} أصل{{plural}} بانتظار المزامنة",
+      "syncNow": "مزامنة الآن",
+      "syncing": "يتم مزامنة الأصول",
+      "offlineAlert": "بدون اتصال",
+      "offlineMessage": "أنت غير متصل بالإنترنت",
+      "allSyncedAlert": "المزامنة",
+      "allSyncedMessage": "تمت مزامنة جميع الأصول"
+    },
+    "filter": {
+      "all": "الكل",
+      "done": "مكتمل",
+      "incomplete": "غير مكتمل"
+    },
+    "search": {
+      "placeholderWithKey": "ابحث في {{key}}",
+      "placeholderAll": "ابحث في جميع القيم",
+      "fieldPickerLabel": "الكل"
+    },
+    "fieldModal": {
+      "title": "اختر حقل البحث",
+      "allValues": "كل القيم"
+    },
+    "grid": {
+      "pendingSaving": "جارٍ حفظ {{count}} أصل{{plural}}…"
+    },
+    "empty": {
+      "title": "لا توجد محتويات",
+      "messageRoot": "افتح مجلدًا لإضافة مجلدات أو أصول.",
+      "messageFolder": "أنشئ مجلدًا أو أضف أصلًا جديدًا."
+    },
+    "advancedSearch": {
+      "noResultsTitle": "لا توجد نتائج",
+      "noResultsText": "جرّب قيمة أخرى أو اختر حقلًا مختلفًا."
+    },
+    "actions": {
+      "newFolder": "مجلد جديد",
+      "newAsset": "أصل جديد",
+      "back": "رجوع"
+    },
+    "folderModal": {
+      "title": "إنشاء مجلد جديد",
+      "placeholder": "اسم المجلد",
+      "cancel": "إلغاء",
+      "create": "إنشاء",
+      "validationTitle": "تحقق",
+      "validationMessage": "اسم المجلد مطلوب",
+      "successTitle": "تم بنجاح",
+      "successMessage": "تم إنشاء المجلد",
+      "offlineTitle": "بدون اتصال",
+      "errorTitle": "خطأ",
+      "errorMessage": "فشل إنشاء المجلد"
+    },
+    "snackbar": {
+      "assetCreated": "تم إنشاء الأصل بنجاح",
+      "assetUpdated": "تم تحديث الأصل بنجاح",
+      "saveFailed": "فشل حفظ الأصل"
+    },
+    "codeScanner": {
+      "notFoundTitle": "غير موجود",
+      "notFoundMessage": "لم يتم العثور على أصل لهذا الرمز"
+    },
+    "searchError": {
+      "title": "خطأ في البحث",
+      "defaultMessage": "فشل البحث المتقدم"
+    }
+  },
+  "common": {
+    "error": "خطأ",
+    "validation": "تنبيه",
+    "cancel": "إلغاء"
+  },
+  "asset": {
+    "createAsset": "إنشاء أصل",
+    "editAsset": "تعديل الأصل",
+    "stepOf": "الخطوة {{step}} من {{total}}",
+    "uploadImages": "رفع الصور",
+    "openCamera": "فتح الكاميرا",
+    "uploadFromPhone": "رفع من الهاتف",
+    "scanText": "مسح النص",
+    "imagesSelected": "تم اختيار {{count}} صورة",
+    "imagesSelected_plural": "تم اختيار {{count}} صور",
+    "assetIsPresent": "الأصل موجود",
+    "assetDetails": "تفاصيل الأصل",
+    "assetName": "اسم الأصل",
+    "assetNameRequired": "اسم الأصل مطلوب",
+    "condition": "الحالة",
+    "conditionGood": "جيد",
+    "conditionNew": "جديد",
+    "conditionUsed": "مستخدم",
+    "conditionDamaged": "تالف",
+    "assetType": "نوع الأصل",
+    "typeOther": "أخرى",
+    "typeVehicle": "مركبة",
+    "brand": "الماركة",
+    "model": "الموديل",
+    "manufactureYear": "سنة التصنيع",
+    "kilometersDriven": "الكيلومترات / ساعات الاستخدام",
+    "description": "الوصف",
+    "writeSomething": "اكتب شيئًا...",
+    "scannedTextHelper": "سيتم إضافة النص الممسوح هنا تلقائيًا.",
+    "voiceNotes": "الملاحظات الصوتية",
+    "recordVoiceNote": "تسجيل ملاحظة صوتية",
+    "stopRecording": "إيقاف التسجيل",
+    "markAsDone": "تحديد كمكتمل",
+    "voiceNotesAdded": "تمت إضافة {{count}} ملاحظة صوتية",
+    "voiceNotesAdded_plural": "تمت إضافة {{count}} ملاحظات صوتية",
+    "saved": "محفوظ",
+    "back": "رجوع",
+    "next": "التالي",
+    "finish": "إنهاء",
+    "saveChanges": "حفظ التغييرات",
+    "permissionRequired": "الصلاحية مطلوبة",
+    "photoPermissionMessage": "يرجى السماح بالوصول إلى الصور.",
+    "microphonePermissionMessage": "صلاحية الميكروفون مطلوبة.",
+    "unablePickImages": "تعذر اختيار الصور من الهاتف.",
+    "couldNotStartRecording": "تعذر بدء التسجيل.",
+    "couldNotStopRecording": "تعذر إيقاف التسجيل.",
+    "failedToSaveAsset": "فشل حفظ الأصل",
+    "recordingInProgress": "التسجيل قيد التشغيل",
+    "stopRecordingBeforeSaving": "يرجى إيقاف التسجيل الصوتي قبل حفظ الأصل.",
+    "stopRecordingAndSave": "إيقاف التسجيل والحفظ",
+    "playbackNotAvailable": "التشغيل غير متاح",
+    "remoteVoicePlaybackMessage": "لا يمكن تشغيل الملاحظات الصوتية المحفوظة داخل شاشة التعديل. يمكنك الاستماع إليها بعد حفظ الأصل.",
+    "couldNotPlayVoiceNote": "تعذر تشغيل الملاحظة الصوتية."
   }
 }
+
+
+
+
+
