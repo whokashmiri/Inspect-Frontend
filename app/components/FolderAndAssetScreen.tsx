@@ -143,18 +143,31 @@ export default function FolderAndAssetScreen({ route }: Props) {
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const SEARCH_PAGE_SIZE = 15;
 
-  const handleBackPress = async () => {
-    if (navigatingFolderId) return;
-    if (path.length > 1) {
-      const previousIndex = path.length - 2;
-      await goToPathIndex(previousIndex);
-      return;
-    }
+ const handleBackPress = async () => {
+  if (navigatingFolderId) return;
+
+  if (
+    adminRootFolderIdRef.current &&
+    currentFolderId === adminRootFolderIdRef.current
+  ) {
     router.back();
-  };
+    return;
+  }
+
+  if (path.length > 2) {
+    const previousIndex = path.length - 2;
+    await goToPathIndex(previousIndex);
+    return;
+  }
+
+  router.back();
+};
 
   const folderInputRef = useRef<TextInput>(null);
   const isOnline = useIsOnline();
+
+  const autoEnterRootAttemptedRef = useRef(false);
+  const adminRootFolderIdRef = useRef<string | null>(null);
 
   const openFolderModal = () => {
     setFolderModalVisible(true);
@@ -409,58 +422,139 @@ export default function FolderAndAssetScreen({ route }: Props) {
     }
   };
 
-  const loadContents = useCallback(
-    async (parent: string | null, options?: { showSkeleton?: boolean }) => {
-      const readOffline = async () => {
+
+
+  const fetchContentsData = useCallback(
+  async (parent: string | null, ignoreFilters = false) => {
+    if (projectId.startsWith("offline_")) {
+      return { folders: [], assets: [] };
+    }
+
+    const shouldUseOffline =
+      offlineMode ||
+      (downloadedOffline && (isOnline === false || isOnline === null));
+
+    if (shouldUseOffline) {
+      return getOfflineContents(projectId, parent);
+    }
+
+    return projectContentApi.listContents(
+      projectId,
+      parent,
+      ignoreFilters ? "all" : filter,
+      ignoreFilters ? "" : searchQuery
+    );
+  },
+  [projectId, offlineMode, downloadedOffline, isOnline, filter, searchQuery]
+);
+
+
+
+const autoEnterAdminRootFolder = useCallback(async () => {
+  if (autoEnterRootAttemptedRef.current) return;
+
+  autoEnterRootAttemptedRef.current = true;
+
+  try {
+    setLoading(true);
+    setContentLoading(true);
+     setFolders([]);
+    setAssets([]);
+
+    const rootData = await fetchContentsData(null, true);
+    const rootFolders = (rootData.folders || []) as FolderItem[];
+
+    if (!rootFolders.length) {
+      setFolders([]);
+      setAssets([]);
+
+      showSnackbar(
+        "Root folder does not exist. Contact your company admin.",
+        "error"
+      );
+
+      return;
+    }
+
+    const rootFolder = rootFolders[0];
+
+    adminRootFolderIdRef.current = rootFolder.id;
+
+    setCurrentFolderId(rootFolder.id);
+    setPath([
+      { id: null, name: projectName },
+      { id: rootFolder.id, name: rootFolder.name },
+    ]);
+
+    const insideRootData = await fetchContentsData(rootFolder.id);
+
+    setFolders((insideRootData.folders || []) as FolderItem[]);
+    setAssets((insideRootData.assets || []) as AssetItem[]);
+  } catch (error: any) {
+    console.log("AUTO ENTER ROOT ERROR:", error);
+
+    showSnackbar(
+      error?.message ||
+        "Could not open root folder. Contact your company admin.",
+      "error"
+    );
+  } finally {
+    setLoading(false);
+    setContentLoading(false);
+    setRefreshing(false);
+    setNavigatingFolderId(null);
+  }
+}, [fetchContentsData, projectName]);
+
+
+ const loadContents = useCallback(
+  async (parent: string | null, options?: { showSkeleton?: boolean }) => {
+    try {
+      if (options?.showSkeleton) {
+        setContentLoading(true);
+        setFolders([]);
+        setAssets([]);
+      }
+
+      if (projectId.startsWith("offline_")) {
+        setFolders([]);
+        setAssets([]);
+        return;
+      }
+
+      const data = await fetchContentsData(parent);
+
+      setFolders((data.folders || []) as FolderItem[]);
+      setAssets((data.assets || []) as AssetItem[]);
+    } catch (error: any) {
+      console.log("LOAD ERROR:", error);
+
+      try {
         const offlineData = await getOfflineContents(projectId, parent);
         setFolders((offlineData.folders || []) as FolderItem[]);
         setAssets((offlineData.assets || []) as AssetItem[]);
-      };
-      try {
-        if (options?.showSkeleton) {
-          setContentLoading(true);
-          setFolders([]);
-          setAssets([]);
-        }
-        if (projectId.startsWith("offline_")) {
-          setFolders([]);
-          setAssets([]);
-          return;
-        }
-        const shouldUseOffline =
-          offlineMode || (downloadedOffline && (isOnline === false || isOnline === null));
-        if (shouldUseOffline) {
-          await readOffline();
-          return;
-        }
-        const data = await projectContentApi.listContents(projectId, parent, filter, searchQuery);
-        setFolders(data.folders || []);
-        setAssets(data.assets || []);
-      } catch (error: any) {
-        console.log("LOAD ERROR:", error);
-        if (downloadedOffline || offlineMode) {
-          try {
-            await readOffline();
-            return;
-          } catch (offlineError: any) {
-            console.log("OFFLINE FALLBACK ERROR:", offlineError);
-          }
-        }
+      } catch (offlineError) {
+        console.log("OFFLINE FALLBACK ERROR:", offlineError);
         console.error(error?.message || "Failed to load data");
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
-        setContentLoading(false);
-        setNavigatingFolderId(null);
       }
-    },
-    [projectId, isOnline, downloadedOffline, filter, searchQuery, offlineMode]
-  );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+      setContentLoading(false);
+      setNavigatingFolderId(null);
+    }
+  },
+  [projectId, fetchContentsData]
+);
 
   useEffect(() => {
-    loadContents(currentFolderId);
-  }, [loadContents, currentFolderId, filter, searchQuery]);
+  if (!autoEnterRootAttemptedRef.current) {
+    autoEnterAdminRootFolder();
+    return;
+  }
 
+  loadContents(currentFolderId);
+}, [autoEnterAdminRootFolder, loadContents, currentFolderId, filter, searchQuery]);
  
   const onRefresh = async () => {
     setRefreshing(true);
@@ -529,6 +623,9 @@ useEffect(() => {
 
   const goToPathIndex = async (index: number) => {
     if (navigatingFolderId) return;
+   if (index === 0 && adminRootFolderIdRef.current) {
+  return;
+}
     const nextPath = path.slice(0, index + 1);
     const selected = nextPath[nextPath.length - 1];
     const folderId = selected.id;
@@ -867,17 +964,33 @@ useEffect(() => {
 
         {/* ── Breadcrumb ── */}
         <View style={styles.breadcrumbRow}>
-          {path.map((crumb, index) => (
-            <TouchableOpacity
-              key={`${crumb.id ?? "root"}-${index}`}
-              onPress={() => goToPathIndex(index)}
-            >
-              <Text style={styles.breadcrumbText}>
-                {crumb.name}
-                {index < path.length - 1 ? " / " : ""}
-              </Text>
-            </TouchableOpacity>
-          ))}
+            
+
+
+            {path
+  .filter((_, index) => !(index === 0 && adminRootFolderIdRef.current))
+  .map((crumb, visibleIndex) => {
+    const realIndex = adminRootFolderIdRef.current
+      ? visibleIndex + 1
+      : visibleIndex;
+
+    return (
+      <TouchableOpacity
+        key={`${crumb.id ?? "root"}-${realIndex}`}
+        onPress={() => goToPathIndex(realIndex)}
+      >
+        <Text style={styles.breadcrumbText}>
+          {crumb.name}
+          {visibleIndex <
+          path.filter((_, index) => !(index === 0 && adminRootFolderIdRef.current)).length - 1
+            ? " / "
+            : ""}
+        </Text>
+      </TouchableOpacity>
+    );
+  })}
+
+
         </View>
 
         {/* ── Filter row ── */}
