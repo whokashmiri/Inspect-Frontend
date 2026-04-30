@@ -71,6 +71,8 @@ const lastScannedAtRef = useRef<number>(0);
   const [photos, setPhotos] = useState<any[]>([]);
   const [zoomDisplay, setZoomDisplay] = useState(1);
 
+  const [torch, setTorch] = useState<"off" | "on">("off");
+
   const [isProcessingScan, setIsProcessingScan] = useState(false);
   const [scanText, setScanText] = useState("");
   const [scanError, setScanError] = useState("");
@@ -197,6 +199,7 @@ const lastScannedAtRef = useRef<number>(0);
       setLastCapturedScanPath(null);
       setIsProcessingScan(false);
       setHasLiveCodeResult(false);
+      setTorch("off");
       lastScannedValueRef.current = null;
       lastScannedAtRef.current = 0;
     }
@@ -335,7 +338,8 @@ const lastScannedAtRef = useRef<number>(0);
             isActive={visible}
             photo
             animatedProps={animatedProps}
-             codeScanner={mode === "scan" ? codeScanner : undefined}
+            codeScanner={mode === "scan" ? codeScanner : undefined}
+            torch={torch}
           />
         </GestureDetector>
 
@@ -345,6 +349,21 @@ const lastScannedAtRef = useRef<number>(0);
           </TouchableOpacity>
 
           <View style={styles.topRightGroup}>
+
+            <TouchableOpacity
+  style={[styles.flashBtn, torch === "on" && styles.flashBtnActive]}
+  onPress={() => setTorch((prev) => (prev === "on" ? "off" : "on"))}
+  activeOpacity={0.85}
+>
+  <Text
+    style={[
+      styles.flashBtnText,
+      torch === "on" && styles.flashBtnTextActive,
+    ]}
+  >
+    {torch === "on" ? "Flash On" : "Flash Off"}
+  </Text>
+</TouchableOpacity>
             <View style={styles.modeBadge}>
               <Text style={styles.modeBadgeText}>
   {mode === "scan" ? t("camera.scanMode") : t("camera.photoMode")}
@@ -715,4 +734,28 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     backgroundColor: ACC,
   },
+
+  flashBtn: {
+  paddingHorizontal: 10,
+  paddingVertical: 7,
+  borderRadius: 999,
+  backgroundColor: "rgba(255,255,255,0.14)",
+  borderWidth: 1,
+  borderColor: "rgba(255,255,255,0.18)",
+},
+
+flashBtnActive: {
+  backgroundColor: ACC,
+  borderColor: ACC,
+},
+
+flashBtnText: {
+  color: "#fff",
+  fontSize: 12,
+  fontWeight: "700",
+},
+
+flashBtnTextActive: {
+  color: "#000",
+},
 });

@@ -50,6 +50,7 @@ export default function OfflineScannerModal({
   const { hasPermission, requestPermission } = useCameraPermission();
   const camera = useRef<Camera>(null);
   const { t } = useTranslation();
+  
 
   const [flash, setFlash] = useState<"off" | "on">("off");
   const [toggles, setToggles] = useState<ScanToggles>(defaultToggles);
@@ -69,6 +70,7 @@ export default function OfflineScannerModal({
       setCapturedImageUri(null);
       setHasLiveLockedResult(false);
       setToggles(defaultToggles);
+      setFlash("off");
     }
   }, [visible]);
 
@@ -181,7 +183,10 @@ export default function OfflineScannerModal({
         />
 
         <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
-          <TouchableOpacity style={styles.topBtn} onPress={onClose}>
+          <TouchableOpacity style={styles.topBtn}  onPress={() => {
+          setFlash("off");
+          onClose();
+          }}>
            <Text style={styles.topBtnText}>{t("scanner.close")}</Text>
           </TouchableOpacity>
 

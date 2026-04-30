@@ -1,5 +1,5 @@
 // codeScannerModal.tsx
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -38,6 +38,7 @@ export default function CodeScannerModal({
   const lockedRef = useRef(false);
   const allowScanRef = useRef(createCodeDeduper(2000));
   const { t } = useTranslation();
+  const [torch, setTorch] = useState<"off" | "on">("off");
 
   useEffect(() => {
     if (visible && !hasPermission) {
@@ -48,6 +49,7 @@ export default function CodeScannerModal({
   useEffect(() => {
     if (!visible) {
       lockedRef.current = false;
+       setTorch("off");
     }
   }, [visible]);
 
@@ -92,6 +94,21 @@ export default function CodeScannerModal({
           <TouchableWithoutFeedback>
             <View style={styles.card}>
               <View style={styles.header}>
+
+                <TouchableOpacity
+  onPress={() => setTorch((prev) => (prev === "on" ? "off" : "on"))}
+  style={[styles.flashBtn, torch === "on" && styles.flashBtnActive]}
+  activeOpacity={0.85}
+>
+  <Text
+    style={[
+      styles.flashText,
+      torch === "on" && styles.flashTextActive,
+    ]}
+  >
+    {torch === "on" ? "Flash On" : "Flash"}
+  </Text>
+</TouchableOpacity>
                 <Text style={styles.title}>{t("codeScanner.title")}</Text>
                 <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
                   <Text style={styles.closeText}>✕</Text>
@@ -109,6 +126,7 @@ export default function CodeScannerModal({
                     device={device}
                     isActive={visible}
                     codeScanner={codeScanner}
+                     torch={torch}
                   />
                 ) : (
                   <View style={styles.placeholder}>
@@ -239,4 +257,34 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
   },
+
+  headerActions: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 8,
+},
+
+flashBtn: {
+  paddingHorizontal: 10,
+  paddingVertical: 7,
+  borderRadius: 999,
+  backgroundColor: "rgba(255,255,255,0.12)",
+  borderWidth: 1,
+  borderColor: "rgba(255,255,255,0.18)",
+},
+
+flashBtnActive: {
+  backgroundColor: ACC,
+  borderColor: ACC,
+},
+
+flashText: {
+  color: "#fff",
+  fontSize: 12,
+  fontWeight: "800",
+},
+
+flashTextActive: {
+  color: "#000",
+},
 });
