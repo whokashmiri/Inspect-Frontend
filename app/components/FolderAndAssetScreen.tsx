@@ -289,6 +289,11 @@ export default function FolderAndAssetScreen({ route }: Props) {
     snackbarTimeout.current = setTimeout(() => setSnackbar(null), 3000);
   };
 
+  const refreshPendingCount = useCallback(async () => {
+  const count = await getPendingCount();
+  setPendingCount(count);
+}, []);
+
   const runAdvancedSearch = useCallback(
     async (page = 1, append = false) => {
       const query = debouncedSearchQuery.trim();
@@ -456,6 +461,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
     loadContents(currentFolderId);
   }, [loadContents, currentFolderId, filter, searchQuery]);
 
+ 
   const onRefresh = async () => {
     setRefreshing(true);
     if (isOnline) {
@@ -466,28 +472,53 @@ export default function FolderAndAssetScreen({ route }: Props) {
     await loadContents(currentFolderId);
   };
 
-  const handleSyncNow = async () => {
+const handleSyncNow = useCallback(
+  async (silent = false) => {
     const offlineState = isOnline === false || isOnline === null;
-    if (offlineState) {
-      Alert.alert(
-        t("folderAssetScreen.sync.offlineAlert"),
-        t("folderAssetScreen.sync.offlineMessage")
-      );
-      return;
-    }
-    if (pendingCount <= 0) {
-      Alert.alert(
-        t("folderAssetScreen.sync.allSyncedAlert"),
-        t("folderAssetScreen.sync.allSyncedMessage")
-      );
-      return;
-    }
-    setIsSyncing(true);
-    await syncQueue();
-    setIsSyncing(false);
-    await loadContents(currentFolderId);
-  };
 
+    if (offlineState) {
+      if (!silent) {
+        Alert.alert(
+          t("folderAssetScreen.sync.offlineAlert"),
+          t("folderAssetScreen.sync.offlineMessage")
+        );
+      }
+      return;
+    }
+
+    const latestPendingCount = await getPendingCount();
+    setPendingCount(latestPendingCount);
+
+    if (latestPendingCount <= 0) {
+      if (!silent) {
+        Alert.alert(
+          t("folderAssetScreen.sync.allSyncedAlert"),
+          t("folderAssetScreen.sync.allSyncedMessage")
+        );
+      }
+      return;
+    }
+
+    setIsSyncing(true);
+
+    try {
+      await syncQueue();
+      await refreshPendingCount();
+      await loadContents(currentFolderId);
+    } finally {
+      setIsSyncing(false);
+    }
+  },
+  [isOnline, currentFolderId, loadContents, refreshPendingCount, t]
+);
+// Auto-sync whenever we come online and there are pending items
+useEffect(() => {
+  if (isOnline !== true) return;
+  if (pendingCount <= 0) return;
+  if (isSyncing) return;
+
+  handleSyncNow(true);
+}, [isOnline, pendingCount, isSyncing, handleSyncNow]);
   const openFolder = async (folder: FolderItem) => {
     if (navigatingFolderId) return;
     setNavigatingFolderId(folder.id);
@@ -535,6 +566,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
         payload,
         { type: "createFolder", projectId }
       );
+      await refreshPendingCount();
       if ("offline" in result) {
         if (downloadedOffline) {
           const localFolder = buildLocalFolder(folderName.trim());
@@ -627,6 +659,8 @@ export default function FolderAndAssetScreen({ route }: Props) {
       payload,
       { type: "createAsset", projectId }
     );
+    
+    await refreshPendingCount();
     if ("offline" in result) {
       if (downloadedOffline) {
         const localAsset = buildLocalAsset(draft);
@@ -673,6 +707,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
       payload,
       { type: "updateAsset", projectId }
     );
+    await refreshPendingCount();
     if ("offline" in result) {
       if (downloadedOffline) {
         const existingOfflineAsset =
@@ -752,16 +787,6 @@ export default function FolderAndAssetScreen({ route }: Props) {
     return combined.filter((item) => item.name?.toLowerCase().includes(q));
   }, [folders, filteredAssets, searchQuery]);
 
-  const itemsWithPlaceholders = useMemo(() => {
-    return [
-      ...items,
-      ...Array.from({ length: pendingAssetSaveCount }, (_, index) => ({
-        itemType: "placeholder" as const,
-        id: `placeholder-${index}`,
-      })),
-    ];
-  }, [items, pendingAssetSaveCount]);
-
   const renderSkeletons = () => {
     return Array.from({ length: 12 }).map((_, index) => (
       <View key={index} style={styles.gridItem}>
@@ -821,7 +846,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
             </Text>
           </View>
           <TouchableOpacity
-            onPress={handleSyncNow}
+           onPress={() => handleSyncNow(false)}
             style={styles.syncBtn}
             disabled={isSyncing}
           >
@@ -914,17 +939,6 @@ export default function FolderAndAssetScreen({ route }: Props) {
           </View>
         ) : (
           <>
-            {pendingAssetSaveCount > 0 && (
-              <View style={styles.pendingSaveBanner}>
-                <Text style={styles.pendingSaveText}>
-                  {t("folderAssetScreen.grid.pendingSaving", {
-                    count: pendingAssetSaveCount,
-                    plural: pendingAssetSaveCount > 1 ? "s" : "",
-                  })}
-                </Text>
-              </View>
-            )}
-
             {isAdvancedSearching ? (
               /* ── Advanced search results list ── */
               <FlatList
@@ -1017,7 +1031,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
             ) : (
               /* ── Grid list ── */
               <FlatList
-                data={itemsWithPlaceholders}
+                data={items}
                 keyExtractor={(item) => `${item.itemType}-${item.id}`}
                 numColumns={NUM_COLUMNS}
                 columnWrapperStyle={styles.columnWrapper}
@@ -1044,17 +1058,6 @@ export default function FolderAndAssetScreen({ route }: Props) {
                   </View>
                 }
                 renderItem={({ item }) => {
-                  if (item.itemType === "placeholder") {
-                    return (
-                      <View style={styles.gridItem}>
-                        <View style={styles.gridCard}>
-                          <View style={styles.skeletonIconGrid} />
-                          <View style={styles.skeletonTitleGrid} />
-                        </View>
-                      </View>
-                    );
-                  }
-
                   if (item.itemType === "folder") {
                     const isOpening = navigatingFolderId === item.id;
                     return (
@@ -1159,6 +1162,14 @@ export default function FolderAndAssetScreen({ route }: Props) {
         >
           <Ionicons name="barcode-outline" size={22} color="#000" />
         </TouchableOpacity>
+
+        {/* ── Pending asset save loader ── */}
+        {pendingAssetSaveCount > 0 && (
+          <View style={[styles.pendingLoader, { bottom: Math.max(insets.bottom, 0) + 110 }]}>
+            <ActivityIndicator size="small" color="#000" />
+            <Text style={styles.pendingLoaderText}>{pendingAssetSaveCount}</Text>
+          </View>
+        )}
 
         {/* ── Back button ── */}
         <TouchableOpacity
@@ -1764,5 +1775,24 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 4,
     fontWeight: "700",
+  },
+  pendingLoader: {
+    position: "absolute",
+    right: 20,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: ACC,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    zIndex: 20,
+    elevation: 8,
+  },
+  pendingLoaderText: {
+    color: "#000",
+    fontSize: 14,
+    fontWeight: "bold",
+    marginLeft: 4,
   },
 });

@@ -292,9 +292,15 @@ export async function initStorage(): Promise<void> {
     );
     const projectColumnNames = projectColumns.map((c) => c.name);
 
-    if (!projectColumnNames.includes("companyId")) {
-      await db.execAsync(`ALTER TABLE offline_projects ADD COLUMN companyId TEXT;`);
+   if (!projectColumnNames.includes("companyId")) {
+  try {
+    await db.execAsync(`ALTER TABLE offline_projects ADD COLUMN companyId TEXT;`);
+  } catch (error: any) {
+    if (!String(error?.message || error).includes("duplicate column name")) {
+      throw error;
     }
+  }
+}
 
     if (!projectColumnNames.includes("userId")) {
       await db.execAsync(`ALTER TABLE offline_projects ADD COLUMN userId TEXT;`);
