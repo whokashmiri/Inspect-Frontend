@@ -130,7 +130,18 @@ export default function CreateAssetWizardModal({
     }, 120);
   };
 
-  const next = () => setStep((s) => Math.min(s + 1, 3));
+  const totalSteps = 3;
+
+  const next = () => {
+    if (step === 1 && !draft.name?.trim()) {
+      Alert.alert(t("common.validation"), t("asset.assetNameRequired"));
+      scrollToField("name");
+      return;
+    }
+
+    setStep((s) => Math.min(s + 1, totalSteps));
+  };
+
   const back = () => setStep((s) => Math.max(s - 1, 1));
 
   const openPhotoCamera = () => {
@@ -427,7 +438,7 @@ export default function CreateAssetWizardModal({
                   </View>
 
                   <Text style={styles.step}>
-                    {t("asset.stepOf", { step, total: 3 })}
+                    {t("asset.stepOf", { step, total: totalSteps })}
                   </Text>
 
                   <ScrollView
@@ -444,108 +455,10 @@ export default function CreateAssetWizardModal({
                     {step === 1 && (
                       <>
                         <Text style={styles.label}>
-                          {t("asset.uploadImages")}
-                        </Text>
-
-                        <View style={styles.imageActionRow}>
-                          <TouchableOpacity
-                            style={[styles.primaryBtn, styles.flexBtn]}
-                            onPress={openPhotoCamera}
-                            activeOpacity={0.85}
-                          >
-                            <Text style={styles.primaryText}>
-                              {t("asset.openCamera")}
-                            </Text>
-                          </TouchableOpacity>
-
-                          <TouchableOpacity
-                            style={[styles.darkBtn, styles.flexBtn]}
-                            onPress={pickImagesFromLibrary}
-                            activeOpacity={0.85}
-                          >
-                            <Text style={styles.darkBtnText}>
-                              {t("asset.uploadFromPhone")}
-                            </Text>
-                          </TouchableOpacity>
-
-                          <TouchableOpacity
-                            style={[styles.darkBtn, styles.flexBtn]}
-                            onPress={openScanCamera}
-                            activeOpacity={0.85}
-                          >
-                            <Text style={styles.darkBtnText}>
-                              {t("asset.scanText")}
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-
-                        <Text style={styles.helper}>
-                          {t("asset.imagesSelected", {
-                            count: draft.images.length,
-                          })}
-                        </Text>
-
-                        {draft.images.length > 0 && (
-                          <View style={styles.previewGrid}>
-                            {draft.images.map((img, index) => (
-                              <View
-                                key={`${img.uri}-${index}`}
-                                style={[
-                                  styles.previewItem,
-                                  {
-                                    width: previewSize,
-                                    height: previewSize,
-                                  },
-                                ]}
-                              >
-                                <Image
-                                  source={{ uri: img.uri }}
-                                  style={styles.previewImage}
-                                />
-
-                                <TouchableOpacity
-                                  style={styles.removeBadge}
-                                  onPress={() => removeImage(index)}
-                                >
-                                  <Text style={styles.removeBadgeText}>✕</Text>
-                                </TouchableOpacity>
-                              </View>
-                            ))}
-                          </View>
-                        )}
-
-                        <View style={styles.row}>
-                          <TouchableOpacity
-                            onPress={() =>
-                              setDraft((prev) => ({
-                                ...prev,
-                                isPresent: !prev.isPresent,
-                              }))
-                            }
-                            style={[
-                              styles.checkboxIsPresent,
-                              draft.isPresent && styles.checkboxActive,
-                            ]}
-                          >
-                            {draft.isPresent && (
-                              <Text style={styles.checkmarkIsPresent}>✓</Text>
-                            )}
-                          </TouchableOpacity>
-
-                          <Text style={styles.checkboxLabelIsPresent}>
-                            {t("asset.assetIsPresent")}
-                          </Text>
-                        </View>
-                      </>
-                    )}
-
-                    {step === 2 && (
-                      <>
-                        <Text style={styles.label}>
                           {t("asset.assetDetails")}
                         </Text>
 
-                        <View onLayout={setFieldPosition("name")}>
+                        <View onLayout={setFieldPosition("name")}> 
                           <Text style={styles.fieldLabel}>
                             {t("asset.assetName")}
                           </Text>
@@ -736,6 +649,118 @@ export default function CreateAssetWizardModal({
                             </View>
                           </>
                         )}
+
+                        <View style={styles.row}>
+                          <TouchableOpacity
+                            onPress={() =>
+                              setDraft((prev) => ({
+                                ...prev,
+                                isPresent: !prev.isPresent,
+                              }))
+                            }
+                            style={[
+                              styles.checkboxIsPresent,
+                              draft.isPresent && styles.checkboxActive,
+                            ]}
+                          >
+                            {draft.isPresent && (
+                              <Text style={styles.checkmarkIsPresent}>✓</Text>
+                            )}
+                          </TouchableOpacity>
+
+                          <Text style={styles.checkboxLabelIsPresent}>
+                            {t("asset.assetIsPresent")}
+                          </Text>
+                        </View>
+                      </>
+                    )}
+
+                    {step === 2 && (
+                      <>
+                        <Text style={styles.label}>
+                          {t("asset.uploadImages")}
+                        </Text>
+
+                        <View style={styles.imageActionRow}>
+                          <TouchableOpacity
+                            style={[
+                              styles.primaryBtn,
+                              styles.flexBtn,
+                              {
+                                flexDirection: "row",
+                                alignItems: "center",
+                                justifyContent: "center",
+                              },
+                            ]}
+                            onPress={openPhotoCamera}
+                            activeOpacity={0.85}
+                          >
+                            <MaterialIcons
+                              name="photo-camera"
+                              size={18}
+                              color="#fff"
+                              style={{ marginRight: 8 }}
+                            />
+                            <Text style={styles.primaryText}>
+                              {t("asset.openCamera")}
+                            </Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={[styles.darkBtn, styles.flexBtn]}
+                            onPress={pickImagesFromLibrary}
+                            activeOpacity={0.85}
+                          >
+                            <Text style={styles.darkBtnText}>
+                              {t("asset.uploadFromPhone")}
+                            </Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={[styles.darkBtn, styles.flexBtn]}
+                            onPress={openScanCamera}
+                            activeOpacity={0.85}
+                          >
+                            <Text style={styles.darkBtnText}>
+                              {t("asset.scanText")}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+
+                        <Text style={styles.helper}>
+                          {t("asset.imagesSelected", {
+                            count: draft.images.length,
+                          })}
+                        </Text>
+
+                        {draft.images.length > 0 && (
+                          <View style={styles.previewGrid}>
+                            {draft.images.map((img, index) => (
+                              <View
+                                key={`${img.uri}-${index}`}
+                                style={[
+                                  styles.previewItem,
+                                  {
+                                    width: previewSize,
+                                    height: previewSize,
+                                  },
+                                ]}
+                              >
+                                <Image
+                                  source={{ uri: img.uri }}
+                                  style={styles.previewImage}
+                                />
+
+                                <TouchableOpacity
+                                  style={styles.removeBadge}
+                                  onPress={() => removeImage(index)}
+                                >
+                                  <Text style={styles.removeBadgeText}>✕</Text>
+                                </TouchableOpacity>
+                              </View>
+                            ))}
+                          </View>
+                        )}
                       </>
                     )}
 
@@ -919,7 +944,7 @@ export default function CreateAssetWizardModal({
                     </View>
 
                     <View style={styles.footerSideRight}>
-                      {step < 3 ? (
+                      {step < totalSteps ? (
                         <TouchableOpacity
                           style={[styles.primaryBtn, styles.nextBtn]}
                           onPress={next}
@@ -1008,7 +1033,7 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 420,
     maxHeight: "94%",
-    minHeight: "60%",
+    minHeight: "70%",
     backgroundColor: "#ffffff",
     borderWidth: 1,
     borderColor: BORDER,

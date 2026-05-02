@@ -130,7 +130,7 @@ const toggleLanguage = useCallback(async () => {
         </View>
 
         
-                        <View style={[{ flexDirection: "row", alignItems: "center" }, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                        <View style={[{ flexDirection: "row", marginLeft:10, alignItems: "center" }, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
                           <TouchableOpacity
                             onPress={toggleLanguage}
                             style={styles.langToggle}
@@ -423,7 +423,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER,
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 10,
     borderRadius: 10,
     marginRight: 10,
   },
