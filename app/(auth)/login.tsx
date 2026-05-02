@@ -165,12 +165,15 @@ const { t } = useTranslation();
 }
 
 // ─── Styles ─────────────────────────────────────────────────────────────────
-const ACC = "#C8F135"; // lime accent
-const SURFACE = "#111";
-const BORDER = "#222";
+const ACC = "#2A324B";
+const SURFACE = "#E1E5EE";
+const BORDER = "#C7CCDB";
+const TEXT = "#2A324B";
+const MUTED = "#767B91";
+const SOFT = "#F7C59F";
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: "#000" },
+  flex: { flex: 1, backgroundColor: "#ffffff" },
   scroll: { flexGrow: 1, justifyContent: "center", padding: 28 },
 
   header: { alignItems: "center", marginBottom: 44 },
@@ -187,24 +190,24 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 6,
-    backgroundColor: "#000",
+    backgroundColor: SOFT,
   },
   title: {
     fontFamily: fonts.inter.semiBold as unknown as string,
     fontSize: 22,
     fontWeight: "400",
-    color: "#fff",
+    color: TEXT,
     letterSpacing: -0.5,
     marginBottom: 6,
   },
-  subtitle: { fontSize: 15, color: "#666" },
+  subtitle: { fontSize: 15, color: MUTED },
 
   form: { gap: 6 },
   fieldGroup: { marginBottom: 14 },
   label: {
     fontSize: 8,
     fontWeight: "600",
-    color: "#888",
+    color: MUTED,
     letterSpacing: 0.8,
     textTransform: "uppercase",
     marginBottom: 8,
@@ -217,7 +220,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    color: "#fff",
+    color: TEXT,
   },
   inputRow: {
     flexDirection: "row",
@@ -232,10 +235,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    color: "#fff",
+    color: TEXT,
   },
   eyeBtn: { paddingRight: 14 },
-  eyeIcon: { fontSize: 18 },
+  eyeIcon: { fontSize: 18, color: MUTED },
+
   inputError: { borderColor: "#FF453A" },
   errorText: { fontSize: 12, color: "#FF453A", marginTop: 5, marginLeft: 2 },
 
@@ -252,7 +256,7 @@ const styles = StyleSheet.create({
   btnText: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#000",
+    color: "#ffffff",
     letterSpacing: 0.2,
   },
 
@@ -261,6 +265,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginTop: 36,
   },
-  footerText: { fontSize: 14, color: "#555" },
+  footerText: { fontSize: 14, color: MUTED },
   footerLink: { fontSize: 14, color: ACC, fontWeight: "600" },
 });

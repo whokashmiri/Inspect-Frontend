@@ -15,9 +15,12 @@ import * as Updates from "expo-updates";
 import { useTranslation } from 'react-i18next';
 import { saveLanguagePreference } from "../offline/authStorage";
 
-const ACC = "#C6FF00";
-const SURFACE = "#111111";
-const BORDER = "#232323";
+const ACC = "#2A324B";
+const SURFACE = "#E1E5EE";
+const BORDER = "#C7CCDB";
+const TEXT = "#2A324B";
+const MUTED = "#767B91";
+const SOFT = "#F7C59F";
 
 export type HeaderUser = {
   username?: string;
@@ -46,7 +49,7 @@ const InfoRow = memo(function InfoRow({
   return (
     <View style={styles.infoCard}>
       <View style={styles.infoTopRow}>
-        <Ionicons name={icon} size={14} color="#777" />
+        <Ionicons name={icon} size={14} color="#767B91" />
         <Text style={styles.infoLabel}>{label}</Text>
       </View>
       <Text style={styles.infoValue}>{value || "-"}</Text>
@@ -187,7 +190,7 @@ const toggleLanguage = useCallback(async () => {
                 disabled={loggingOut}
                 style={styles.closeBtn}
               >
-                <Ionicons name="close" size={20} color="#fff" />
+                <Ionicons name="close" size={20} color="#2A324B" />
               </TouchableOpacity>
             </View>
 
@@ -217,10 +220,10 @@ const toggleLanguage = useCallback(async () => {
                 disabled={loggingOut}
               >
                 {loggingOut ? (
-                  <ActivityIndicator size="small" color="#000" />
+                   <ActivityIndicator size="small" color="#ffffff" />
                 ) : (
                   <>
-                    <Ionicons name="log-out-outline" size={18} color="#000" />
+                   <Ionicons name="log-out-outline" size={18} color="#ffffff" />
                     <Text style={styles.logoutButtonText}> {t("header.logout")}</Text>
                   </>
                 )}
@@ -239,7 +242,7 @@ export const AppHeader = memo(AppHeaderComponent);
 
 const styles = StyleSheet.create({
   header: {
-    backgroundColor: "#000",
+    backgroundColor: "#ffffff",
     borderBottomWidth: 1,
     borderBottomColor: BORDER,
     paddingHorizontal: 20,
@@ -267,17 +270,17 @@ const styles = StyleSheet.create({
     width: 15,
     height: 15,
     borderRadius: 5,
-    backgroundColor: "#000",
+    backgroundColor: SOFT,
   },
   companyName: {
     fontSize: 22,
     fontWeight: "400",
-    color: "#fff",
+    color: TEXT,
     letterSpacing: -0.5,
   },
   companySub: {
     fontSize: 12,
-    color: "#666",
+    color: MUTED,
     marginTop: 2,
   },
   avatarButton: {
@@ -287,20 +290,20 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: SURFACE,
+    backgroundColor: ACC,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: ACC,
     alignItems: "center",
     justifyContent: "center",
   },
   avatarText: {
-    color: "#fff",
+    color: "#ffffff",
     fontSize: 14,
     fontWeight: "800",
   },
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.72)",
+    backgroundColor: "rgba(42,50,75,0.55)",
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 20,
@@ -308,7 +311,7 @@ const styles = StyleSheet.create({
   modalCard: {
     width: "100%",
     maxWidth: 400,
-    backgroundColor: "#000",
+    backgroundColor: "#ffffff",
     borderWidth: 1,
     borderColor: BORDER,
     borderRadius: 24,
@@ -336,7 +339,7 @@ const styles = StyleSheet.create({
     marginRight: 14,
   },
   modalAvatarText: {
-    color: "#000",
+    color: "#ffffff",
     fontSize: 20,
     fontWeight: "900",
   },
@@ -346,12 +349,12 @@ const styles = StyleSheet.create({
   profileName: {
     fontSize: 15,
     fontWeight: "500",
-    color: "#fff",
+    color: TEXT,
     letterSpacing: -0.4,
   },
   profileRole: {
     fontSize: 8,
-    color: "#777",
+    color: MUTED,
     marginTop: 4,
     textTransform: "uppercase",
     letterSpacing: 0.8,
@@ -386,13 +389,13 @@ const styles = StyleSheet.create({
   infoLabel: {
     fontSize: 8,
     fontWeight: "700",
-    color: "#888",
+    color: MUTED,
     letterSpacing: 0.8,
     textTransform: "uppercase",
   },
   infoValue: {
     fontSize: 13,
-    color: "#fff",
+    color: TEXT,
     fontWeight: "600",
   },
   logoutButton: {
@@ -411,26 +414,23 @@ const styles = StyleSheet.create({
   logoutButtonText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#000",
+    color: "#ffffff",
     letterSpacing: 0.2,
   },
-  
-   langToggle: {
-  backgroundColor: SURFACE,
-  borderWidth: 1,
-  borderColor: BORDER,
-  paddingHorizontal: 10,
-  paddingVertical: 6,
-  borderRadius: 10,
-  marginRight: 10,
-},
 
-langText: {
-  color: "#fff",
-  fontSize: 10,
-  fontWeight: "700",
-  letterSpacing: 1,
-},
-
- 
+  langToggle: {
+    backgroundColor: SURFACE,
+    borderWidth: 1,
+    borderColor: BORDER,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    marginRight: 10,
+  },
+  langText: {
+    color: TEXT,
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 1,
+  },
 });

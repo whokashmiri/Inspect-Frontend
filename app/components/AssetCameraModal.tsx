@@ -491,7 +491,7 @@ const lastScannedAtRef = useRef<number>(0);
 
 const BORDER = "rgba(255,255,255,0.18)";
 const SURFACE = "rgba(0,0,0,0.45)";
-const ACC = "#D4FF00";
+const ACC = "#08519c";
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000" },

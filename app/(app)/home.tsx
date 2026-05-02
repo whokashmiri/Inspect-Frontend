@@ -52,9 +52,12 @@ export default function HomeScreen() {
   );
 }
 
-const ACC = "#C8F135";
-const SURFACE = "#111";
-const BORDER = "#222";
+const ACC = "#2A324B";
+const SURFACE = "#E1E5EE";
+const BORDER = "#C7CCDB";
+const TEXT = "#2A324B";
+const MUTED = "#767B91";
+const SOFT = "#F7C59F";
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: "#ffffff" },
@@ -77,24 +80,24 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 6,
-    backgroundColor: "#000",
+    backgroundColor: SOFT,
   },
   title: {
     fontFamily: fonts.inter.semiBold as unknown as string,
     fontSize: 22,
     fontWeight: "400",
-    color: "#060606",
+    color: TEXT,
     letterSpacing: -0.5,
     marginBottom: 6,
   },
   subtitle: {
     fontSize: 15,
-    color: "#666",
+    color: MUTED,
   },
   companyBtn: {
-    backgroundColor: SURFACE,
+    backgroundColor: ACC,
     borderWidth: 0.6,
-    borderColor: BORDER,
+    borderColor: ACC,
     borderRadius: 14,
     paddingVertical: 15,
     alignItems: "center",
@@ -103,13 +106,13 @@ const styles = StyleSheet.create({
   companyBtnText: {
     fontSize: 13,
     fontWeight: "500",
-    color: ACC,
+    color: "#ffffff",
     letterSpacing: 1,
     textTransform: "uppercase",
   },
   message: {
     fontSize: 14,
-    color: "#555",
+    color: MUTED,
     textAlign: "center",
     marginTop: 10,
   },

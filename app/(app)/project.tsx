@@ -33,7 +33,7 @@ import fonts from "../fonts/fonts";
 
 type FilterType = "recent" | "new";
 
-const ACC = "#C6FF00";
+
 
 function getProjectStatusLabel(project: Project, t: (key: string) => string) {
   const raw = (project.workflowStatus ?? "").toLowerCase();
@@ -453,7 +453,7 @@ export default function ProjectScreen() {
                               <Ionicons
                                 name="cloud-download-outline"
                                 size={20}
-                                color="#000"
+                                color="#f3f3f4"
                               />
                             )}
                           </Pressable>
@@ -472,12 +472,12 @@ export default function ProjectScreen() {
                               disabled={isDownloading}
                             >
                               {isDownloading ? (
-                                <ActivityIndicator size="small" color={ACC} />
+                                <ActivityIndicator size="small" color={BORDER} />
                               ) : (
                                 <Ionicons
                                   name="refresh-outline"
                                   size={20}
-                                  color={ACC}
+                                  color={SURFACE}
                                 />
                               )}
                             </Pressable>
@@ -523,21 +523,24 @@ export default function ProjectScreen() {
   );
 }
 
-// const ACC = "#C8F135";
-const SURFACE = "#111";
-const BORDER = "#f8f1f1";
+const ACC = "#2A324B";
+const SURFACE = "#E1E5EE";
+const BORDER = "#C7CCDB";
+const TEXT = "#2A324B";
+const MUTED = "#767B91";
+const SOFT = "#F7C59F";
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: "#ffffff" },
   scroll: { padding: 8, paddingTop: 10, paddingBottom: 40 },
-  header: { marginBottom: 10  },
+  header: { marginBottom: 10 },
   title: {
-    color: SURFACE,
+    color: TEXT,
     fontSize: 17,
     fontFamily: fonts.inter.semiBold as unknown as string,
   },
-  companyName: { color: SURFACE , textTransform: "uppercase" },
-  subtitle: { color: "#666", marginTop: 6, fontSize: 10 },
+  companyName: { color: TEXT, textTransform: "uppercase" },
+  subtitle: { color: MUTED, marginTop: 6, fontSize: 10 },
 
   actionRow: {
     flexDirection: "row",
@@ -546,18 +549,19 @@ const styles = StyleSheet.create({
   },
   switchBtn: {
     flex: 1,
-    backgroundColor: SURFACE,
+    backgroundColor: ACC,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: ACC,
     borderRadius: 10,
     paddingVertical: 10,
     alignItems: "center",
   },
   switchBtnText: {
-    color: "#fff",
+    color: "#ffffff",
     fontSize: 12,
     fontFamily: fonts.inter.medium as unknown as string,
   },
+
   createBtn: {
     flex: 1,
     backgroundColor: ACC,
@@ -566,7 +570,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   createBtnText: {
-    color: "#000",
+    color: "#ffffff",
     fontSize: 12,
     fontFamily: fonts.inter.semiBold as unknown as string,
   },
@@ -590,11 +594,11 @@ const styles = StyleSheet.create({
     borderColor: ACC,
   },
   filterBtnText: {
-    color: "#aaa",
+    color: MUTED,
     fontSize: 12,
   },
   filterBtnTextActive: {
-    color: "#000",
+    color: "#ffffff",
     fontFamily: fonts.inter.semiBold as unknown as string,
   },
 
@@ -608,7 +612,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   errorBannerText: {
-    color: "#FF7B72",
+    color: "#FF453A",
     fontSize: 13,
     textAlign: "center",
   },
@@ -618,7 +622,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   emptyText: {
-    color: "#666",
+    color: MUTED,
     fontSize: 14,
   },
 
@@ -638,7 +642,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   projectName: {
-    color: "#fff",
+    color: TEXT,
     fontSize: 13,
     fontFamily: fonts.inter.semiBold as unknown as string,
     flex: 1,
@@ -646,18 +650,18 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   statusPill: {
-    backgroundColor: "rgba(200, 241, 53, 0.15)",
+    backgroundColor: SOFT,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 5,
   },
   statusPillText: {
-    color: ACC,
+    color: TEXT,
     fontSize: 9,
     fontFamily: fonts.inter.medium as unknown as string,
   },
   projectMeta: {
-    color: "#777",
+    color: MUTED,
     fontSize: 8,
     marginTop: 8,
     textTransform: "uppercase",
@@ -678,6 +682,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
+
   iconBtn: {
     width: 40,
     height: 40,
@@ -689,21 +694,22 @@ const styles = StyleSheet.create({
     backgroundColor: ACC,
   },
   refreshIconBtn: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: SOFT,
     borderWidth: 1,
-    borderColor: ACC,
+    borderColor: SOFT,
   },
   removeIconBtn: {
-    backgroundColor: "#2a1111",
+    backgroundColor: "#2A324B",
     borderWidth: 1,
-    borderColor: "#ff6b6b",
+    borderColor: "#2A324B",
   },
   iconBtnDisabled: {
     opacity: 0.5,
   },
+
   offlineReadyBadge: {
-    backgroundColor: "rgba(200, 241, 53, 0.12)",
-    borderColor: "rgba(200, 241, 53, 0.4)",
+    backgroundColor: "#C7CCDB",
+    borderColor: BORDER,
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 10,
@@ -711,13 +717,13 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
   },
   offlineReadyText: {
-    color: ACC,
+    color: TEXT,
     fontSize: 10,
     fontFamily: fonts.inter.medium as unknown as string,
   },
   pendingSyncBadge: {
-    backgroundColor: "rgba(255, 193, 7, 0.12)",
-    borderColor: "rgba(255, 193, 7, 0.35)",
+    backgroundColor: SOFT,
+    borderColor: SOFT,
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 10,
@@ -725,27 +731,26 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
   },
   pendingSyncText: {
-    color: "#FFC107",
+    color: TEXT,
     fontSize: 10,
     fontFamily: fonts.inter.medium as unknown as string,
   },
 
-
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.65)",
+    backgroundColor: "rgba(42,50,75,0.55)",
     justifyContent: "center",
     padding: 24,
   },
   modalCard: {
-    backgroundColor: "#0d0d0d",
+    backgroundColor: "#ffffff",
     borderWidth: 1,
     borderColor: BORDER,
     borderRadius: 18,
     padding: 18,
   },
   modalTitle: {
-    color: "#fff",
+    color: TEXT,
     fontSize: 18,
     marginBottom: 14,
     fontFamily: fonts.inter.semiBold as unknown as string,
@@ -757,7 +762,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 13,
-    color: "#fff",
+    color: TEXT,
     marginBottom: 16,
   },
   modalActions: {
@@ -774,7 +779,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   cancelBtnText: {
-    color: "#fff",
+    color: TEXT,
   },
   saveBtn: {
     flex: 1,
@@ -784,7 +789,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   saveBtnText: {
-    color: "#000",
+    color: "#ffffff",
     fontFamily: fonts.inter.semiBold as unknown as string,
   },
   btnDisabled: {

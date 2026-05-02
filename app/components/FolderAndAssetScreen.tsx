@@ -66,7 +66,7 @@ type Props = {
   };
 };
 
-const ACC = "#D4FF00";
+
 const NUM_COLUMNS = 3;
 const FLAT_COLUMNS = 1;
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -205,6 +205,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
   const [pendingCount, setPendingCount] = useState(0);
   const [pendingAssetSaveCount, setPendingAssetSaveCount] = useState(0);
   const [downloadedOffline, setDownloadedOffline] = useState(false);
+  const [downloadCheckCompleted, setDownloadCheckCompleted] = useState(false);
   const [snackbar, setSnackbar] = useState<{
     message: string;
     type: "success" | "error" | "info";
@@ -272,23 +273,29 @@ export default function FolderAndAssetScreen({ route }: Props) {
     return () => clearInterval(interval);
   }, []);
 
-  useEffect(() => {
-    const checkDownloaded = async () => {
-      if (projectId.startsWith("offline_")) {
-        setDownloadedOffline(false);
-        downloadCheckCompletedRef.current = true;
-        return;
-      }
-      const downloaded = await isProjectDownloaded(projectId);
-      setDownloadedOffline(downloaded);
-      downloadCheckCompletedRef.current = true;
-    };
-    // Reset for new project
-    autoEnterRootAttemptedRef.current = false;
-    downloadCheckCompletedRef.current = false;
-    checkDownloaded();
-  }, [projectId]);
+useEffect(() => {
+  const checkDownloaded = async () => {
+    setDownloadCheckCompleted(false);
 
+    if (projectId.startsWith("offline_")) {
+      setDownloadedOffline(false);
+      downloadCheckCompletedRef.current = true;
+      setDownloadCheckCompleted(true);
+      return;
+    }
+
+    const downloaded = await isProjectDownloaded(projectId);
+
+    setDownloadedOffline(downloaded);
+    downloadCheckCompletedRef.current = true;
+    setDownloadCheckCompleted(true);
+  };
+
+  autoEnterRootAttemptedRef.current = false;
+  downloadCheckCompletedRef.current = false;
+
+  checkDownloaded();
+}, [projectId]);
   useEffect(() => {
     return () => {
       if (snackbarTimeout.current) {
@@ -553,9 +560,8 @@ const autoEnterAdminRootFolder = useCallback(async () => {
   [projectId, fetchContentsData]
 );
 
-  useEffect(() => {
-  // Wait for download check to complete before attempting auto-enter in offline mode
-  if (!downloadCheckCompletedRef.current) {
+useEffect(() => {
+  if (!downloadCheckCompleted) {
     return;
   }
 
@@ -565,9 +571,19 @@ const autoEnterAdminRootFolder = useCallback(async () => {
   }
 
   loadContents(currentFolderId);
-}, [autoEnterAdminRootFolder, loadContents, currentFolderId, filter, searchQuery, downloadedOffline, isOnline]);
- 
-  const onRefresh = async () => {
+}, [
+  downloadCheckCompleted,
+  autoEnterAdminRootFolder,
+  loadContents,
+  currentFolderId,
+  filter,
+  searchQuery,
+  downloadedOffline,
+  isOnline,
+]);
+
+
+const onRefresh = async () => {
     setRefreshing(true);
     if (isOnline) {
       setIsSyncing(true);
@@ -895,6 +911,23 @@ useEffect(() => {
     return combined.filter((item) => item.name?.toLowerCase().includes(q));
   }, [folders, filteredAssets, searchQuery]);
 
+
+  const getAssetImageUri = (asset: AssetItem) => {
+  const image = asset.images?.find((img: any) => {
+    const uri = img?.url || img?.uri;
+    return typeof uri === "string" && uri.trim().length > 0;
+  });
+
+  return image?.url || image?.url || null;
+};
+
+const getValidAssetImages = (asset: AssetItem) => {
+  return (asset.images || []).filter((img: any) => {
+    const uri = img?.url || img?.uri;
+    return typeof uri === "string" && uri.trim().length > 0;
+  });
+};
+
   const renderSkeletons = () => {
     return Array.from({ length: 12 }).map((_, index) => (
       <View key={index} style={styles.gridItem}>
@@ -960,7 +993,8 @@ useEffect(() => {
           >
             {isSyncing ? (
               <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <ActivityIndicator size="small" color="#000" />
+                <ActivityIndicator size="small" color="#ffffff" />
+
                 <Text style={styles.syncBtnText}>
                   {" "}{t("folderAssetScreen.sync.syncing")}
                 </Text>
@@ -975,12 +1009,10 @@ useEffect(() => {
 
         {/* ── Breadcrumb ── */}
         <View style={styles.breadcrumbRow}>
-            
-
 
             {path
-  .filter((_, index) => !(index === 0 && adminRootFolderIdRef.current))
-  .map((crumb, visibleIndex) => {
+            .filter((_, index) => !(index === 0 && adminRootFolderIdRef.current))
+            .map((crumb, visibleIndex) => {
     const realIndex = adminRootFolderIdRef.current
       ? visibleIndex + 1
       : visibleIndex;
@@ -1036,7 +1068,7 @@ useEffect(() => {
                   })
                 : t("folderAssetScreen.search.placeholderAll")
             }
-            placeholderTextColor="#666"
+            placeholderTextColor="#767B91"
             style={styles.advancedSearchInput}
           />
           <TouchableOpacity
@@ -1047,7 +1079,7 @@ useEffect(() => {
               {selectedRawDataKey ||
                 t("folderAssetScreen.search.fieldPickerLabel")}
             </Text>
-            <Ionicons name="chevron-down" size={14} color="#000" />
+            <Ionicons name="chevron-down" size={14} color="#2A324B" />
           </TouchableOpacity>
         </View>
 
@@ -1087,7 +1119,7 @@ useEffect(() => {
                 ListFooterComponent={
                   advancedSearchLoading ? (
                     <ActivityIndicator
-                      color={ACC}
+                      color="#2A324B"
                       style={{ marginVertical: 18 }}
                     />
                   ) : null
@@ -1112,7 +1144,7 @@ useEffect(() => {
                   >
                     {item.images?.length ? (
                       <Image
-                        source={{ uri: item.images[0].url }}
+                        source={{ uri: getAssetImageUri(item)! }}
                         style={styles.searchResultImage}
                         resizeMode="cover"
                       />
@@ -1121,7 +1153,7 @@ useEffect(() => {
                         <Ionicons
                           name="cube-outline"
                           size={28}
-                          color="#fff"
+                          color="#020202"
                         />
                       </View>
                     )}
@@ -1218,13 +1250,13 @@ useEffect(() => {
                         onPress={() => openEditAsset(item)}
                         activeOpacity={0.85}
                       >
-                        {item.images && item.images.length > 0 ? (
-                          <Image
-                            source={{ uri: item.images[0].url }}
-                            style={styles.assetImageBackground}
-                            resizeMode="cover"
-                          />
-                        ) : (
+                        {getAssetImageUri(item) ? (
+                      <Image
+                        source={{ uri: getAssetImageUri(item)! }}
+                        style={styles.assetImageBackground}
+                        resizeMode="cover"
+                        />
+                      ) : (
                           <View style={styles.iconWrap}>
                             <Ionicons
                               name="cube-outline"
@@ -1247,7 +1279,7 @@ useEffect(() => {
                         {item.images && item.images.length > 0 && (
                           <View style={styles.photoCountBadge}>
                             <Text style={styles.photoCountText}>
-                              {item.images.length}
+                              {getValidAssetImages(item).length}
                             </Text>
                           </View>
                         )}
@@ -1262,7 +1294,7 @@ useEffect(() => {
                             color={
                               item.id?.startsWith("offline_")
                                 ? "#fff"
-                                : "#D4FF00"
+                                : "#F7C59F"
                             }
                           />
                         </View>
@@ -1284,7 +1316,7 @@ useEffect(() => {
           onPress={() => setCodeScannerVisible(true)}
           activeOpacity={0.85}
         >
-          <Ionicons name="barcode-outline" size={22} color="#000" />
+          <Ionicons name="barcode-outline" size={22} color="#ffffff" />
         </TouchableOpacity>
 
         {/* ── Pending asset save loader ── */}
@@ -1370,7 +1402,7 @@ useEffect(() => {
                       placeholder={t(
                         "folderAssetScreen.folderModal.placeholder"
                       )}
-                      placeholderTextColor="#777"
+                     placeholderTextColor="#767B91"
                       value={folderName}
                       onChangeText={setFolderName}
                       returnKeyType="done"
@@ -1493,9 +1525,17 @@ useEffect(() => {
   );
 }
 
+const ACC = "#2A324B";
+const SURFACE = "#E1E5EE";
+const BORDER = "#C7CCDB";
+const TEXT = "#2A324B";
+const MUTED = "#767B91";
+const SOFT = "#F7C59F";
+
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: "#ffffff" },
   container: { flex: 1, paddingHorizontal: 10, paddingTop: 0 },
+
   scanFab: {
     position: "absolute",
     right: 20,
@@ -1510,39 +1550,43 @@ const styles = StyleSheet.create({
     zIndex: 20,
     elevation: 8,
   },
+
   filterRow: { flexDirection: "row", gap: 8, marginBottom: 12 },
   filterBtn: {
     flex: 1,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    backgroundColor: "#222",
+    backgroundColor: SURFACE,
     borderRadius: 12,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#444",
+    borderColor: BORDER,
   },
   filterBtnActive: { backgroundColor: ACC, borderColor: ACC },
-  filterText: { color: "#999", fontSize: 12, fontWeight: "500" },
-  filterTextActive: { color: "#000", fontWeight: "600" },
+  filterText: { color: MUTED, fontSize: 12, fontWeight: "500" },
+  filterTextActive: { color: "#ffffff", fontWeight: "600" },
+
   searchInput: {
-    backgroundColor: "#222",
+    backgroundColor: SURFACE,
     borderWidth: 1,
-    borderColor: "#444",
+    borderColor: BORDER,
     borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    color: "#fff",
+    color: TEXT,
     fontSize: 14,
     marginBottom: 12,
   },
+
   title: {
     fontSize: 15,
     fontWeight: "400",
-    color: "#090808",
+    color: TEXT,
     marginTop: 4,
     textTransform: "uppercase",
   },
-  subtitle: { color: "#2a2828", marginTop: 0, marginBottom: 4, fontSize: 10 },
+  subtitle: { color: MUTED, marginTop: 0, marginBottom: 4, fontSize: 10 },
+
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1557,31 +1601,36 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: ACC,
   },
-  dashboardBtnText: { color: "#000", fontSize: 12, fontWeight: "700" },
+  dashboardBtnText: { color: "#ffffff", fontSize: 12, fontWeight: "700" },
+
   offlineModeBadge: {
-    backgroundColor: "rgba(212,255,0,0.12)",
+    backgroundColor: SURFACE,
     borderWidth: 1,
-    borderColor: "rgba(212,255,0,0.35)",
+    borderColor: BORDER,
     padding: 8,
     borderRadius: 8,
     marginBottom: 10,
   },
-  offlineModeText: { color: "#222", fontSize: 12 },
+  offlineModeText: { color: MUTED, fontSize: 12 },
+
   pendingBadge: {
     flexDirection: "row",
-    backgroundColor: "#444",
+    backgroundColor: SURFACE,
+    borderWidth: 1,
+    borderColor: BORDER,
     padding: 8,
     borderRadius: 8,
     marginBottom: 10,
     alignItems: "center",
   },
   networkIndicator: { marginRight: 8 },
-  syncingSubText: { color: "#aaa", fontSize: 10, marginTop: 2 },
+  syncingSubText: { color: MUTED, fontSize: 10, marginTop: 2 },
+
   syncTickBadge: {
     position: "absolute",
     bottom: 6,
     right: 6,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    backgroundColor: ACC,
     borderRadius: 8,
     width: 20,
     height: 20,
@@ -1589,29 +1638,33 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     zIndex: 15,
   },
-  pendingText: { color: "#D4FF00", fontSize: 12, flex: 1 },
+  pendingText: { color: TEXT, fontSize: 12, flex: 1 },
   syncBtn: {
-    backgroundColor: "#D4FF00",
+    backgroundColor: ACC,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6,
   },
-  syncBtnText: { color: "#000", fontSize: 12, fontWeight: "600" },
+  syncBtnText: { color: "#ffffff", fontSize: 12, fontWeight: "600" },
+
   breadcrumbRow: { flexDirection: "row", flexWrap: "wrap", marginBottom: 12 },
-  breadcrumbText: { color: "#888", fontSize: 10, fontWeight: "600" },
+  breadcrumbText: { color: MUTED, fontSize: 10, fontWeight: "600" },
+
   listContent: { paddingBottom: 120 },
   listContentWithBottomBar: { paddingBottom: 120 },
   gridWrap: { flexDirection: "row", flexWrap: "wrap" },
+
   pendingSaveBanner: {
-    backgroundColor: "rgba(212,255,0,0.14)",
-    borderColor: "rgba(212,255,0,0.35)",
+    backgroundColor: SOFT,
+    borderColor: SOFT,
     borderWidth: 1,
     borderRadius: 14,
     paddingVertical: 10,
     paddingHorizontal: 14,
     marginBottom: 12,
   },
-  pendingSaveText: { color: "#090909", fontSize: 12, fontWeight: "600" },
+  pendingSaveText: { color: TEXT, fontSize: 12, fontWeight: "600" },
+
   snackbar: {
     position: "absolute",
     left: 20,
@@ -1626,19 +1679,20 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 8,
   },
-  snackbarText: { color: "#000", fontSize: 13, fontWeight: "600" },
-  snackbarSuccess: { backgroundColor: "#D4FF00" },
+  snackbarText: { color: "#ffffff", fontSize: 13, fontWeight: "600" },
+  snackbarSuccess: { backgroundColor: ACC },
   snackbarError: { backgroundColor: "#FF6B6B" },
-  snackbarInfo: { backgroundColor: "#444" },
+  snackbarInfo: { backgroundColor: MUTED },
+
   columnWrapper: { gap: GRID_GAP, marginBottom: GRID_GAP },
   gridItem: { width: ITEM_SIZE, marginBottom: GRID_GAP },
   gridCard: {
     width: "100%",
     height: ITEM_SIZE,
-    backgroundColor: "#111",
+    backgroundColor: SURFACE,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#1f1f1f",
+    borderColor: BORDER,
     paddingVertical: 12,
     paddingHorizontal: 8,
     alignItems: "center",
@@ -1654,30 +1708,39 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     position: "relative",
   },
-  gridTitle: { color: "#fff", fontSize: 12, textAlign: "center", lineHeight: 14 },
+  gridTitle: {
+    color: TEXT,
+    fontSize: 12,
+    textAlign: "center",
+    lineHeight: 14,
+    fontWeight: "500",
+  },
+
   skeletonIconGrid: {
     width: 26,
     height: 26,
     borderRadius: 8,
-    backgroundColor: "#222",
+    backgroundColor: BORDER,
     marginBottom: 10,
   },
   skeletonTitleGrid: {
     width: "80%",
     height: 10,
     borderRadius: 6,
-    backgroundColor: "#222",
+    backgroundColor: BORDER,
   },
+
   emptyWrap: { paddingTop: 60, alignItems: "center", width: "100%" },
-  emptyTitle: { color: "#fff", fontSize: 12, fontWeight: "700" },
-  emptyText: { color: "#888", marginTop: 8, fontSize: 10 },
+  emptyTitle: { color: TEXT, fontSize: 12, fontWeight: "700" },
+  emptyText: { color: MUTED, marginTop: 8, fontSize: 10 },
+
   bottomActionBar: {
     position: "absolute",
     left: 20,
     right: 20,
     flexDirection: "row",
     gap: 5,
-    borderColor: "#1f1f1f",
+    borderColor: BORDER,
     borderRadius: 15,
   },
   primaryBtn: {
@@ -1688,7 +1751,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   primaryBtnText: {
-    color: "#000",
+    color: "#ffffff",
     fontSize: 13,
     fontFamily: fonts.inter.semiBold as unknown as string,
   },
@@ -1699,49 +1762,52 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: "center",
-    backgroundColor: "#111",
+    backgroundColor: "#ffffff",
   },
   secondaryBtnText: {
     color: ACC,
     fontSize: 13,
     fontFamily: fonts.inter.semiBold as unknown as string,
   },
+
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
+    backgroundColor: "rgba(42,50,75,0.55)",
     justifyContent: "center",
   },
   modalKeyboardWrap: { flex: 1, justifyContent: "flex-end" },
   modalCard: {
-    backgroundColor: "#111",
+    backgroundColor: "#ffffff",
     padding: 15,
     paddingBottom: 18,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     borderWidth: 1,
-    borderColor: "#1f1f1f",
+    borderColor: BORDER,
   },
-  modalTitle: { color: "#fff", fontSize: 15, marginBottom: 16 },
+  modalTitle: { color: TEXT, fontSize: 15, marginBottom: 16 },
   input: {
-    backgroundColor: "#1b1b1b",
-    color: "#fff",
+    backgroundColor: SURFACE,
+    color: TEXT,
     fontSize: 14,
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#2a2a2a",
+    borderColor: BORDER,
   },
   modalActions: { flexDirection: "row", gap: 10, marginTop: 10 },
   modalCancelBtn: {
     flex: 1,
-    backgroundColor: "#222",
+    backgroundColor: SURFACE,
+    borderWidth: 1,
+    borderColor: BORDER,
     borderRadius: 10,
     alignItems: "center",
     paddingVertical: 10,
   },
-  modalCancelText: { color: "#fff" },
+  modalCancelText: { color: TEXT },
   modalSaveBtn: {
     flex: 1,
     backgroundColor: ACC,
@@ -1749,7 +1815,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 10,
   },
-  modalSaveText: { color: "#000" },
+  modalSaveText: { color: "#ffffff" },
+
   assetImageBackground: {
     position: "absolute",
     top: 4,
@@ -1771,9 +1838,10 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 10,
     borderBottomRightRadius: 10,
     zIndex: 10,
+    backgroundColor: "rgba(42,50,75,0.65)",
   },
   gridTitleOverlay: {
-    color: "#fff",
+    color: "#ffffff",
     fontSize: 11,
     textAlign: "center",
     lineHeight: 14,
@@ -1788,14 +1856,14 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: "#FF4444",
     borderWidth: 2,
-    borderColor: "#111",
+    borderColor: "#ffffff",
     zIndex: 10,
   },
   photoCountBadge: {
     position: "absolute",
     top: 6,
     right: 6,
-    backgroundColor: "rgba(0,0,0,0.7)",
+    backgroundColor: "rgba(42,50,75,0.75)",
     borderRadius: 10,
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -1804,33 +1872,36 @@ const styles = StyleSheet.create({
     gap: 2,
     zIndex: 10,
   },
-  photoCountText: { color: "#fff", fontSize: 10, fontWeight: "600" },
+  photoCountText: { color: "#ffffff", fontSize: 10, fontWeight: "600" },
+
   backButton: {
-    backgroundColor: "#D4FF00",
+    backgroundColor: SOFT,
     borderRadius: 10,
     padding: 8,
     position: "absolute",
     left: 20,
     zIndex: 20,
   },
+  backText: { fontSize: 16, fontWeight: "600", color: TEXT },
+
   rawKeyModalCard: {
     width: "85%",
     maxHeight: "70%",
-    backgroundColor: "#111",
+    backgroundColor: "#ffffff",
     borderRadius: 20,
     padding: 18,
     borderWidth: 1,
-    borderColor: "#222",
+    borderColor: BORDER,
     alignSelf: "center",
     justifyContent: "center",
   },
   rawKeyOption: {
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "#222",
+    borderBottomColor: BORDER,
   },
-  rawKeyOptionText: { color: "#fff", fontSize: 15, fontWeight: "600" },
-  backText: { fontSize: 16, fontWeight: "600", color: "#111" },
+  rawKeyOptionText: { color: TEXT, fontSize: 15, fontWeight: "600" },
+
   advancedSearchRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1841,10 +1912,10 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 44,
     borderRadius: 14,
-    backgroundColor: "#111",
+    backgroundColor: SURFACE,
     borderWidth: 1,
-    borderColor: "#222",
-    color: "#fff",
+    borderColor: BORDER,
+    color: TEXT,
     paddingHorizontal: 14,
     fontSize: 14,
   },
@@ -1853,7 +1924,7 @@ const styles = StyleSheet.create({
     minWidth: 96,
     maxWidth: 140,
     borderRadius: 14,
-    backgroundColor: ACC,
+    backgroundColor: SOFT,
     paddingHorizontal: 10,
     flexDirection: "row",
     alignItems: "center",
@@ -1861,52 +1932,54 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   rawKeyPickerText: {
-    color: "#000",
+    color: TEXT,
     fontWeight: "800",
     fontSize: 12,
     maxWidth: 95,
   },
+
   searchListContent: { paddingTop: 4 },
   searchResultCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#111",
+    backgroundColor: SURFACE,
     borderRadius: 16,
     padding: 10,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: "#222",
+    borderColor: BORDER,
   },
   searchResultImage: {
     width: 54,
     height: 54,
     borderRadius: 12,
-    backgroundColor: "#222",
+    backgroundColor: BORDER,
   },
   searchResultIcon: {
     width: 54,
     height: 54,
     borderRadius: 12,
-    backgroundColor: "#222",
+    backgroundColor: BORDER,
     alignItems: "center",
     justifyContent: "center",
   },
   searchResultBody: { flex: 1, marginLeft: 12 },
-  searchResultTitle: { color: "#fff", fontSize: 14, fontWeight: "800" },
-  searchResultLocation: { color: "#999", fontSize: 12, marginTop: 3 },
+  searchResultTitle: { color: TEXT, fontSize: 14, fontWeight: "800" },
+  searchResultLocation: { color: MUTED, fontSize: 12, marginTop: 3 },
   searchResultMeta: {
     color: ACC,
     fontSize: 11,
     marginTop: 4,
     fontWeight: "700",
   },
+
   pendingLoader: {
     position: "absolute",
     right: 20,
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: ACC,
+    backgroundColor: SOFT,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
@@ -1914,7 +1987,7 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   pendingLoaderText: {
-    color: "#000",
+    color: TEXT,
     fontSize: 14,
     fontWeight: "bold",
     marginLeft: 4,

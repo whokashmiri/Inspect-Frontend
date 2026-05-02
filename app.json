@@ -11,11 +11,12 @@
     },
     "ios": {
       "supportsTablet": false,
+       "bundleIdentifier": "com.anonymous.batchcam",
       "infoPlist": {
         "NSCameraUsageDescription": "BatchCam needs camera access to capture photos",
         "NSPhotoLibraryAddUsageDescription": "BatchCam needs access to save photos to your library."
-      },
-      "bundleIdentifier": "com.anonymous.batchcam"
+      }
+     
     },
     "android": {
       "usesCleartextTraffic": true,

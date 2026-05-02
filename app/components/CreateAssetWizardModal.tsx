@@ -552,7 +552,7 @@ export default function CreateAssetWizardModal({
 
                           <TextInput
                             placeholder={t("asset.assetName")}
-                            placeholderTextColor="#666"
+                            placeholderTextColor="#767B91"
                             value={draft.name}
                             onChangeText={(text) => {
                               if (!disableAssetName) {
@@ -587,7 +587,7 @@ export default function CreateAssetWizardModal({
                                 condition: value,
                               }))
                             }
-                            dropdownIconColor="#fff"
+                            dropdownIconColor="#2A324B"
                             style={styles.picker}
                           >
                             <Picker.Item
@@ -982,56 +982,19 @@ export default function CreateAssetWizardModal({
   );
 }
 
-const BORDER = "#222";
-const SURFACE = "#111";
-const ACC = "#D4FF00";
+const ACC = "#2A324B";
+const SURFACE = "#E1E5EE";
+const BORDER = "#C7CCDB";
+const TEXT = "#2A324B";
+const MUTED = "#767B91";
+const SOFT = "#F7C59F";
 
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.72)",
+    backgroundColor: "rgba(42,50,75,0.55)",
     paddingHorizontal: 10,
     paddingVertical: 1,
-  },
-
-  checkboxWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 12,
-    padding: 12,
-    backgroundColor: "#1a1a1a",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#333",
-  },
-
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: "#666",
-    backgroundColor: "#222",
-    marginRight: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  checkboxChecked: {
-    borderColor: ACC,
-    backgroundColor: ACC,
-  },
-
-  checkmark: {
-    color: "#000",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-
-  checkboxLabel: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "500",
   },
 
   keyboardWrap: {
@@ -1046,7 +1009,7 @@ const styles = StyleSheet.create({
     maxWidth: 420,
     maxHeight: "94%",
     minHeight: "60%",
-    backgroundColor: "#000",
+    backgroundColor: "#ffffff",
     borderWidth: 1,
     borderColor: BORDER,
     borderRadius: 24,
@@ -1075,7 +1038,7 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    color: "#fff",
+    color: TEXT,
     fontSize: 15,
     fontWeight: "500",
   },
@@ -1092,58 +1055,98 @@ const styles = StyleSheet.create({
   },
 
   closeText: {
-    color: "#fff",
+    color: TEXT,
     fontSize: 12,
     fontWeight: "700",
   },
 
   step: {
-    color: "#777",
+    color: MUTED,
     fontSize: 10,
     marginTop: 2,
     marginBottom: 10,
   },
 
   label: {
-    color: "#fff",
+    color: TEXT,
     fontSize: 12,
     marginBottom: 10,
     fontWeight: "500",
   },
 
-
   row: {
-  flexDirection: "row",
-  alignItems: "center",
-  marginTop: 16,
-},
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 16,
+  },
 
-checkboxIsPresent: {
-  width: 22,
-  height: 22,
-  borderWidth: 2,
-  borderColor: "#999",
-  borderRadius: 4,
-  marginRight: 10,
-  alignItems: "center",
-  justifyContent: "center",
-},
+  checkboxIsPresent: {
+    width: 22,
+    height: 22,
+    borderWidth: 2,
+    borderColor: MUTED,
+    borderRadius: 4,
+    marginRight: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
-checkboxActive: {
-  backgroundColor: "#4CAF50",
-  borderColor: "#4CAF50",
-},
+  checkboxActive: {
+    backgroundColor: ACC,
+    borderColor: ACC,
+  },
 
-checkmarkIsPresent: {
-  color: "#fff",
-  fontSize: 14,
-  fontWeight: "bold",
-},
+  checkmarkIsPresent: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "bold",
+  },
 
-checkboxLabelIsPresent: {
-  fontSize: 16,
-  color: "#fff", // match your theme
-},
+  checkboxLabelIsPresent: {
+    fontSize: 16,
+    color: TEXT,
+  },
+
+  checkboxWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: SURFACE,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: MUTED,
+    backgroundColor: "#ffffff",
+    marginRight: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  checkboxChecked: {
+    borderColor: ACC,
+    backgroundColor: ACC,
+  },
+
+  checkmark: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+
+  checkboxLabel: {
+    color: TEXT,
+    fontSize: 14,
+    fontWeight: "500",
+  },
+
   descriptionHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -1152,19 +1155,19 @@ checkboxLabelIsPresent: {
   },
 
   scanBtn: {
-    backgroundColor: SURFACE,
+    backgroundColor: SOFT,
     minHeight: 38,
     paddingHorizontal: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: SOFT,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 8,
   },
 
   scanBtnText: {
-    color: "#fff",
+    color: TEXT,
     fontSize: 12,
     fontWeight: "600",
   },
@@ -1176,7 +1179,7 @@ checkboxLabelIsPresent: {
     borderRadius: 14,
     paddingHorizontal: 12,
     paddingVertical: 12,
-    color: "#fff",
+    color: TEXT,
     marginBottom: 12,
     fontSize: 14,
   },
@@ -1199,7 +1202,7 @@ checkboxLabelIsPresent: {
   },
 
   picker: {
-    color: "#fff",
+    color: TEXT,
     height: 58,
     width: "100%",
     overflow: "hidden",
@@ -1243,13 +1246,13 @@ checkboxLabelIsPresent: {
     width: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: "rgba(0,0,0,0.75)",
+    backgroundColor: "rgba(42,50,75,0.75)",
     alignItems: "center",
     justifyContent: "center",
   },
 
   removeBadgeText: {
-    color: "#fff",
+    color: "#ffffff",
     fontSize: 10,
     fontWeight: "700",
   },
@@ -1268,7 +1271,7 @@ checkboxLabelIsPresent: {
   },
 
   primaryText: {
-    color: "#000",
+    color: "#ffffff",
     fontSize: 13,
     fontWeight: "500",
   },
@@ -1285,7 +1288,7 @@ checkboxLabelIsPresent: {
   },
 
   darkBtnText: {
-    color: "#fff",
+    color: TEXT,
     fontSize: 13,
     fontWeight: "500",
   },
@@ -1294,25 +1297,26 @@ checkboxLabelIsPresent: {
     minHeight: 46,
     paddingHorizontal: 12,
     justifyContent: "center",
-    borderColor: "#666",
+    borderColor: BORDER,
     borderWidth: 1,
     borderRadius: 8,
+    backgroundColor: "#ffffff",
   },
 
   secondaryText: {
-    color: "#ded6d6",
+    color: TEXT,
     fontWeight: "600",
     fontSize: 14,
   },
 
   helper: {
-    color: "#777",
+    color: MUTED,
     marginTop: 8,
     fontSize: 12,
   },
 
   fieldLabel: {
-    color: "#ccc",
+    color: MUTED,
     fontSize: 12,
     marginBottom: 6,
     fontWeight: "500",
@@ -1338,7 +1342,6 @@ checkboxLabelIsPresent: {
   footerSide: {
     flex: 1,
     alignItems: "flex-start",
-   
   },
 
   footerSideRight: {
@@ -1371,7 +1374,7 @@ checkboxLabelIsPresent: {
   },
 
   voiceText: {
-    color: "#fff",
+    color: TEXT,
     fontSize: 13,
   },
 
@@ -1381,7 +1384,7 @@ checkboxLabelIsPresent: {
   },
 
   voiceRemoteText: {
-    color: "#666",
+    color: MUTED,
     fontSize: 12,
     fontStyle: "italic",
   },

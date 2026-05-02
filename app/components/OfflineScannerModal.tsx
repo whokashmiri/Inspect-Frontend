@@ -335,8 +335,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   chipActive: {
-    backgroundColor: "#D4FF00",
-    borderColor: "#D4FF00",
+    backgroundColor: "#08519c",
+    borderColor: "#08519c",
   },
   chipText: { color: "#fff", fontWeight: "600" },
   chipTextActive: { color: "#000" },
@@ -356,7 +356,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "#2A2A2A",
   },
-  resultType: { color: "#D4FF00", fontWeight: "700", marginBottom: 2 },
+  resultType: { color: "#08519c", fontWeight: "700", marginBottom: 2 },
   resultValue: { color: "#fff" },
   bottomActions: {
     flexDirection: "row",
@@ -373,7 +373,7 @@ const styles = StyleSheet.create({
   captureBtnText: { color: "#000", fontWeight: "800" },
   saveBtn: {
     flex: 1,
-    backgroundColor: "#D4FF00",
+    backgroundColor: "#08519c",
     paddingVertical: 14,
     borderRadius: 14,
     alignItems: "center",

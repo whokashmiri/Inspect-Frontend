@@ -25,7 +25,7 @@ type Props = {
   onDetected: (code: string) => void | Promise<void>;
 };
 
-const ACC = "#D4FF00";
+const ACC = "#08519c";
 
 export default function CodeScannerModal({
   visible,
