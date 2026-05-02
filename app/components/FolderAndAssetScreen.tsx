@@ -168,6 +168,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
   const autoEnterRootAttemptedRef = useRef(false);
   const adminRootFolderIdRef = useRef<string | null>(null);
+  const downloadCheckCompletedRef = useRef(false);
 
   const openFolderModal = () => {
     setFolderModalVisible(true);
@@ -275,11 +276,16 @@ export default function FolderAndAssetScreen({ route }: Props) {
     const checkDownloaded = async () => {
       if (projectId.startsWith("offline_")) {
         setDownloadedOffline(false);
+        downloadCheckCompletedRef.current = true;
         return;
       }
       const downloaded = await isProjectDownloaded(projectId);
       setDownloadedOffline(downloaded);
+      downloadCheckCompletedRef.current = true;
     };
+    // Reset for new project
+    autoEnterRootAttemptedRef.current = false;
+    downloadCheckCompletedRef.current = false;
     checkDownloaded();
   }, [projectId]);
 
@@ -548,13 +554,18 @@ const autoEnterAdminRootFolder = useCallback(async () => {
 );
 
   useEffect(() => {
+  // Wait for download check to complete before attempting auto-enter in offline mode
+  if (!downloadCheckCompletedRef.current) {
+    return;
+  }
+
   if (!autoEnterRootAttemptedRef.current) {
     autoEnterAdminRootFolder();
     return;
   }
 
   loadContents(currentFolderId);
-}, [autoEnterAdminRootFolder, loadContents, currentFolderId, filter, searchQuery]);
+}, [autoEnterAdminRootFolder, loadContents, currentFolderId, filter, searchQuery, downloadedOffline, isOnline]);
  
   const onRefresh = async () => {
     setRefreshing(true);
