@@ -5,7 +5,10 @@
 import * as SecureStore from "expo-secure-store";
 
 // ─── Config ────────────────────────────────────────────────────────────────
-export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://api.167.71.231.64.nip.io/api/v1";
+// export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://api.167.71.231.64.nip.io/api/v1";
+
+
+export const BASE_URL = process.env.EXPO_PUBLIC_API_URL 
 
 const TOKEN_KEY = "auth.accessToken";
 const REFRESH_KEY = "auth.refreshToken";

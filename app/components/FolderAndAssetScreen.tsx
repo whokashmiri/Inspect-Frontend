@@ -423,8 +423,20 @@ useEffect(() => {
         result = await projectContentApi.advancedSearchContents(projectId, code);
       }
       setCodeScannerVisible(false);
-      setEditingAsset(result.assets && result.assets.length > 0 ? result.assets[0] : null);
-      setAssetModalVisible(true);
+     const foundAsset = result.assets?.[0];
+
+setCodeScannerVisible(false);
+
+if (!foundAsset) {
+  Alert.alert(
+    t("folderAssetScreen.codeScanner.notFoundTitle"),
+    t("folderAssetScreen.codeScanner.notFoundMessage")
+  );
+  return;
+}
+
+setEditingAsset(foundAsset);
+setAssetModalVisible(true);
     } catch (error: any) {
       Alert.alert(
         t("folderAssetScreen.codeScanner.notFoundTitle"),
