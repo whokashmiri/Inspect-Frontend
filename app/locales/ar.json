@@ -54,7 +54,8 @@
     "stats": {
   "total": "الإجمالي",
   "done": "مكتمل",
-  "incomplete": "غير مكتمل"
+  "incomplete": "غير مكتمل",
+  "notes":"ملاحظات"
 },
     "filters": {
       "recent": "الأحدث",

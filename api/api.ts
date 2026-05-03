@@ -214,6 +214,7 @@ export interface ProjectStats {
   totalAssets: number;
   doneAssets: number;
   incompleteAssets: number;
+  assetsWithNotes: number;
 }
 export interface Project {
   id: string;

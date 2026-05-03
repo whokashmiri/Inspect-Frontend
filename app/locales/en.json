@@ -54,7 +54,8 @@
     "stats": {
   "total": "Total",
   "done": "Done",
-  "incomplete": "Incomplete"
+  "incomplete": "Incomplete",
+  "notes":"Notes"
 },
     "filters": {
       

@@ -250,6 +250,7 @@ export default function ProjectScreen() {
             totalAssets: 0,
             doneAssets: 0,
             incompleteAssets: 0,
+            assetsWithNotes: 0,
         },
         company: {
           id: "offline-company",
@@ -362,6 +363,7 @@ export default function ProjectScreen() {
                 totalAssets: 0,
                 doneAssets: 0,
                 incompleteAssets: 0,
+                assetsWithNotes: 0,
                 };
 
 
@@ -411,7 +413,7 @@ export default function ProjectScreen() {
 
 
 <View style={styles.statBox}>
-    <Text style={styles.statNumber}>{stats.incompleteAssets}</Text>
+    <Text style={styles.statNumber}>{stats.assetsWithNotes}</Text>
     <Text style={styles.statLabel}>
       Notes
       {/* {t("projectScreen.stats.incomplete")} */}
