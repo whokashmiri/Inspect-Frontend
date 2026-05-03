@@ -20,7 +20,7 @@ import {
 import { Picker } from "@react-native-picker/picker";
 import * as ImagePicker from "expo-image-picker";
 import { Audio } from "expo-av";
-import { MaterialIcons } from "@expo/vector-icons";
+import {Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import AssetCameraModal from "./AssetCameraModal";
 import { AssetDraft } from "./utils/types";
@@ -39,6 +39,8 @@ type ExtendedAssetDraft = AssetDraft & {
   kilometersDriven?: string;
   isPresent?: boolean;
   isDone?: boolean;
+  hasNotes?: boolean;
+  notes?: string ;
 };
 
 type Props = {
@@ -65,6 +67,8 @@ const getInitialDraft = (
   kilometersDriven: initialData?.kilometersDriven || "",
   isPresent: initialData?.isPresent ?? true,
   isDone: initialData?.isDone || false,
+  hasNotes: initialData?.hasNotes ?? false,
+  notes: initialData?.notes || "",
 });
 
 export default function CreateAssetWizardModal({
@@ -486,6 +490,45 @@ export default function CreateAssetWizardModal({
                             onFocus={() => scrollToField("name")}
                           />
                         </View>
+
+<TouchableOpacity
+  style={styles.notesCheckRow}
+ onPress={() =>
+  setDraft((prev) => ({
+    ...prev,
+    hasNotes: !prev.hasNotes,
+    notes: !prev.hasNotes ? prev.notes || "" : undefined,
+  }))
+}
+  activeOpacity={0.8}
+>
+  <Ionicons
+    name={draft.hasNotes ? "checkbox" : "square-outline"}
+    size={22}
+    color="#2A324B"
+  />
+  <Text style={styles.notesCheckText}>Add Notes</Text>
+</TouchableOpacity>
+
+{draft.hasNotes && (
+  <View style={styles.notesBox}>
+    <TextInput
+      value={draft.notes || ""}
+      onChangeText={(text) =>
+        setDraft((prev) => ({
+          ...prev,
+          notes: text,
+        }))
+      }
+      placeholder="Write notes..."
+      placeholderTextColor="#767B91"
+      multiline
+      scrollEnabled
+      textAlignVertical="top"
+      style={styles.notesInput}
+    />
+  </View>
+)}
 
                         <Text style={styles.fieldLabel}>
                           {t("asset.condition")}
@@ -1078,6 +1121,37 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+
+  notesCheckRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 8,
+  marginTop: 10,
+  marginBottom: 10,
+},
+
+notesCheckText: {
+  color: "#2A324B",
+  fontSize: 14,
+  fontWeight: "600",
+},
+
+notesBox: {
+  height: 140,
+  backgroundColor: "#E1E5EE",
+  borderWidth: 1,
+  borderColor: "#C7CCDB",
+  borderRadius: 14,
+  padding: 10,
+  marginBottom: 12,
+},
+
+notesInput: {
+  flex: 1,
+  color: "#2A324B",
+  fontSize: 14,
+  minHeight: 120,
+},
 
   closeText: {
     color: TEXT,

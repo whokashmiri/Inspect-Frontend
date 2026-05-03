@@ -51,6 +51,11 @@
       "new": "New",
       "done": "Done"
     },
+    "stats": {
+  "total": "Total",
+  "done": "Done",
+  "incomplete": "Incomplete"
+},
     "filters": {
       
       "recent": "Recent",

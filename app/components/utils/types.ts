@@ -23,6 +23,8 @@ export type AssetDraft = {
   model?: string;
   manufactureYear?: string;
   kilometersDriven?: string;
+  hasNotes?: boolean;
+  notes?: string;
   isDone?: boolean;
   isPresent?: boolean;
 };

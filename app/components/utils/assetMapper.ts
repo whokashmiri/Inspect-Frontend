@@ -1,7 +1,7 @@
 import { AssetItem } from "../../../api/api";
 import { AssetDraft } from "./types";
 
-export function mapAssetToDraft(asset: AssetItem): AssetDraft & { isDone: boolean } {
+export function mapAssetToDraft(asset: AssetItem): AssetDraft & { isDone: boolean; hasNotes?: boolean; notes?: string } {
   return {
     name: asset.name,
     writtenDescription: asset.writtenDescription || "",
@@ -13,6 +13,8 @@ export function mapAssetToDraft(asset: AssetItem): AssetDraft & { isDone: boolea
     kilometersDriven: asset.kilometersDriven || "",
     isPresent: asset.isPresent,
     isDone: asset.isDone || false,
+    hasNotes: asset.hasNotes ?? false,
+    notes: asset.notes || "",
     images: asset.images.map((img, index) => ({
       uri: img.url,
       name: `asset_image_${index + 1}.jpg`,

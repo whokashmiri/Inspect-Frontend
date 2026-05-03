@@ -209,6 +209,12 @@ export interface ProjectUser {
   role: string | null;
 }
 
+
+export interface ProjectStats {
+  totalAssets: number;
+  doneAssets: number;
+  incompleteAssets: number;
+}
 export interface Project {
   id: string;
   name: string;
@@ -219,6 +225,10 @@ export interface Project {
   userId: string;
   company: ProjectCompany | null;
   user: ProjectUser | null;
+  stats?: ProjectStats;
+
+
+  
 }
 
 export interface CreateProjectResponse {
@@ -292,6 +302,9 @@ export interface AssetItem {
   model: string | null;
   manufactureYear: string | null;
   kilometersDriven: string | null;
+
+  hasNotes: boolean;
+  notes: string | null;
 
   isDone: boolean;
   isPresent: boolean;
@@ -381,6 +394,8 @@ export const projectContentApi = {
     kilometersDriven?: string | null;
     isDone?: boolean;
     isPresent?: boolean;
+    hasNotes?: boolean;
+    notes?: string | null;
   }) => {
     const form = new FormData();
 
@@ -425,6 +440,8 @@ export const projectContentApi = {
     if (payload.kilometersDriven?.trim()) {
       form.append("kilometersDriven", payload.kilometersDriven.trim());
     }
+    form.append("hasNotes", payload.hasNotes ? "true" : "false");
+    form.append("notes", payload.notes ?? "");
 
     form.append("isDone", payload.isDone ? "true" : "false");
     form.append("isPresent", payload.isPresent === false ? "false" : "true");
@@ -517,6 +534,8 @@ export const projectContentApi = {
     code?: string | null;
     manufactureYear?: string | null;
     kilometersDriven?: string | null;
+    hasNotes?: boolean;
+    notes?: string | null;
     isDone?: boolean;
     isPresent?: boolean;
   }) => {
@@ -544,6 +563,7 @@ export const projectContentApi = {
       form.append("assetType", normalizedAssetType);
     }
 
+    
     if (payload.brand !== undefined) {
       form.append("brand", payload.brand ?? "");
     }
@@ -554,6 +574,15 @@ export const projectContentApi = {
 
     if (payload.code !== undefined) {
       form.append("code", payload.code ?? "");
+    }
+
+    if (payload.hasNotes !== undefined) {
+      form.append("hasNotes", payload.hasNotes ? "true" : "false");
+
+    }
+
+    if (payload.notes !== undefined) {
+      form.append("notes", payload.notes ?? "");
     }
 
     if (payload.manufactureYear !== undefined) {

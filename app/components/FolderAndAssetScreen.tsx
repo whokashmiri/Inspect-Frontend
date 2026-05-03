@@ -87,6 +87,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
   const [advancedSearchHasMore, setAdvancedSearchHasMore] = useState(true);
   const [rawKeyModalVisible, setRawKeyModalVisible] = useState(false);
 
+
   const getNestedRawDataValue = (rawData: any, key?: string | null) => {
     if (!rawData || !key) return rawData;
     return key.split(".").reduce((acc, part) => {
@@ -756,6 +757,8 @@ useEffect(() => {
       manufactureYear: isVehicle ? draft.manufactureYear || null : null,
       kilometersDriven: isVehicle ? draft.kilometersDriven || null : null,
       isDone: draft.isDone ?? false,
+      hasNotes:draft.hasNotes ?? false,
+      notes: draft.notes || null,
       isPresent: draft.isPresent ?? true,
       createdBy: { id: "offline-user", fullName: "You", email: "" },
       images: [],
@@ -785,6 +788,10 @@ useEffect(() => {
       assetType: normalizedAssetType,
       brand: isVehicle ? draft.brand || null : null,
       model: isVehicle ? draft.model || null : null,
+      
+      hasNotes:draft.hasNotes ?? false,
+      notes: draft.notes || null,
+
       manufactureYear: isVehicle ? draft.manufactureYear || null : null,
       kilometersDriven: isVehicle ? draft.kilometersDriven || null : null,
       isDone: draft.isDone ?? false,
@@ -833,6 +840,10 @@ useEffect(() => {
       assetType: normalizedAssetType,
       brand: isVehicle ? draft.brand || null : null,
       model: isVehicle ? draft.model || null : null,
+
+      hasNotes:draft.hasNotes ?? false,
+      notes: draft.notes || null,
+
       manufactureYear: isVehicle ? draft.manufactureYear || null : null,
       kilometersDriven: isVehicle ? draft.kilometersDriven || null : null,
       isDone: draft.isDone ?? false,
@@ -858,6 +869,10 @@ useEffect(() => {
           assetType: normalizedAssetType,
           brand: isVehicle ? draft.brand || null : null,
           model: isVehicle ? draft.model || null : null,
+
+          hasNotes:draft.hasNotes ?? false,
+          notes: draft.notes || null,
+
           manufactureYear: isVehicle ? draft.manufactureYear || null : null,
           kilometersDriven: isVehicle ? draft.kilometersDriven || null : null,
           isDone: draft.isDone ?? existingOfflineAsset.isDone,
@@ -1191,6 +1206,18 @@ const getValidAssetImages = (asset: AssetItem) => {
                             "—"}
                         </Text>
                       )}
+                      {(item as any).hasNotes && (
+                        <View style={styles.searchResultNotesIndicator}>
+                          <Ionicons
+                            name="document-text"
+                            size={12}
+                            color="#5B9BD5"
+                          />
+                          <Text style={styles.searchResultNotesText}>
+                            Has notes
+                          </Text>
+                        </View>
+                      )}
                     </View>
                     <Ionicons name="chevron-forward" size={20} color="#777" />
                   </TouchableOpacity>
@@ -1293,6 +1320,15 @@ const getValidAssetImages = (asset: AssetItem) => {
                             <Text style={styles.photoCountText}>
                               {getValidAssetImages(item).length}
                             </Text>
+                          </View>
+                        )}
+                        {(item as any).hasNotes && (
+                          <View style={styles.notesBadge}>
+                            <Ionicons
+                              name="document-text"
+                              size={12}
+                              color="#fff"
+                            />
                           </View>
                         )}
                         <View style={styles.syncTickBadge}>
@@ -1885,6 +1921,18 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   photoCountText: { color: "#ffffff", fontSize: 10, fontWeight: "600" },
+  notesBadge: {
+    position: "absolute",
+    top: 6,
+    right: 50,
+    backgroundColor: "#5B9BD5",
+    borderRadius: 8,
+    width: 20,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10,
+  },
 
   backButton: {
     backgroundColor: SOFT,
@@ -1983,6 +2031,17 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 4,
     fontWeight: "700",
+  },
+  searchResultNotesIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 6,
+    gap: 4,
+  },
+  searchResultNotesText: {
+    color: "#5B9BD5",
+    fontSize: 11,
+    fontWeight: "600",
   },
 
   pendingLoader: {

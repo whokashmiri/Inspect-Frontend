@@ -153,42 +153,7 @@ export default function ProjectScreen() {
     }
   }
 
-  async function handleCreateProject() {
-    if (!projectName.trim()) {
-      setGlobalError(t("projectScreen.errors.nameRequired"));
-      return;
-    }
 
-    setCreating(true);
-    setGlobalError(null);
-
-    try {
-      const payload = { name: projectName.trim() };
-      const result = await safeApiCall(
-        () => projectApi.create(payload),
-        payload,
-        { type: "createProject" }
-      );
-
-      if ("offline" in result) {
-        Alert.alert(t("projectScreen.offline.title"), result.message);
-      } else {
-        setProjects((prev) => [result.project, ...prev]);
-      }
-
-      setProjectName("");
-      setShowCreateModal(false);
-      setFilter("new");
-    } catch (err) {
-      const msg =
-        err instanceof ApiError
-          ? err.message
-          : t("projectScreen.errors.createFailed");
-      setGlobalError(msg);
-    } finally {
-      setCreating(false);
-    }
-  }
 
   async function handleDownloadProject(project: Project, forceRefresh = false) {
     try {
@@ -271,6 +236,8 @@ export default function ProjectScreen() {
   const offlineProjectEntries = useMemo<Project[]>(() => {
     return pendingProjects.map((item) => {
       const payload = item.payload as { name?: string };
+      console.log(payload);
+      
       return {
         id: item.id,
         name: payload.name ?? t("projectScreen.offline.projectName"),
@@ -279,6 +246,11 @@ export default function ProjectScreen() {
         workflowStatus: "new",
         companyId: "offline-company",
         userId: user?.id ?? "offline-user",
+        stats: {
+            totalAssets: 0,
+            doneAssets: 0,
+            incompleteAssets: 0,
+        },
         company: {
           id: "offline-company",
           name: user?.companyName ?? t("projectScreen.offline.projectName"),
@@ -386,6 +358,13 @@ export default function ProjectScreen() {
               const isRemoving = removingProjectId === project.id;
               const pendingForProject = projectPendingMap[project.id] ?? 0;
 
+               const stats = project.stats ?? {
+                totalAssets: 0,
+                doneAssets: 0,
+                incompleteAssets: 0,
+                };
+
+
               return (
                 <Pressable
                   key={project.id}
@@ -411,6 +390,35 @@ export default function ProjectScreen() {
                       name: project.company?.name ?? "Unknown",
                     })}
                   </Text>
+
+                  <View style={styles.statsRow}>
+  <View style={styles.statBox}>
+    <Text style={styles.statNumber}>{stats.totalAssets}</Text>
+    <Text style={styles.statLabel}>{t("projectScreen.stats.total")}</Text>
+  </View>
+
+  <View style={styles.statBox}>
+    <Text style={styles.statNumber}>{stats.doneAssets}</Text>
+    <Text style={styles.statLabel}>{t("projectScreen.stats.done")}</Text>
+  </View>
+
+  <View style={styles.statBox}>
+    <Text style={styles.statNumber}>{stats.incompleteAssets}</Text>
+    <Text style={styles.statLabel}>
+      {t("projectScreen.stats.incomplete")}
+    </Text>
+  </View>
+
+
+<View style={styles.statBox}>
+    <Text style={styles.statNumber}>{stats.incompleteAssets}</Text>
+    <Text style={styles.statLabel}>
+      Notes
+      {/* {t("projectScreen.stats.incomplete")} */}
+    </Text>
+  </View>
+
+</View>
 
                   <View style={styles.projectFooterRow}>
                     <View style={styles.projectBadgeColumn}>
@@ -630,8 +638,8 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   projectCard: {
-    backgroundColor: SURFACE,
-    borderWidth: 1,
+    // backgroundColor: SURFACE,
+    borderWidth: 2,
     borderColor: BORDER,
     borderRadius: 14,
     padding: 16,
@@ -666,6 +674,36 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textTransform: "uppercase",
   },
+
+  statsRow: {
+  flexDirection: "row",
+  gap: 8,
+  marginTop: 5,
+},
+
+statBox: {
+  flex: 1,
+  // backgroundColor: SURFACE,
+  borderWidth: 2,
+  borderColor: BORDER,
+  borderRadius: 5,
+  paddingVertical: 1,
+  alignItems: "center",
+},
+
+statNumber: {
+  color: TEXT,
+  fontSize: 15,
+  fontFamily: fonts.inter.semiBold as unknown as string,
+},
+
+statLabel: {
+  color: MUTED,
+  fontSize: 8,
+  marginTop: 3,
+  textTransform: "uppercase",
+  fontFamily: fonts.inter.medium as unknown as string,
+},
   projectFooterRow: {
     marginTop: 14,
     flexDirection: "row",
