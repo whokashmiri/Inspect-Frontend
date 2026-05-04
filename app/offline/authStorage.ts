@@ -17,7 +17,11 @@ const KEYS = {
 
 const OFFLINE_AUTH_DAYS = 14;
 
+let initialized = false;
+
 export async function initAuthStorage() {
+  if (initialized) return;
+
   await db.execAsync(`
     CREATE TABLE IF NOT EXISTS offline_user (
       id TEXT PRIMARY KEY NOT NULL,
@@ -37,11 +41,17 @@ export async function initAuthStorage() {
       companyId TEXT NOT NULL,
       selectedAt INTEGER NOT NULL
     );
+
+    CREATE INDEX IF NOT EXISTS idx_offline_companies_userId
+    ON offline_companies(userId);
   `);
+
+  initialized = true;
 }
 
 export async function saveTokens(accessToken: string, refreshToken?: string | null) {
   await SecureStore.setItemAsync(KEYS.accessToken, accessToken);
+
   if (refreshToken) {
     await SecureStore.setItemAsync(KEYS.refreshToken, refreshToken);
   }
@@ -61,24 +71,33 @@ export async function clearTokens() {
 }
 
 export async function saveCachedUser(user: CachedUser) {
+  await initAuthStorage();
+
   await db.runAsync(
-    `
-      INSERT OR REPLACE INTO offline_user (id, data, updatedAt)
-      VALUES (?, ?, ?)
-    `,
+    `INSERT OR REPLACE INTO offline_user (id, data, updatedAt)
+     VALUES (?, ?, ?)`,
     [user.id, JSON.stringify(user), Date.now()]
   );
 }
 
 export async function getCachedUser(): Promise<CachedUser | null> {
+  await initAuthStorage();
+
   const row = await db.getFirstAsync<{ data: string }>(
     `SELECT data FROM offline_user LIMIT 1`
   );
+
   if (!row?.data) return null;
-  return JSON.parse(row.data);
+
+  try {
+    return JSON.parse(row.data);
+  } catch {
+    return null;
+  }
 }
 
 export async function clearCachedUser() {
+  await initAuthStorage();
   await db.runAsync(`DELETE FROM offline_user`);
 }
 
@@ -86,14 +105,14 @@ export async function saveCachedCompanies(
   userId: string,
   companies: CachedCompany[]
 ) {
+  await initAuthStorage();
+
   await db.runAsync(`DELETE FROM offline_companies WHERE userId = ?`, [userId]);
 
   for (const company of companies) {
     await db.runAsync(
-      `
-        INSERT OR REPLACE INTO offline_companies (id, userId, data, updatedAt)
-        VALUES (?, ?, ?, ?)
-      `,
+      `INSERT OR REPLACE INTO offline_companies (id, userId, data, updatedAt)
+       VALUES (?, ?, ?, ?)`,
       [company.id, userId, JSON.stringify(company), Date.now()]
     );
   }
@@ -102,32 +121,46 @@ export async function saveCachedCompanies(
 export async function getCachedCompanies(
   userId: string
 ): Promise<CachedCompany[]> {
+  await initAuthStorage();
+
   const rows = await db.getAllAsync<{ data: string }>(
     `SELECT data FROM offline_companies WHERE userId = ? ORDER BY updatedAt DESC`,
     [userId]
   );
 
-  return rows.map((r) => JSON.parse(r.data));
+  return rows
+    .map((r) => {
+      try {
+        return JSON.parse(r.data);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
 }
 
 export async function clearCachedCompanies(userId?: string) {
+  await initAuthStorage();
+
   if (userId) {
     await db.runAsync(`DELETE FROM offline_companies WHERE userId = ?`, [userId]);
     return;
   }
+
   await db.runAsync(`DELETE FROM offline_companies`);
 }
 
 export async function saveSelectedCompany(userId: string, companyId: string) {
+  await initAuthStorage();
+
   await db.runAsync(
-    `
-      INSERT OR REPLACE INTO offline_selected_company (userId, companyId, selectedAt)
-      VALUES (?, ?, ?)
-    `,
+    `INSERT OR REPLACE INTO offline_selected_company (userId, companyId, selectedAt)
+     VALUES (?, ?, ?)`,
     [userId, companyId, Date.now()]
   );
 
   const meta = await getSessionMeta();
+
   if (meta?.userId === userId) {
     await saveSessionMeta({
       ...meta,
@@ -137,18 +170,26 @@ export async function saveSelectedCompany(userId: string, companyId: string) {
 }
 
 export async function getSelectedCompanyId(userId: string): Promise<string | null> {
+  await initAuthStorage();
+
   const row = await db.getFirstAsync<{ companyId: string }>(
     `SELECT companyId FROM offline_selected_company WHERE userId = ? LIMIT 1`,
     [userId]
   );
+
   return row?.companyId ?? null;
 }
 
 export async function clearSelectedCompany(userId?: string) {
+  await initAuthStorage();
+
   if (userId) {
-    await db.runAsync(`DELETE FROM offline_selected_company WHERE userId = ?`, [userId]);
+    await db.runAsync(`DELETE FROM offline_selected_company WHERE userId = ?`, [
+      userId,
+    ]);
     return;
   }
+
   await db.runAsync(`DELETE FROM offline_selected_company`);
 }
 
@@ -169,7 +210,14 @@ export async function saveSessionMeta(
 
 export async function getSessionMeta(): Promise<OfflineSessionMeta | null> {
   const raw = await SecureStore.getItemAsync(KEYS.sessionMeta);
-  return raw ? JSON.parse(raw) : null;
+
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
 }
 
 export async function clearSessionMeta() {
@@ -179,6 +227,7 @@ export async function clearSessionMeta() {
 export async function isOfflineSessionValid(): Promise<boolean> {
   const meta = await getSessionMeta();
   if (!meta) return false;
+
   return Date.now() <= meta.offlineAllowedUntil;
 }
 
@@ -198,6 +247,7 @@ export async function cacheAuthenticatedSession(params: {
   } = params;
 
   await initAuthStorage();
+
   await saveTokens(accessToken, refreshToken);
   await saveCachedUser(user);
 
@@ -218,6 +268,8 @@ export async function cacheAuthenticatedSession(params: {
 }
 
 export async function clearOfflineAuthState() {
+  await initAuthStorage();
+
   const cachedUser = await getCachedUser();
 
   await clearTokens();
@@ -227,14 +279,13 @@ export async function clearOfflineAuthState() {
   await clearCachedCompanies(cachedUser?.id);
 }
 
-/* ✅ LANGUAGE PREFERENCE STORAGE */
 export async function saveLanguagePreference(language: "ar" | "en") {
   await SecureStore.setItemAsync(KEYS.preferredLanguage, language);
 }
 
 export async function getLanguagePreference(): Promise<"ar" | "en"> {
   const language = await SecureStore.getItemAsync(KEYS.preferredLanguage);
-  return (language as "ar" | "en") || "ar"; // Default to Arabic
+  return language === "en" ? "en" : "ar";
 }
 
 export async function clearLanguagePreference() {

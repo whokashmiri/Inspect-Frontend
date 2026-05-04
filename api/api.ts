@@ -29,6 +29,19 @@ export const tokenStore = {
 
 type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
+
+
+export interface AssetMediaInput {
+  uri?: string;
+  url?: string;
+  name?: string;
+  type?: string;
+  publicId?: string | null;
+  duration?: number | null;
+  existing?: boolean;
+}
+
+
 interface JsonRequestOptions {
   method?: Method;
   body?: Record<string, unknown>;
@@ -132,6 +145,23 @@ export async function requestForm<T>(url: string, options: {
   return data;
 }
 
+
+async function uploadFilesInBatches<T>(
+  files: UploadFileInput[],
+  uploadFn: (file: UploadFileInput) => Promise<T>,
+  batchSize = 3
+): Promise<T[]> {
+  const results: T[] = [];
+
+  for (let i = 0; i < files.length; i += batchSize) {
+    const batch = files.slice(i, i + batchSize);
+    const uploaded = await Promise.all(batch.map(uploadFn));
+    results.push(...uploaded);
+  }
+
+  return results;
+}
+
 // ─── Auth endpoints ─────────────────────────────────────────────────────────
 export interface AuthTokens {
   accessToken: string;
@@ -184,6 +214,11 @@ export const authApi = {
 };
 
 // ─── Convenience wrapper ────────────────────────────────────────────────────
+// 
+
+
+
+
 export async function loginAndSave(username: string, password: string) {
   const res = await authApi.login({ username, password });
 
@@ -207,6 +242,27 @@ export interface ProjectUser {
   id: string;
   username: string | null;
   role: string | null;
+}
+
+export interface UploadedImageInput {
+  url: string;
+  publicId: string;
+}
+
+export interface UploadedVoiceNoteInput {
+  url: string;
+  publicId: string;
+  duration?: number | null;
+}
+
+export interface CloudinarySignUploadResponse {
+  cloudName: string;
+  apiKey: string;
+  timestamp: number;
+  signature: string;
+  folder: string;
+  publicId: string;
+  resourceType: "image" | "video";
 }
 
 
@@ -238,6 +294,78 @@ export interface CreateProjectResponse {
 
 export interface ListProjectsResponse {
   projects: Project[];
+}
+
+export const mediaApi = {
+  signUpload: (payload: {
+    projectId: string;
+    mediaType: "image" | "voice";
+  }) =>
+    request<CloudinarySignUploadResponse>("/media/sign-upload", {
+      method: "POST",
+      body: payload,
+    }),
+
+
+};
+
+
+async function uploadSingleFileToCloudinary(params: {
+  file: UploadFileInput;
+  projectId: string;
+  mediaType: "image" | "voice";
+}) {
+  const signData = await mediaApi.signUpload({
+    projectId: params.projectId,
+    mediaType: params.mediaType,
+  });
+
+  const form = new FormData();
+
+  form.append("file", {
+    uri: params.file.uri,
+    name: params.file.name,
+    type:
+      params.file.type ||
+      (params.mediaType === "voice" ? "audio/m4a" : "image/jpeg"),
+  } as any);
+
+  form.append("api_key", signData.apiKey);
+  form.append("timestamp", String(signData.timestamp));
+  form.append("signature", signData.signature);
+  form.append("folder", signData.folder);
+  form.append("public_id", signData.publicId);
+
+  const uploadUrl = `https://api.cloudinary.com/v1_1/${signData.cloudName}/${signData.resourceType}/upload`;
+
+  const response = await fetch(uploadUrl, {
+    method: "POST",
+    body: form,
+  });
+
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new ApiError(
+      response.status,
+      data?.error?.message || "Cloudinary upload failed",
+      data
+    );
+  }
+
+  if (params.mediaType === "voice") {
+    return {
+      url: data.secure_url,
+      publicId: data.public_id,
+      duration:
+        typeof data.duration === "number" ? Math.round(data.duration) : null,
+    };
+  }
+
+  return {
+    url: data.secure_url,
+    publicId: data.public_id,
+  };
 }
 
 export const projectApi = {
@@ -348,6 +476,20 @@ export interface UploadFileInput {
   type: string;
 }
 
+function getLocalUploadFiles(files?: AssetMediaInput[]): UploadFileInput[] {
+  return (files || [])
+    .filter((file) => {
+      const uri = file.uri;
+      return typeof uri === "string" && !uri.startsWith("http");
+    })
+    .map((file) => ({
+      uri: file.uri!,
+      name: file.name || `file_${Date.now()}`,
+      type: file.type || "application/octet-stream",
+    }));
+}
+
+
 export interface AdvancedRawDataKeysResponse {
   keys: string[];
 }
@@ -373,105 +515,78 @@ export const projectContentApi = {
       },
     }),
 
-  createAsset: async (payload: {
-    projectId: string;
-    name: string;
-    writtenDescription?: string | null;
+ createAsset: async (payload: {
+  projectId: string;
+  name: string;
+  writtenDescription?: string | null;
+  parent?: string | null;
+  folderId?: string | null;
+  images?: AssetMediaInput[];
+  voiceNotes?: AssetMediaInput[];
+  condition?: "" | "New" | "Used" | "Damaged" | "Good" | null;
+  assetType?: "vehicle" | "other" | "Vehicle" | "Other";
+  brand?: string | null;
+  model?: string | null;
+  code?: string | null;
+  manufactureYear?: string | null;
+  kilometersDriven?: string | null;
+  isDone?: boolean;
+  isPresent?: boolean;
+  hasNotes?: boolean;
+  notes?: string | null;
+}) => {
+  const localImages = getLocalUploadFiles(payload.images);
+const localVoiceNotes = getLocalUploadFiles(payload.voiceNotes);
+  const uploadedImages = await uploadFilesInBatches(
+    localImages,
+    (image) =>
+      uploadSingleFileToCloudinary({
+        file: image,
+        projectId: payload.projectId,
+        mediaType: "image",
+      }),
+    3
+  );
 
-    // new field
-    parent?: string | null;
+  const uploadedVoiceNotes = await uploadFilesInBatches(
+    localVoiceNotes,
+    (voice) =>
+      uploadSingleFileToCloudinary({
+        file: voice,
+        projectId: payload.projectId,
+        mediaType: "voice",
+      }),
+    2
+  );
 
-    // temporary compatibility if some screens still use old field
-    folderId?: string | null;
+  const resolvedParentSubProjectId =
+    payload.parent ?? payload.folderId ?? null;
 
-    images?: UploadFileInput[];
-    voiceNotes?: UploadFileInput[];
-    condition?: "" | "New" | "Used" | "Damaged" | "Good" | null;
-    assetType?: "vehicle" | "other" | "Vehicle" | "Other";
-    brand?: string | null;
-    model?: string | null;
-    code?: string | null;
-    manufactureYear?: string | null;
-    kilometersDriven?: string | null;
-    isDone?: boolean;
-    isPresent?: boolean;
-    hasNotes?: boolean;
-    notes?: string | null;
-  }) => {
-    const form = new FormData();
-
-    form.append("name", payload.name);
-
-    if (payload.writtenDescription?.trim()) {
-      form.append("writtenDescription", payload.writtenDescription.trim());
+  return request<CreateAssetResponse>(
+    `/projects/${payload.projectId}/assets`,
+    {
+      method: "POST",
+      body: {
+        name: payload.name,
+        writtenDescription: payload.writtenDescription?.trim() || null,
+        parent: resolvedParentSubProjectId,
+        condition: payload.condition || undefined,
+        assetType: normalizeAssetType(payload.assetType) ?? "other",
+        brand: payload.brand?.trim() || null,
+        model: payload.model?.trim() || null,
+        code: payload.code?.trim() || null,
+        manufactureYear: payload.manufactureYear?.trim() || null,
+        kilometersDriven: payload.kilometersDriven?.trim() || null,
+        isDone: payload.isDone ?? false,
+        isPresent: payload.isPresent ?? true,
+        hasNotes: payload.hasNotes ?? false,
+        notes: payload.notes ?? null,
+        images: uploadedImages,
+        voiceNotes: uploadedVoiceNotes,
+      },
     }
-
-    const resolvedParentSubProjectId =
-      payload.parent ?? payload.folderId ?? null;
-
-    if (resolvedParentSubProjectId) {
-      form.append("parent", resolvedParentSubProjectId);
-    }
-
-    if (payload.condition) {
-      form.append("condition", payload.condition);
-    }
-
-    const normalizedAssetType = normalizeAssetType(payload.assetType);
-    if (normalizedAssetType) {
-      form.append("assetType", normalizedAssetType);
-    }
-
-    if (payload.brand?.trim()) {
-      form.append("brand", payload.brand.trim());
-    }
-
-    if (payload.model?.trim()) {
-      form.append("model", payload.model.trim());
-    }
-
-    if (payload.code?.trim()) {
-      form.append("code", payload.code.trim());
-    }
-
-    if (payload.manufactureYear?.trim()) {
-      form.append("manufactureYear", payload.manufactureYear.trim());
-    }
-
-    if (payload.kilometersDriven?.trim()) {
-      form.append("kilometersDriven", payload.kilometersDriven.trim());
-    }
-    form.append("hasNotes", payload.hasNotes ? "true" : "false");
-    form.append("notes", payload.notes ?? "");
-
-    form.append("isDone", payload.isDone ? "true" : "false");
-    form.append("isPresent", payload.isPresent === false ? "false" : "true");
-
-    for (const image of payload.images ?? []) {
-      form.append("images", {
-        uri: image.uri,
-        name: image.name,
-        type: image.type,
-      } as any);
-    }
-
-    for (const voice of payload.voiceNotes ?? []) {
-      form.append("voiceNotes", {
-        uri: voice.uri,
-        name: voice.name,
-        type: voice.type,
-      } as any);
-    }
-
-    return requestForm<CreateAssetResponse>(
-      `/projects/${payload.projectId}/assets`,
-      {
-        method: "POST",
-        body: form,
-      }
-    );
-  },
-
+  );
+},
   getAssetByCode: async (projectId: string, code: string) => {
     console.log("SCANNED RAW CODE:", JSON.stringify(code));
     console.log("PROJECT ID USED:", projectId);
@@ -522,113 +637,71 @@ export const projectContentApi = {
       body: { isDone },
     }),
 
-  updateAsset: async (payload: {
-    assetId: string;
-    name?: string | null;
-    writtenDescription?: string | null;
-    images?: UploadFileInput[];
-    voiceNotes?: UploadFileInput[];
-    condition?: "" | "New" | "Used" | "Damaged" | "Good" | null;
-    assetType?: "vehicle" | "other" | "Vehicle" | "Other";
-    brand?: string | null;
-    model?: string | null;
-    code?: string | null;
-    manufactureYear?: string | null;
-    kilometersDriven?: string | null;
-    hasNotes?: boolean;
-    notes?: string | null;
-    isDone?: boolean;
-    isPresent?: boolean;
-  }) => {
-    const form = new FormData();
+updateAsset: async (payload: {
+  assetId: string;
+  projectId: string;
+  name?: string | null;
+  writtenDescription?: string | null;
+  images?: AssetMediaInput[];
+  voiceNotes?: AssetMediaInput[];
+  condition?: "" | "New" | "Used" | "Damaged" | "Good" | null;
+  assetType?: "vehicle" | "other" | "Vehicle" | "Other";
+  brand?: string | null;
+  model?: string | null;
+  code?: string | null;
+  manufactureYear?: string | null;
+  kilometersDriven?: string | null;
+  hasNotes?: boolean;
+  notes?: string | null;
+  isDone?: boolean;
+  isPresent?: boolean;
+}) => {
 
-    if (payload.name !== undefined) {
-      form.append("name", payload.name ?? "");
-    }
+  const localImages = getLocalUploadFiles(payload.images);
+const localVoiceNotes = getLocalUploadFiles(payload.voiceNotes);
+  const uploadedImages = await uploadFilesInBatches(
+   localImages,
+    (image) =>
+      uploadSingleFileToCloudinary({
+        file: image,
+        projectId: payload.projectId,
+        mediaType: "image",
+      }),
+    3
+  );
 
-    if (payload.writtenDescription !== undefined) {
-      form.append("writtenDescription", payload.writtenDescription ?? "");
-    }
+  const uploadedVoiceNotes = await uploadFilesInBatches(
+    localVoiceNotes,
+    (voice) =>
+      uploadSingleFileToCloudinary({
+        file: voice,
+        projectId: payload.projectId,
+        mediaType: "voice",
+      }),
+    2
+  );
 
-    if (
-      payload.condition === "New" ||
-      payload.condition === "Used" ||
-      payload.condition === "Damaged" ||
-      payload.condition === "Good"
-    ) {
-      form.append("condition", payload.condition);
-    }
-
-    const normalizedAssetType = normalizeAssetType(payload.assetType);
-    if (normalizedAssetType !== undefined) {
-      form.append("assetType", normalizedAssetType);
-    }
-
-    
-    if (payload.brand !== undefined) {
-      form.append("brand", payload.brand ?? "");
-    }
-
-    if (payload.model !== undefined) {
-      form.append("model", payload.model ?? "");
-    }
-
-    if (payload.code !== undefined) {
-      form.append("code", payload.code ?? "");
-    }
-
-    if (payload.hasNotes !== undefined) {
-      form.append("hasNotes", payload.hasNotes ? "true" : "false");
-
-    }
-
-    if (payload.notes !== undefined) {
-      form.append("notes", payload.notes ?? "");
-    }
-
-    if (payload.manufactureYear !== undefined) {
-      form.append("manufactureYear", payload.manufactureYear ?? "");
-    }
-
-    if (payload.kilometersDriven !== undefined) {
-      form.append("kilometersDriven", payload.kilometersDriven ?? "");
-    }
-
-    if (payload.isDone !== undefined) {
-      form.append("isDone", payload.isDone ? "true" : "false");
-    }
-
-    if (payload.isPresent !== undefined) {
-      form.append("isPresent", payload.isPresent ? "true" : "false");
-    }
-
-    for (const image of payload.images ?? []) {
-      form.append("images", {
-        uri: image.uri,
-        name: image.name,
-        type: image.type,
-      } as any);
-    }
-
-    for (const voice of payload.voiceNotes ?? []) {
-      form.append("voiceNotes", {
-        uri: voice.uri,
-        name: voice.name,
-        type: voice.type,
-      } as any);
-    }
-
-    console.log("UPDATE FORM isDone:", payload.isDone);
-    console.log("UPDATE FORM parts:", (form as any)._parts);
-
-    return requestForm<UpdateAssetResponse>(
-      `/projects/assets/${payload.assetId}`,
-      {
-        method: "PATCH",
-        body: form,
-      }
-    );
-  },
+  return request<UpdateAssetResponse>(`/projects/assets/${payload.assetId}`, {
+    method: "PATCH",
+    body: {
+      name: payload.name,
+      writtenDescription: payload.writtenDescription,
+      condition: payload.condition || undefined,
+      assetType: normalizeAssetType(payload.assetType),
+      brand: payload.brand,
+      model: payload.model,
+      code: payload.code,
+      manufactureYear: payload.manufactureYear,
+      kilometersDriven: payload.kilometersDriven,
+      hasNotes: payload.hasNotes,
+      notes: payload.notes,
+      isDone: payload.isDone,
+      isPresent: payload.isPresent,
+      images: uploadedImages,
+      voiceNotes: uploadedVoiceNotes,
+    },
+  });
+},
 
 
  advancedGetRawDataKeys: (projectId: string) => {

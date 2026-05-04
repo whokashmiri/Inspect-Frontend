@@ -23,38 +23,50 @@ import { Audio } from "expo-av";
 import {Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import AssetCameraModal from "./AssetCameraModal";
-import { AssetDraft } from "./utils/types";
+import { AssetDraft, AssetMediaInput } from "./utils/types";
 import { AudioModule, RecordingPresets, useAudioRecorder } from "expo-audio";
 
 type AssetCondition = "" | "New" | "Used" | "Damaged" | "Good";
 type AssetType = "Other" | "Vehicle";
 type CameraMode = "photos" | "scan";
 
-type ExtendedAssetDraft = AssetDraft & {
-  condition?: AssetCondition;
-  assetType?: AssetType;
-  brand?: string;
-  model?: string;
-  manufactureYear?: string;
-  kilometersDriven?: string;
-  isPresent?: boolean;
-  isDone?: boolean;
-  hasNotes?: boolean;
-  notes?: string ;
-};
+// type MediaInput = {
+//   uri?: string;
+//   url?: string;
+//   name?: string;
+//   type?: string;
+//   publicId?: string | null;
+//   duration?: number | null;
+//   existing?: boolean;
+// };
+
+// type ExtendedAssetDraft = Omit<AssetDraft, "images" | "voiceNotes"> & {
+//   images: MediaInput[];
+//   voiceNotes: MediaInput[];
+//   condition?: AssetCondition;
+//   assetType?: AssetType;
+//   brand?: string;
+//   model?: string;
+//   manufactureYear?: string;
+//   kilometersDriven?: string;
+//   isPresent?: boolean;
+//   isDone?: boolean;
+//   hasNotes?: boolean;
+//   notes?: string;
+// };
 
 type Props = {
   visible: boolean;
   onClose: () => void;
-  onSubmit: (draft: ExtendedAssetDraft) => Promise<void> | void;
+  onSubmit: (draft: AssetDraft) => Promise<void> | void;
   mode?: "create" | "edit";
-  initialData?: Partial<ExtendedAssetDraft>;
+  initialData?: Partial<AssetDraft>;
   disableAssetName?: boolean;
 };
 
 const getInitialDraft = (
-  initialData?: Partial<ExtendedAssetDraft>
-): ExtendedAssetDraft => ({
+  initialData?: Partial<AssetDraft>
+): AssetDraft => ({
   images: initialData?.images || [],
   name: initialData?.name || "",
   writtenDescription: initialData?.writtenDescription || "",
@@ -83,9 +95,11 @@ export default function CreateAssetWizardModal({
 
   const [step, setStep] = useState(1);
   const [cameraOpen, setCameraOpen] = useState(false);
-  const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
+const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
+  const [notesModalVisible, setNotesModalVisible] = useState(false);
 
   const { width } = useWindowDimensions();
+
   const isSmallScreen = width < 380;
 
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -97,7 +111,7 @@ export default function CreateAssetWizardModal({
   const scrollRef = useRef<ScrollView>(null);
   const fieldPositions = useRef<Record<string, number>>({});
 
-  const [draft, setDraft] = useState<ExtendedAssetDraft>(
+  const [draft, setDraft] = useState<AssetDraft>(
     getInitialDraft(initialData)
   );
 
@@ -493,15 +507,24 @@ export default function CreateAssetWizardModal({
 
 <TouchableOpacity
   style={styles.notesCheckRow}
- onPress={() =>
-  setDraft((prev) => ({
-    ...prev,
-    hasNotes: !prev.hasNotes,
-    notes: !prev.hasNotes ? prev.notes || "" : undefined,
-  }))
-}
+  onPress={() => {
+    const newHasNotes = !draft.hasNotes;
+    setDraft((prev) => ({
+      ...prev,
+      hasNotes: newHasNotes,
+    }));
+    if (newHasNotes) {
+      setNotesModalVisible(true);
+    } else {
+      setDraft((prev) => ({
+        ...prev,
+        notes: "",
+      }));
+    }
+  }}
   activeOpacity={0.8}
 >
+
   <Ionicons
     name={draft.hasNotes ? "checkbox" : "square-outline"}
     size={22}
@@ -510,27 +533,10 @@ export default function CreateAssetWizardModal({
   <Text style={styles.notesCheckText}>Add Notes</Text>
 </TouchableOpacity>
 
-{draft.hasNotes && (
-  <View style={styles.notesBox}>
-    <TextInput
-      value={draft.notes || ""}
-      onChangeText={(text) =>
-        setDraft((prev) => ({
-          ...prev,
-          notes: text,
-        }))
-      }
-      placeholder="Write notes..."
-      placeholderTextColor="#767B91"
-      multiline
-      scrollEnabled
-      textAlignVertical="top"
-      style={styles.notesInput}
-    />
-  </View>
-)}
+
 
                         <Text style={styles.fieldLabel}>
+
                           {t("asset.condition")}
                         </Text>
 
@@ -778,30 +784,34 @@ export default function CreateAssetWizardModal({
 
                         {draft.images.length > 0 && (
                           <View style={styles.previewGrid}>
-                            {draft.images.map((img, index) => (
-                              <View
-                                key={`${img.uri}-${index}`}
-                                style={[
-                                  styles.previewItem,
-                                  {
-                                    width: previewSize,
-                                    height: previewSize,
-                                  },
-                                ]}
-                              >
-                                <Image
-                                  source={{ uri: img.uri }}
-                                  style={styles.previewImage}
-                                />
 
-                                <TouchableOpacity
-                                  style={styles.removeBadge}
-                                  onPress={() => removeImage(index)}
-                                >
-                                  <Text style={styles.removeBadgeText}>✕</Text>
-                                </TouchableOpacity>
-                              </View>
-                            ))}
+                            {draft.images.map((img, index) => {
+  const imageUri = img.uri || img.url;
+  if (!imageUri) return null;
+
+  return (
+    <View
+      key={`${imageUri}-${index}`}
+      style={[
+        styles.previewItem,
+        {
+          width: previewSize,
+          height: previewSize,
+        },
+      ]}
+    >
+      <Image source={{ uri: imageUri }} style={styles.previewImage} />
+
+      <TouchableOpacity
+        style={styles.removeBadge}
+        onPress={() => removeImage(index)}
+      >
+        <Text style={styles.removeBadgeText}>✕</Text>
+      </TouchableOpacity>
+    </View>
+  );
+})}
+                           
                           </View>
                         )}
                       </>
@@ -901,14 +911,14 @@ export default function CreateAssetWizardModal({
                         </Text>
 
                         {(draft.voiceNotes || []).map((note, index) => {
-                          const isRemote =
-                            note.uri.startsWith("http") ||
-                            note.uri.startsWith("//");
-                          const canPlay = !isRemote;
+                          const noteUri = note.uri || note.url || "";
+
+                          const isRemote = noteUri.startsWith("http") || noteUri.startsWith("//");
+                          const canPlay = !!noteUri && !isRemote;
 
                           return (
                             <View
-                              key={`${note.uri}-${index}`}
+                              key={`${noteUri}-${index}`}
                               style={styles.voiceItem}
                             >
                               <View style={styles.voiceActionsLeft}>
@@ -946,7 +956,7 @@ export default function CreateAssetWizardModal({
                                 {canPlay && (
                                   <TouchableOpacity
                                     onPress={() =>
-                                      playVoiceNote(note.uri, index)
+                                      playVoiceNote(noteUri, index)
                                     }
                                     activeOpacity={0.7}
                                   >
@@ -1046,9 +1056,83 @@ export default function CreateAssetWizardModal({
           setCameraOpen(false);
         }}
       />
+
+      <NotesModal
+        visible={notesModalVisible}
+        notes={draft.notes || ""}
+        onSave={(notes) => {
+          setDraft((prev) => ({ ...prev, notes }));
+          setNotesModalVisible(false);
+        }}
+        onCancel={() => {
+          if (!draft.hasNotes) {
+            setDraft((prev) => ({ ...prev, notes: "" }));
+          }
+          setNotesModalVisible(false);
+        }}
+      />
     </>
   );
 }
+
+const NotesModal: React.FC<{
+  visible: boolean;
+  notes: string;
+  onSave: (notes: string) => void;
+  onCancel: () => void;
+}> = ({ visible, notes, onSave, onCancel }) => {
+  const [currentNotes, setCurrentNotes] = useState(notes);
+  const { t } = useTranslation();
+
+  useEffect(() => {
+    setCurrentNotes(notes);
+  }, [notes]);
+
+  return (
+    <Modal visible={visible} transparent animationType="fade">
+      <TouchableWithoutFeedback onPress={onCancel}>
+        <View style={styles.overlay}>
+          <TouchableWithoutFeedback>
+            <View style={[styles.modalCard, styles.modalCardSmall]}>
+              <View style={styles.header}>
+                <Text style={styles.title}>Notes</Text>
+                <TouchableOpacity onPress={onCancel} style={styles.closeBtn}>
+                  <Text style={styles.closeText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.notesBox}>
+                <TextInput
+                  value={currentNotes}
+                  onChangeText={setCurrentNotes}
+                  placeholder="Write notes..."
+                  placeholderTextColor="#767B91"
+                  multiline
+                  scrollEnabled
+                  textAlignVertical="top"
+                  style={styles.notesInput}
+                />
+              </View>
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={styles.secondaryBtn}
+                  onPress={onCancel}
+                >
+                  <Text style={styles.secondaryText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.primaryBtn}
+                  onPress={() => onSave(currentNotes)}
+                >
+                  <Text style={styles.primaryText}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableWithoutFeedback>
+        </View>
+      </TouchableWithoutFeedback>
+    </Modal>
+  );
+};
 
 const ACC = "#2A324B";
 const SURFACE = "#E1E5EE";
@@ -1487,4 +1571,12 @@ notesInput: {
     fontSize: 12,
     fontStyle: "italic",
   },
+
+  modalActions:{
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 12,
+     marginTop: 12,
+    
+  }
 });

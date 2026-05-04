@@ -236,7 +236,7 @@ export default function ProjectScreen() {
   const offlineProjectEntries = useMemo<Project[]>(() => {
     return pendingProjects.map((item) => {
       const payload = item.payload as { name?: string };
-      console.log(payload);
+      
       
       return {
         id: item.id,
@@ -415,8 +415,17 @@ export default function ProjectScreen() {
 <View style={styles.statBox}>
     <Text style={styles.statNumber}>{stats.assetsWithNotes}</Text>
     <Text style={styles.statLabel}>
-      Notes
-      {/* {t("projectScreen.stats.incomplete")} */}
+      
+      {t("projectScreen.stats.notes")}
+    </Text>
+  </View>
+
+  
+<View style={styles.statBox}>
+    <Text style={styles.statNumber}>{stats.assetsWithNotes}</Text>
+    <Text style={styles.statLabel}>
+      
+      {t("projectScreen.stats.assets")}
     </Text>
   </View>
 
@@ -686,7 +695,7 @@ const styles = StyleSheet.create({
 statBox: {
   flex: 1,
   // backgroundColor: SURFACE,
-  borderWidth: 2,
+  // borderWidth: 2,
   borderColor: BORDER,
   borderRadius: 5,
   paddingVertical: 1,

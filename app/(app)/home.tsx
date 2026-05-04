@@ -3,27 +3,49 @@ import { useRouter } from "expo-router";
 import { useAuth } from "../../api/AuthContext";
 import { useFonts } from "expo-font";
 import fonts from "../fonts/fonts";
+import "../i18n/i18n";
+import React from "react";
+import { useTranslation } from "react-i18next";
 
-import '../i18n/i18n';
-
-import React from 'react';
-
-import { useTranslation } from 'react-i18next';
+import { projectApi } from "../../api/api";
+import { isProjectDownloaded } from "../offline";
+import { downloadProjectForOffline } from "../offline/downloader";
 
 export default function HomeScreen() {
-   const { t } = useTranslation();
+  const { t } = useTranslation();
+
   const [loaded] = useFonts({
     ...fonts.poppins,
     ...fonts.inter,
   });
 
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isOnline } = useAuth();
 
   if (!loaded) return null;
 
+  const downloadCompanyProjects = async () => {
+    try {
+      if (!isOnline) return;
+
+      const res = await projectApi.list();
+
+      for (const project of res.projects) {
+        const alreadyDownloaded = await isProjectDownloaded(project.id);
+
+        if (!alreadyDownloaded) {
+          await downloadProjectForOffline(project);
+        }
+      }
+    } catch (error) {
+      console.warn("Company projects auto-download failed:", error);
+    }
+  };
+
   const handleCompanyPress = () => {
-    router.push("/project");
+    downloadCompanyProjects(); // fire immediately in background
+
+    router.push("/project"); // navigate immediately
   };
 
   return (
@@ -34,8 +56,8 @@ export default function HomeScreen() {
             <View style={styles.logoInner} />
           </View>
 
-          <Text style={styles.title}>{t('companyPage.title')}</Text>
-          <Text style={styles.subtitle}>{t('companyPage.description')}</Text>
+          <Text style={styles.title}>{t("companyPage.title")}</Text>
+          <Text style={styles.subtitle}>{t("companyPage.description")}</Text>
         </View>
 
         <Pressable style={styles.companyBtn} onPress={handleCompanyPress}>

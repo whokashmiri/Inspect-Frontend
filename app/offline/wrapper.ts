@@ -1,7 +1,10 @@
+// offline/index.ts or offline/safeApiCall.ts
+
 import NetInfo from "@react-native-community/netinfo";
 import { savePending, initStorage } from "./storage";
 import { PendingItem, OfflineResult, OfflineAction } from "./types";
 import { getCachedUser, isOfflineSessionValid } from "./authStorage";
+import { persistOfflineMediaPayload } from "./mediaStorage";
 
 function extractLocalMediaUris(payload: any, type: OfflineAction): string[] {
   if ((type !== "createAsset" && type !== "updateAsset") || !payload) return [];
@@ -9,16 +12,20 @@ function extractLocalMediaUris(payload: any, type: OfflineAction): string[] {
   const imageUris = Array.isArray(payload.images)
     ? payload.images
         .map((item: any) => item?.uri)
-        .filter((uri: any) => typeof uri === "string")
+        .filter((uri: any) => typeof uri === "string" && !uri.startsWith("http"))
     : [];
 
   const voiceUris = Array.isArray(payload.voiceNotes)
     ? payload.voiceNotes
         .map((item: any) => item?.uri)
-        .filter((uri: any) => typeof uri === "string")
+        .filter((uri: any) => typeof uri === "string" && !uri.startsWith("http"))
     : [];
 
   return [...imageUris, ...voiceUris];
+}
+
+function shouldPersistMedia(type: OfflineAction) {
+  return type === "createAsset" || type === "updateAsset";
 }
 
 export async function safeApiCall<T>(
@@ -48,18 +55,27 @@ export async function safeApiCall<T>(
   const canUseOffline = cachedUser && (await isOfflineSessionValid());
 
   if (!canUseOffline) {
-    throw new Error("Offline session is not available. Please reconnect and sign in again.");
+    throw new Error(
+      "Offline session is not available. Please reconnect and sign in again."
+    );
   }
 
-  const localId = `offline_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+  const localId = `offline_${Date.now()}_${Math.random()
+    .toString(36)
+    .slice(2, 11)}`;
+
+  const payloadToSave = shouldPersistMedia(options.type)
+    ? await persistOfflineMediaPayload(fallbackPayload)
+    : fallbackPayload;
 
   const pending: Omit<PendingItem, "status" | "retryCount" | "lastAttempt"> = {
     id: localId,
     type: options.type,
-    payload: fallbackPayload,
+    payload: payloadToSave,
     projectId: options.projectId,
     localMediaUris:
-      options.localMediaUris ?? extractLocalMediaUris(fallbackPayload, options.type),
+      options.localMediaUris ??
+      extractLocalMediaUris(payloadToSave, options.type),
     createdAt: Date.now(),
   };
 

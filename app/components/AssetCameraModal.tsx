@@ -282,13 +282,13 @@ const lastScannedAtRef = useRef<number>(0);
 
       setScanText(cleaned);
     } catch (error) {
-      console.log("Scan processing error:", error);
+     
       setScanError(t("camera.extractFailed"));
     } finally {
       setIsProcessingScan(false);
     }
   } catch (error) {
-    console.log("Take photo error:", error);
+   
     if (mode === "scan") {
      setScanError(t("camera.captureFailed"));
     }

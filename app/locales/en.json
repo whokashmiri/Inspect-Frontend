@@ -52,10 +52,11 @@
       "done": "Done"
     },
     "stats": {
-  "total": "Total",
-  "done": "Done",
-  "incomplete": "Incomplete",
-  "notes":"Notes"
+   "total": "Total",
+    "done": "Done",
+    "incomplete": "Incomplete",
+    "notes":"Notes",
+    "assets":"Assets"
 },
     "filters": {
       

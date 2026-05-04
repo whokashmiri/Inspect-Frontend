@@ -52,10 +52,11 @@
       "done": "مكتمل"
     },
     "stats": {
-  "total": "الإجمالي",
-  "done": "مكتمل",
-  "incomplete": "غير مكتمل",
-  "notes":"ملاحظات"
+    "total": "الإجمالي",
+    "done": "مكتمل",
+    "incomplete": "غير مكتمل",
+    "notes":"ملاحظات",
+    "assets":"الأصول"
 },
     "filters": {
       "recent": "الأحدث",

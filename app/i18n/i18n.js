@@ -24,7 +24,7 @@ const getLanguage = async () => {
       return savedLanguage;
     }
   } catch (error) {
-    console.log('Could not retrieve saved language:', error);
+   
   }
 
   // Fall back to system locale
@@ -72,7 +72,7 @@ const handleRTL = async (lng) => {
 
 // Run initialization
 initializeI18n().catch((error) => {
-  console.log('Error initializing i18n:', error);
+ 
   // Fallback initialization
   i18n.use(initReactI18next).init({
     resources,

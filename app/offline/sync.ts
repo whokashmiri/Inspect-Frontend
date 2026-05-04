@@ -2,6 +2,7 @@ import { Alert } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
 import { projectApi, projectContentApi, authApi, tokenStore } from "../../api/api";
 import { getPending, updateStatus, deletePending, updatePayload } from "./storage";
+import { deleteOfflineImageFiles } from "./mediaStorage";
 import { PendingItem } from "./types";
 import {
   getCachedUser,
@@ -122,11 +123,13 @@ async function processQueueItem(
 
       case "createAsset": {
         await projectContentApi.createAsset(item.payload as any);
+        await deleteOfflineImageFiles(item.payload);
         break;
       }
 
       case "updateAsset": {
         await projectContentApi.updateAsset(item.payload as any);
+        await deleteOfflineImageFiles(item.payload);
         break;
       }
 

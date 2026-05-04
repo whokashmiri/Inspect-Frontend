@@ -1,3 +1,4 @@
+// offline/downloader.ts
 import {
   Project,
   FolderItem,
@@ -27,7 +28,7 @@ function normalizeFolder(folder: any): FolderItem {
 function normalizeAsset(asset: any): AssetItem {
   return {
     ...asset,
-    folderId: asset.folderId ?? asset.parent ?? null,
+    parent: asset.parent ?? asset.folderId ?? null,
   };
 }
 

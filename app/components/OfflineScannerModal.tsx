@@ -128,7 +128,7 @@ export default function OfflineScannerModal({
 
       setResults(ocrResults);
     } catch (error) {
-      console.log("captureAndProcess error", error);
+      
       Alert.alert(
         t("scanner.alerts.failedTitle"),
         t("scanner.alerts.failedDesc")

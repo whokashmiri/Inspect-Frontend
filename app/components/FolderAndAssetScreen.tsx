@@ -253,7 +253,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
         const result = await projectContentApi.advancedGetRawDataKeys(projectId);
         setRawDataKeys(result.keys || []);
       } catch (error) {
-        console.log("RAW DATA KEYS ERROR:", error);
+        console.warn("RAW DATA KEYS ERROR:", error);
       }
     };
     loadRawDataKeys();
@@ -517,7 +517,7 @@ const autoEnterAdminRootFolder = useCallback(async () => {
     setFolders((insideRootData.folders || []) as FolderItem[]);
     setAssets((insideRootData.assets || []) as AssetItem[]);
   } catch (error: any) {
-    console.log("AUTO ENTER ROOT ERROR:", error);
+   
 
     showSnackbar(
       error?.message ||
@@ -553,14 +553,14 @@ const autoEnterAdminRootFolder = useCallback(async () => {
       setFolders((data.folders || []) as FolderItem[]);
       setAssets((data.assets || []) as AssetItem[]);
     } catch (error: any) {
-      console.log("LOAD ERROR:", error);
+      
 
       try {
         const offlineData = await getOfflineContents(projectId, parent);
         setFolders((offlineData.folders || []) as FolderItem[]);
         setAssets((offlineData.assets || []) as AssetItem[]);
       } catch (offlineError) {
-        console.log("OFFLINE FALLBACK ERROR:", offlineError);
+       
         console.error(error?.message || "Failed to load data");
       }
     } finally {
@@ -830,6 +830,7 @@ useEffect(() => {
     const isVehicle = normalizedAssetType === "vehicle";
     const payload = {
       assetId: editingAsset.id,
+      projectId,
       name: draft.name,
       writtenDescription: draft.writtenDescription || null,
       images: newImages,
