@@ -1091,9 +1091,9 @@ const NotesModal: React.FC<{
   return (
     <Modal visible={visible} transparent animationType="fade">
       <TouchableWithoutFeedback onPress={onCancel}>
-        <View style={styles.overlay}>
+        <View style={styles.overlayNote}>
           <TouchableWithoutFeedback>
-            <View style={[styles.modalCard, styles.modalCardSmall]}>
+            <View style={[styles.modalCardNote, styles.modalCardSmallNote]}>
               <View style={styles.header}>
                 <Text style={styles.title}>Notes</Text>
                 <TouchableOpacity onPress={onCancel} style={styles.closeBtn}>
@@ -1172,6 +1172,34 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 14,
   },
+
+
+   overlayNote: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.55)",
+    paddingHorizontal: 10,
+    paddingVertical: 1,
+  },
+
+
+   modalCardNote: {
+    width: "100%",
+    maxWidth: 420,
+    maxHeight: "504%",
+    minHeight: "30%",
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 24,
+    padding: 16,
+    top: "30%",
+  },
+
+  modalCardSmallNote: {
+    borderRadius: 18,
+    padding: 14,
+  },
+
 
   scrollView: {
     flex: 1,
