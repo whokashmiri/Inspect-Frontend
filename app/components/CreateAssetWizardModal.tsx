@@ -867,42 +867,47 @@ const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
                           {t("asset.voiceNotes")}
                         </Text>
 
-                        <TouchableOpacity
-                          style={styles.primaryBtn}
-                          onPress={isRecording ? stopRecording : startRecording}
-                        >
-                          <Text style={styles.primaryText}>
-                            {isRecording
-                              ? t("asset.stopRecording")
-                              : t("asset.recordVoiceNote")}
-                          </Text>
-                        </TouchableOpacity>
+                       
+                              <View style={styles.roww}>
+  <TouchableOpacity
+    style={styles.primaryBtn}
+    onPress={isRecording ? stopRecording : startRecording}
+  >
+    <Text style={styles.primaryText}>
+      {isRecording
+        ? t("asset.stopRecording")
+        : t("asset.recordVoiceNote")}
+    </Text>
+  </TouchableOpacity>
 
-                        <TouchableOpacity
-                          style={styles.checkboxWrap}
-                          onPress={() =>
-                            setDraft((prev) => ({
-                              ...prev,
-                              isDone: !prev.isDone,
-                            }))
-                          }
-                          activeOpacity={0.7}
-                        >
-                          <View
-                            style={[
-                              styles.checkbox,
-                              draft.isDone && styles.checkboxChecked,
-                            ]}
-                          >
-                            {draft.isDone && (
-                              <Text style={styles.checkmark}>✓</Text>
-                            )}
-                          </View>
+  <TouchableOpacity
+    style={styles.checkboxWrap}
+    onPress={() =>
+      setDraft((prev) => ({
+        ...prev,
+        isDone: !prev.isDone,
+      }))
+    }
+    activeOpacity={0.7}
+  >
+    <View
+      style={[
+        styles.checkbox,
+        draft.isDone && styles.checkboxChecked,
+      ]}
+    >
+      {draft.isDone && (
+        <Text style={styles.checkmark}>✓</Text>
+      )}
+    </View>
 
-                          <Text style={styles.checkboxLabel}>
-                            {t("asset.markAsDone")}
-                          </Text>
-                        </TouchableOpacity>
+    <Text style={styles.checkboxLabel}>
+      {t("asset.markAsDone")}
+    </Text>
+  </TouchableOpacity>
+</View>
+
+
 
                         <Text style={styles.helper}>
                           {t("asset.voiceNotesAdded", {
@@ -1364,6 +1369,14 @@ notesInput: {
     justifyContent: "space-between",
     marginBottom: 2,
   },
+
+  roww: {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between", // or "flex-start"
+ 
+},
+
 
   scanBtn: {
     backgroundColor: SOFT,
