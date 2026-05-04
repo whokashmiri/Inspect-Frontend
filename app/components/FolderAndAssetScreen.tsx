@@ -47,7 +47,7 @@ import {
   getOfflineRawDataKeys,
   advancedSearchOfflineAssets,
 } from "../offline";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 
 type RouteParams = {
   projectId: string;
@@ -1482,6 +1482,13 @@ const getValidAssetImages = (asset: AssetItem) => {
               }}
               activeOpacity={0.85}
             >
+
+              <MaterialIcons
+                                            name="photo-camera"
+                                            size={18}
+                                            color="#0a0909"
+                                            style={{ marginRight: 8 }}
+                                          />
               <Text style={styles.secondaryBtnText}>
                 {t("folderAssetScreen.actions.newAsset")}
               </Text>
@@ -2004,11 +2011,13 @@ const styles = StyleSheet.create({
   },
   secondaryBtn: {
     flex: 1,
+     flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "center",
     borderWidth: 1,
     borderColor: ACC,
     paddingVertical: 14,
     borderRadius: 12,
-    alignItems: "center",
     backgroundColor: "#ffffff",
   },
   secondaryBtnText: {

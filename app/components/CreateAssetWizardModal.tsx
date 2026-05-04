@@ -30,30 +30,6 @@ type AssetCondition = "" | "New" | "Used" | "Damaged" | "Good";
 type AssetType = "Other" | "Vehicle";
 type CameraMode = "photos" | "scan";
 
-// type MediaInput = {
-//   uri?: string;
-//   url?: string;
-//   name?: string;
-//   type?: string;
-//   publicId?: string | null;
-//   duration?: number | null;
-//   existing?: boolean;
-// };
-
-// type ExtendedAssetDraft = Omit<AssetDraft, "images" | "voiceNotes"> & {
-//   images: MediaInput[];
-//   voiceNotes: MediaInput[];
-//   condition?: AssetCondition;
-//   assetType?: AssetType;
-//   brand?: string;
-//   model?: string;
-//   manufactureYear?: string;
-//   kilometersDriven?: string;
-//   isPresent?: boolean;
-//   isDone?: boolean;
-//   hasNotes?: boolean;
-//   notes?: string;
-// };
 
 type Props = {
   visible: boolean;
@@ -91,7 +67,8 @@ export default function CreateAssetWizardModal({
   initialData,
   disableAssetName = false,
 }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isRTL = i18n.language === "ar" || i18n.dir?.() === "rtl";
 
   const [step, setStep] = useState(1);
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -699,28 +676,8 @@ const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
                           </>
                         )}
 
-                        <View style={styles.row}>
-                          <TouchableOpacity
-                            onPress={() =>
-                              setDraft((prev) => ({
-                                ...prev,
-                                isPresent: !prev.isPresent,
-                              }))
-                            }
-                            style={[
-                              styles.checkboxIsPresent,
-                              draft.isPresent && styles.checkboxActive,
-                            ]}
-                          >
-                            {draft.isPresent && (
-                              <Text style={styles.checkmarkIsPresent}>✓</Text>
-                            )}
-                          </TouchableOpacity>
 
-                          <Text style={styles.checkboxLabelIsPresent}>
-                            {t("asset.assetIsPresent")}
-                          </Text>
-                        </View>
+
                       </>
                     )}
 
@@ -866,9 +823,46 @@ const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
                         <Text style={[styles.label, { marginTop: 8 }]}>
                           {t("asset.voiceNotes")}
                         </Text>
+{/* 
+                        <TouchableOpacity
+                          style={styles.primaryBtn}
+                          onPress={isRecording ? stopRecording : startRecording}
+                        >
+                          <Text style={styles.primaryText}>
+                            {isRecording
+                              ? t("asset.stopRecording")
+                              : t("asset.recordVoiceNote")}
+                          </Text>
+                        </TouchableOpacity>
 
-                       
-                              <View style={styles.roww}>
+                        <TouchableOpacity
+                          style={styles.checkboxWrap}
+                          onPress={() =>
+                            setDraft((prev) => ({
+                              ...prev,
+                              isDone: !prev.isDone,
+                            }))
+                          }
+                          activeOpacity={0.7}
+                        >
+                          <View
+                            style={[
+                              styles.checkbox,
+                              draft.isDone && styles.checkboxChecked,
+                            ]}
+                          >
+                            {draft.isDone && (
+                              <Text style={styles.checkmark}>✓</Text>
+                            )}
+                          </View>
+
+                          <Text style={styles.checkboxLabel}>
+                            {t("asset.markAsDone")}
+                          </Text>
+                        </TouchableOpacity> */}
+
+
+                                                <View style={styles.roww}>
   <TouchableOpacity
     style={styles.primaryBtn}
     onPress={isRecording ? stopRecording : startRecording}
@@ -984,49 +978,44 @@ const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
                     )}
                   </ScrollView>
 
-                  <View style={styles.footer}>
-                    <View style={styles.footerSide}>
-                      {step > 1 ? (
-                        <TouchableOpacity
-                          style={styles.secondaryBtn}
-                          onPress={back}
-                          activeOpacity={0.8}
-                        >
-                          <Text style={styles.secondaryText}>
-                            {t("asset.back")}
-                          </Text>
-                        </TouchableOpacity>
-                      ) : (
-                        <View />
-                      )}
-                    </View>
+<View style={styles.footer}>
+  {/* Back */}
+  <View style={styles.footerSide}>
+    {step > 1 && (
+      <TouchableOpacity
+        style={styles.secondaryBtn}
+        onPress={back}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.secondaryText}>{t("asset.back")}</Text>
+      </TouchableOpacity>
+    )}
+  </View>
 
-                    <View style={styles.footerSideRight}>
-                      {step < totalSteps ? (
-                        <TouchableOpacity
-                          style={[styles.primaryBtn, styles.nextBtn]}
-                          onPress={next}
-                          activeOpacity={0.85}
-                        >
-                          <Text style={styles.primaryText}>
-                            {t("asset.next")}
-                          </Text>
-                        </TouchableOpacity>
-                      ) : (
-                        <TouchableOpacity
-                          style={[styles.primaryBtn, styles.nextBtn]}
-                          onPress={handleFinish}
-                          activeOpacity={0.85}
-                        >
-                          <Text style={styles.primaryText}>
-                            {mode === "edit"
-                              ? t("asset.saveChanges")
-                              : t("asset.finish")}
-                          </Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  </View>
+  {/* Next / Finish */}
+  <View style={styles.footerSideRight}>
+    {step < totalSteps ? (
+      <TouchableOpacity
+        style={[styles.primaryBtn, styles.nextBtn]}
+        onPress={next}
+        activeOpacity={0.85}
+      >
+        <Text style={styles.primaryText}>{t("asset.next")}</Text>
+      </TouchableOpacity>
+    ) : (
+      <TouchableOpacity
+        style={[styles.primaryBtn, styles.nextBtn]}
+        onPress={handleFinish}
+      >
+        <Text style={styles.primaryText}>
+          {mode === "edit" ? t("asset.saveChanges") : t("asset.finish")}
+        </Text>
+      </TouchableOpacity>
+    )}
+  </View>
+</View>
+
+
                 </View>
               </TouchableWithoutFeedback>
             </KeyboardAvoidingView>
@@ -1087,7 +1076,9 @@ const NotesModal: React.FC<{
   onCancel: () => void;
 }> = ({ visible, notes, onSave, onCancel }) => {
   const [currentNotes, setCurrentNotes] = useState(notes);
-  const { t } = useTranslation();
+ const { t, i18n } = useTranslation();
+const isRTL = i18n.language === "ar" || i18n.dir?.() === "rtl";
+
 
   useEffect(() => {
     setCurrentNotes(notes);
@@ -1096,9 +1087,9 @@ const NotesModal: React.FC<{
   return (
     <Modal visible={visible} transparent animationType="fade">
       <TouchableWithoutFeedback onPress={onCancel}>
-        <View style={styles.overlayNote}>
+        <View style={styles.overlay}>
           <TouchableWithoutFeedback>
-            <View style={[styles.modalCardNote, styles.modalCardSmallNote]}>
+            <View style={[styles.modalCard, styles.modalCardSmall]}>
               <View style={styles.header}>
                 <Text style={styles.title}>Notes</Text>
                 <TouchableOpacity onPress={onCancel} style={styles.closeBtn}>
@@ -1177,34 +1168,6 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 14,
   },
-
-
-   overlayNote: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.55)",
-    paddingHorizontal: 10,
-    paddingVertical: 1,
-  },
-
-
-   modalCardNote: {
-    width: "100%",
-    maxWidth: 420,
-    maxHeight: "504%",
-    minHeight: "30%",
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 24,
-    padding: 16,
-    top: "30%",
-  },
-
-  modalCardSmallNote: {
-    borderRadius: 18,
-    padding: 14,
-  },
-
 
   scrollView: {
     flex: 1,
@@ -1296,6 +1259,14 @@ notesInput: {
     marginTop: 16,
   },
 
+
+  roww: {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+},
+
+
   checkboxIsPresent: {
     width: 22,
     height: 22,
@@ -1370,14 +1341,6 @@ notesInput: {
     marginBottom: 2,
   },
 
-  roww: {
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "space-between", // or "flex-start"
- 
-},
-
-
   scanBtn: {
     backgroundColor: SOFT,
     minHeight: 38,
@@ -1434,6 +1397,10 @@ notesInput: {
     marginTop: Platform.OS === "android" ? -4 : 0,
   },
 
+  footerRTL: {
+  flexDirection: "row-reverse",
+},
+
   imageActionRow: {
     flexDirection: "row",
     gap: 8,
@@ -1483,7 +1450,7 @@ notesInput: {
 
   primaryBtn: {
     backgroundColor: ACC,
-    minHeight: 46,
+    minHeight: 40,
     paddingHorizontal: 16,
     borderRadius: 12,
     alignItems: "center",
@@ -1555,13 +1522,14 @@ notesInput: {
     marginBottom: 12,
   },
 
-  footer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 14,
-    paddingTop: 6,
-  },
+footer: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  width: "100%",
+  marginTop: 14,
+  paddingTop: 6,
+},
 
   footerSide: {
     flex: 1,
