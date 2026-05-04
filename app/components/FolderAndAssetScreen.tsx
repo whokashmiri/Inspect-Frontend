@@ -80,12 +80,17 @@ export default function FolderAndAssetScreen({ route }: Props) {
   const { t } = useTranslation(); // ← i18n hook
 
   const [rawDataKeys, setRawDataKeys] = useState<string[]>([]);
-  const [selectedRawDataKey, setSelectedRawDataKey] = useState<string | null>(null);
+  const [selectedRawDataFilters, setSelectedRawDataFilters] = useState<
+  { key: string; value: string }[]
+>([]);
   const [advancedSearchResults, setAdvancedSearchResults] = useState<AssetItem[]>([]);
   const [advancedSearchLoading, setAdvancedSearchLoading] = useState(false);
   const [advancedSearchPage, setAdvancedSearchPage] = useState(1);
   const [advancedSearchHasMore, setAdvancedSearchHasMore] = useState(true);
   const [rawKeyModalVisible, setRawKeyModalVisible] = useState(false);
+
+  const [activeRawDataKey, setActiveRawDataKey] = useState<string | null>(null);
+const [rawDataKeyValues, setRawDataKeyValues] = useState<string[]>([]);
 
 
   const getNestedRawDataValue = (rawData: any, key?: string | null) => {
@@ -321,10 +326,54 @@ useEffect(() => {
   setPendingCount(count);
 }, []);
 
+
+const collectRawDataValuesForKey = useCallback(
+  async (key: string) => {
+    const values = new Set<string>();
+
+    const shouldUseOfflineCache =
+      downloadedOffline && (isOnline === false || isOnline === null);
+
+    if (shouldUseOfflineCache) {
+      const scanFolder = async (parentId: string | null) => {
+        const data = await getOfflineContents(projectId, parentId);
+
+        for (const asset of data.assets || []) {
+          const value = getNestedRawDataValue((asset as any).rawData, key);
+
+          if (
+            value !== null &&
+            value !== undefined &&
+            typeof value !== "object"
+          ) {
+            values.add(String(value));
+          }
+        }
+
+        for (const folder of data.folders || []) {
+          await scanFolder(folder.id);
+        }
+      };
+
+      await scanFolder(null);
+      setRawDataKeyValues(Array.from(values).sort());
+      return;
+    }
+
+    const result = await projectContentApi.advancedGetRawDataKeyValues(
+      projectId,
+      key
+    );
+
+    setRawDataKeyValues(result.values || []);
+  },
+  [projectId, downloadedOffline, isOnline]
+);
+
   const runAdvancedSearch = useCallback(
     async (page = 1, append = false) => {
       const query = debouncedSearchQuery.trim();
-      if (!query) {
+      if (!query && selectedRawDataFilters.length === 0) {
         setAdvancedSearchResults([]);
         setAdvancedSearchPage(1);
         setAdvancedSearchHasMore(true);
@@ -344,12 +393,25 @@ useEffect(() => {
             }
           };
           await collectAssets(null);
-          let matchedAssets = allAssets.filter((asset: any) => {
-            const value = selectedRawDataKey
-              ? getNestedRawDataValue(asset.rawData, selectedRawDataKey)
-              : asset.rawData;
-            return rawDataValueMatches(value, query);
-          });
+let matchedAssets = allAssets.filter((asset: any) => {
+  const matchesSelectedFilters =
+    selectedRawDataFilters.length === 0 ||
+    selectedRawDataFilters.every(({ key, value }) => {
+      const rawValue = getNestedRawDataValue(asset.rawData, key);
+
+      if (rawValue === null || rawValue === undefined) return false;
+
+      return String(rawValue).trim().toLowerCase() ===
+        String(value).trim().toLowerCase();
+    });
+
+  const matchesSearch =
+    !query ||
+    rawDataValueMatches(asset.name, query) ||
+    rawDataValueMatches(asset.rawData, query);
+
+  return matchesSelectedFilters && matchesSearch;
+});
           if (filter === "done") matchedAssets = matchedAssets.filter((a) => a.isDone);
           if (filter === "incomplete") matchedAssets = matchedAssets.filter((a) => !a.isDone);
           const start = (page - 1) * SEARCH_PAGE_SIZE;
@@ -361,7 +423,7 @@ useEffect(() => {
         }
         const result = await projectContentApi.advancedSearchContents(
           projectId,
-          selectedRawDataKey,
+          selectedRawDataFilters,
           query,
           filter,
           page,
@@ -384,7 +446,7 @@ useEffect(() => {
         setAdvancedSearchLoading(false);
       }
     },
-    [projectId, selectedRawDataKey, debouncedSearchQuery, filter, downloadedOffline, isOnline, t]
+    [projectId, selectedRawDataFilters, debouncedSearchQuery, filter, downloadedOffline, isOnline, t]
   );
 
   useEffect(() => {
@@ -401,7 +463,8 @@ useEffect(() => {
     return `${projectName} / Folder`;
   };
 
-  const isAdvancedSearching = debouncedSearchQuery.trim().length > 0;
+  const isAdvancedSearching =
+  debouncedSearchQuery.trim().length > 0 || selectedRawDataFilters.length > 0;;
 
   const advancedSearchListItems = useMemo(() => {
     return advancedSearchResults.map((asset) => ({
@@ -421,7 +484,7 @@ useEffect(() => {
       if (shouldUseOffline) {
         result = await advancedSearchOfflineAssets({ projectId, search: code });
       } else {
-        result = await projectContentApi.advancedSearchContents(projectId, code);
+        result = await projectContentApi.advancedSearchContents(projectId, null, code);
       }
       setCodeScannerVisible(false);
      const foundAsset = result.assets?.[0];
@@ -1090,9 +1153,11 @@ const getValidAssetImages = (asset: AssetItem) => {
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder={
-              selectedRawDataKey
+              selectedRawDataFilters.length > 0
                 ? t("folderAssetScreen.search.placeholderWithKey", {
-                    key: selectedRawDataKey,
+                     key: selectedRawDataFilters
+                     .map((filter) => `${filter.key}: ${filter.value}`)
+                      .join(", "),
                   })
                 : t("folderAssetScreen.search.placeholderAll")
             }
@@ -1104,8 +1169,9 @@ const getValidAssetImages = (asset: AssetItem) => {
             onPress={() => setRawKeyModalVisible(true)}
           >
             <Text style={styles.rawKeyPickerText} numberOfLines={1}>
-              {selectedRawDataKey ||
-                t("folderAssetScreen.search.fieldPickerLabel")}
+              {selectedRawDataFilters.length > 0
+                  ? `${selectedRawDataFilters.length} selected`
+                  : t("folderAssetScreen.search.fieldPickerLabel")}
             </Text>
             <Ionicons name="chevron-down" size={14} color="#2A324B" />
           </TouchableOpacity>
@@ -1198,13 +1264,14 @@ const getValidAssetImages = (asset: AssetItem) => {
                       >
                         {getAssetLocationText(item)}
                       </Text>
-                      {selectedRawDataKey && (
+                      {selectedRawDataFilters.length > 0 && (
                         <Text
                           style={styles.searchResultMeta}
                           numberOfLines={1}
                         >
-                          {getRawDataValue(item.rawData, selectedRawDataKey) ??
-                            "—"}
+                          {selectedRawDataFilters
+                              .map((filter) => `${filter.key}: ${getRawDataValue(item.rawData, filter.key) ?? "—"}`)
+                              .join(" | ")}
                         </Text>
                       )}
                       {(item as any).hasNotes && (
@@ -1497,38 +1564,169 @@ const getValidAssetImages = (asset: AssetItem) => {
           <TouchableWithoutFeedback onPress={() => setRawKeyModalVisible(false)}>
             <View style={styles.modalOverlay}>
               <TouchableWithoutFeedback>
-                <View style={styles.rawKeyModalCard}>
-                  <Text style={styles.modalTitle}>
-                    {t("folderAssetScreen.fieldModal.title")}
-                  </Text>
-                  <TouchableOpacity
-                    style={styles.rawKeyOption}
-                    onPress={() => {
-                      setSelectedRawDataKey(null);
-                      setRawKeyModalVisible(false);
-                    }}
-                  >
-                    <Text style={styles.rawKeyOptionText}>
-                      {t("folderAssetScreen.fieldModal.allValues")}
-                    </Text>
-                  </TouchableOpacity>
-                  <FlatList
-                    data={rawDataKeys}
-                    keyExtractor={(item) => item}
-                    style={{ maxHeight: 360 }}
-                    renderItem={({ item }) => (
-                      <TouchableOpacity
-                        style={styles.rawKeyOption}
-                        onPress={() => {
-                          setSelectedRawDataKey(item);
-                          setRawKeyModalVisible(false);
-                        }}
-                      >
-                        <Text style={styles.rawKeyOptionText}>{item}</Text>
-                      </TouchableOpacity>
-                    )}
-                  />
-                </View>
+                
+<View style={styles.rawKeyModalCard}>
+  <Text style={styles.modalTitle}>
+    {activeRawDataKey
+      ? activeRawDataKey
+      : t("folderAssetScreen.fieldModal.title")}
+  </Text>
+
+  {!activeRawDataKey ? (
+    <>
+      <TouchableOpacity
+        style={styles.rawKeyOption}
+        onPress={() => {
+          setSelectedRawDataFilters([]);
+          setActiveRawDataKey(null);
+          setRawDataKeyValues([]);
+        }}
+      >
+        <Text style={styles.rawKeyOptionText}>
+          {t("folderAssetScreen.fieldModal.allValues")}
+        </Text>
+      </TouchableOpacity>
+
+      <FlatList
+        data={rawDataKeys}
+        keyExtractor={(item) => item}
+        style={{ maxHeight: 360 }}
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={styles.rawKeyOption}
+            onPress={async () => {
+              setActiveRawDataKey(item);
+              await collectRawDataValuesForKey(item);
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Text style={styles.rawKeyOptionText}>{item}</Text>
+              <Ionicons name="chevron-forward" size={18} color="#2A324B" />
+            </View>
+          </TouchableOpacity>
+        )}
+      />
+    </>
+  ) : (
+    <>
+      <TouchableOpacity
+        style={styles.rawKeyOption}
+        onPress={() => {
+          setActiveRawDataKey(null);
+          setRawDataKeyValues([]);
+        }}
+      >
+        <Text style={styles.rawKeyOptionText}>← Back to keys</Text>
+      </TouchableOpacity>
+
+      <FlatList
+        data={rawDataKeyValues}
+        keyExtractor={(item) => item}
+        style={{ maxHeight: 360 }}
+        ListEmptyComponent={
+          <Text style={{ color: MUTED, paddingVertical: 14 }}>
+            No values found for this key
+          </Text>
+        }
+        renderItem={({ item }) => {
+          const selected = selectedRawDataFilters.some(
+            (filter) =>
+              filter.key === activeRawDataKey && filter.value === item
+          );
+
+          return (
+            <TouchableOpacity
+              style={styles.rawKeyOption}
+              onPress={() => {
+                if (!activeRawDataKey) return;
+
+                setSelectedRawDataFilters((prev) => {
+                  const exists = prev.some(
+                    (filter) =>
+                      filter.key === activeRawDataKey &&
+                      filter.value === item
+                  );
+
+                  if (exists) {
+                    return prev.filter(
+                      (filter) =>
+                        !(
+                          filter.key === activeRawDataKey &&
+                          filter.value === item
+                        )
+                    );
+                  }
+
+                  return [
+                    ...prev.filter((filter) => filter.key !== activeRawDataKey),
+                    {
+                      key: activeRawDataKey,
+                      value: item,
+                    },
+                  ];
+                });
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Ionicons
+                  name={selected ? "checkbox" : "square-outline"}
+                  size={20}
+                  color="#2A324B"
+                />
+                <Text style={styles.rawKeyOptionText}>{item}</Text>
+              </View>
+            </TouchableOpacity>
+          );
+        }}
+      />
+    </>
+  )}
+
+  {selectedRawDataFilters.length > 0 && (
+    <View style={{ marginTop: 10 }}>
+      <Text style={{ color: MUTED, fontSize: 12, marginBottom: 6 }}>
+        Selected filters:
+      </Text>
+
+      {selectedRawDataFilters.map((filter) => (
+        <Text
+          key={`${filter.key}-${filter.value}`}
+          style={{ color: TEXT, fontSize: 12, marginBottom: 4 }}
+        >
+          {filter.key}: {filter.value}
+        </Text>
+      ))}
+    </View>
+  )}
+
+  <View style={styles.modalActions}>
+    {selectedRawDataFilters.length > 0 && (
+      <TouchableOpacity
+        style={styles.modalCancelBtn}
+        onPress={() => {
+          setSelectedRawDataFilters([]);
+          setActiveRawDataKey(null);
+          setRawDataKeyValues([]);
+          runAdvancedSearch(1, false);
+        }}
+      >
+        <Text style={styles.modalCancelText}>Clear filters</Text>
+      </TouchableOpacity>
+    )}
+
+    <TouchableOpacity
+      style={[styles.modalSaveBtn, selectedRawDataFilters.length > 0 ? null : { flex: 1, marginTop: 14 }]}
+      onPress={() => {
+        setRawKeyModalVisible(false);
+        setActiveRawDataKey(null);
+        setRawDataKeyValues([]);
+        runAdvancedSearch(1, false);
+      }}
+    >
+      <Text style={styles.modalSaveText}>Done</Text>
+    </TouchableOpacity>
+  </View>
+</View>
               </TouchableWithoutFeedback>
             </View>
           </TouchableWithoutFeedback>
@@ -1846,7 +2044,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER,
   },
-  modalActions: { flexDirection: "row", gap: 10, marginTop: 10 },
+  modalActions: { flexDirection: "row", gap: 10, marginTop: 14 },
   modalCancelBtn: {
     flex: 1,
     backgroundColor: SURFACE,
@@ -1856,7 +2054,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 10,
   },
-  modalCancelText: { color: TEXT },
+  modalCancelText: { color: TEXT, fontSize: 15, fontWeight: "600" },
   modalSaveBtn: {
     flex: 1,
     backgroundColor: ACC,
@@ -1864,7 +2062,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 10,
   },
-  modalSaveText: { color: "#ffffff" },
+  modalSaveText: { color: "#ffffff", fontSize: 15, fontWeight: "600" },
 
   assetImageBackground: {
     position: "absolute",

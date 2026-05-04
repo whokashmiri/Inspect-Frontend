@@ -711,9 +711,21 @@ const localVoiceNotes = getLocalUploadFiles(payload.voiceNotes);
   );
 },
 
+advancedGetRawDataKeyValues: (projectId: string, key: string) => {
+  const params = new URLSearchParams();
+  params.set("key", key);
+
+  return request<{ values: string[] }>(
+    `/projects/${projectId}/contents/advanced-key-values?${params.toString()}`,
+    {
+      method: "GET",
+    }
+  );
+},
+
 advancedSearchContents: (
   projectId: string,
-  key?: string | null,
+  filters?: { key: string; value: string }[] | null,
   search?: string,
   filter?: "all" | "done" | "incomplete",
   page = 1,
@@ -721,8 +733,8 @@ advancedSearchContents: (
 ) => {
   const params = new URLSearchParams();
 
-  if (key) {
-    params.set("key", key);
+  if (filters?.length) {
+    params.set("filters", JSON.stringify(filters));
   }
 
   const cleanSearch = search?.trim();
