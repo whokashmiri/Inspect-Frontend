@@ -62,7 +62,7 @@ const InfoRow = memo(function InfoRow({
 function AppHeaderComponent({
   isAuthenticated = false,
   user = null,
-  title = "ValTech",
+  title = "ValueTech",
   onLogout,
 }: AppHeaderProps) {
  const { t } = useTranslation();

@@ -485,29 +485,61 @@ const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
 <TouchableOpacity
   style={styles.notesCheckRow}
   onPress={() => {
-    const newHasNotes = !draft.hasNotes;
+    if (draft.hasNotes) {
+      setNotesModalVisible(true); // reopen, don't uncheck/delete
+      return;
+    }
+
     setDraft((prev) => ({
       ...prev,
-      hasNotes: newHasNotes,
+      hasNotes: true,
     }));
-    if (newHasNotes) {
-      setNotesModalVisible(true);
-    } else {
-      setDraft((prev) => ({
-        ...prev,
-        notes: "",
-      }));
-    }
+    setNotesModalVisible(true);
   }}
   activeOpacity={0.8}
 >
-
   <Ionicons
     name={draft.hasNotes ? "checkbox" : "square-outline"}
     size={22}
     color="#2A324B"
   />
-  <Text style={styles.notesCheckText}>Add Notes</Text>
+
+  <View style={styles.notesTextWrap}>
+    <Text style={styles.notesCheckText}>Add Notes</Text>
+
+    {!!draft.notes?.trim() && (
+      <Text style={styles.notesPreview} numberOfLines={1}>
+        {draft.notes.trim()}
+      </Text>
+    )}
+  </View>
+
+  {draft.hasNotes && (
+    <TouchableOpacity
+      onPress={() =>
+        Alert.alert(
+          t("common.confirm") || "Confirm",
+          t("asset.removeNotesConfirm") || "Remove notes?",
+          [
+            { text: t("common.cancel") || "Cancel", style: "cancel" },
+            {
+              text: t("common.remove") || "Remove",
+              style: "destructive",
+              onPress: () =>
+                setDraft((prev) => ({
+                  ...prev,
+                  hasNotes: false,
+                  notes: "",
+                })),
+            },
+          ]
+        )
+      }
+      style={styles.notesRemoveBtn}
+    >
+      <Text style={styles.notesRemoveText}>✕</Text>
+    </TouchableOpacity>
+  )}
 </TouchableOpacity>
 
 
@@ -823,44 +855,6 @@ const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
                         <Text style={[styles.label, { marginTop: 8 }]}>
                           {t("asset.voiceNotes")}
                         </Text>
-{/* 
-                        <TouchableOpacity
-                          style={styles.primaryBtn}
-                          onPress={isRecording ? stopRecording : startRecording}
-                        >
-                          <Text style={styles.primaryText}>
-                            {isRecording
-                              ? t("asset.stopRecording")
-                              : t("asset.recordVoiceNote")}
-                          </Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={styles.checkboxWrap}
-                          onPress={() =>
-                            setDraft((prev) => ({
-                              ...prev,
-                              isDone: !prev.isDone,
-                            }))
-                          }
-                          activeOpacity={0.7}
-                        >
-                          <View
-                            style={[
-                              styles.checkbox,
-                              draft.isDone && styles.checkboxChecked,
-                            ]}
-                          >
-                            {draft.isDone && (
-                              <Text style={styles.checkmark}>✓</Text>
-                            )}
-                          </View>
-
-                          <Text style={styles.checkboxLabel}>
-                            {t("asset.markAsDone")}
-                          </Text>
-                        </TouchableOpacity> */}
-
 
                                                 <View style={styles.roww}>
   <TouchableOpacity
@@ -979,7 +973,6 @@ const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
                   </ScrollView>
 
 <View style={styles.footer}>
-  {/* Back */}
   <View style={styles.footerSide}>
     {step > 1 && (
       <TouchableOpacity
@@ -992,7 +985,6 @@ const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
     )}
   </View>
 
-  {/* Next / Finish */}
   <View style={styles.footerSideRight}>
     {step < totalSteps ? (
       <TouchableOpacity
@@ -1059,11 +1051,16 @@ const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
           setNotesModalVisible(false);
         }}
         onCancel={() => {
-          if (!draft.hasNotes) {
-            setDraft((prev) => ({ ...prev, notes: "" }));
-          }
-          setNotesModalVisible(false);
-        }}
+  if (!draft.notes?.trim()) {
+    setDraft((prev) => ({
+      ...prev,
+      hasNotes: false,
+      notes: "",
+    }));
+  }
+
+  setNotesModalVisible(false);
+}}
       />
     </>
   );
@@ -1143,6 +1140,8 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(42,50,75,0.55)",
     paddingHorizontal: 10,
     paddingVertical: 1,
+     justifyContent: "center",   // vertical center
+  alignItems: "center",       // horizontal center
   },
 
   keyboardWrap: {
@@ -1165,8 +1164,16 @@ const styles = StyleSheet.create({
   },
 
   modalCardSmall: {
-    borderRadius: 18,
-    padding: 14,
+     width: "100%",
+    maxWidth: 420,
+    maxHeight: "80%",
+    minHeight: "30%",
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 24,
+    padding: 16,
+    alignSelf: "center",
   },
 
   scrollView: {
@@ -1202,36 +1209,89 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  notesCheckRow: {
+notesCheckRow: {
   flexDirection: "row",
   alignItems: "center",
   gap: 8,
   marginTop: 10,
   marginBottom: 10,
+  backgroundColor: SURFACE,
+  borderWidth: 1,
+  borderColor: BORDER,
+  borderRadius: 12,
+  paddingHorizontal: 10,
+  paddingVertical: 9,
 },
 
-notesCheckText: {
-  color: "#2A324B",
-  fontSize: 14,
-  fontWeight: "600",
+notesPreview: {
+  color: MUTED,
+  fontSize: 11,
+  marginTop: 2,
+},
+
+notesRemoveBtn: {
+  width: 24,
+  height: 24,
+  borderRadius: 12,
+  backgroundColor: "#ffffff",
+  borderWidth: 1,
+  borderColor: BORDER,
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+notesRemoveText: {
+  color: "#ff6b6b",
+  fontSize: 12,
+  fontWeight: "700",
+},
+
+notesModalCard: {
+  width: "88%",
+  maxWidth: 360,
+  alignSelf: "center",
+  backgroundColor: "#ffffff",
+  borderWidth: 1,
+  borderColor: BORDER,
+  borderRadius: 18,
+  padding: 14,
 },
 
 notesBox: {
-  height: 140,
-  backgroundColor: "#E1E5EE",
+  height: 120,
+  backgroundColor: SURFACE,
   borderWidth: 1,
-  borderColor: "#C7CCDB",
+  borderColor: BORDER,
   borderRadius: 14,
   padding: 10,
-  marginBottom: 12,
+  marginBottom: 8,
 },
 
 notesInput: {
   flex: 1,
-  color: "#2A324B",
+  color: TEXT,
   fontSize: 14,
-  minHeight: 120,
+  minHeight: 100,
+  textAlignVertical: "top",
 },
+
+modalActions: {
+  flexDirection: "row",
+  justifyContent: "flex-end",
+  gap: 10,
+  marginTop: 8,
+},
+
+
+notesCheckText: {
+  color: TEXT,
+  fontSize: 14,
+  fontWeight: "600",
+},
+
+
+
+
 
   closeText: {
     color: TEXT,
@@ -1258,6 +1318,11 @@ notesInput: {
     alignItems: "center",
     marginTop: 16,
   },
+
+  notesTextWrap: {
+  flex: 1,
+},
+
 
 
   roww: {
@@ -1581,11 +1646,5 @@ footer: {
     fontStyle: "italic",
   },
 
-  modalActions:{
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 12,
-     marginTop: 12,
-    
-  }
+
 });
