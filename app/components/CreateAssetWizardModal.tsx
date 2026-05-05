@@ -765,11 +765,35 @@ const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
                           </TouchableOpacity>
                         </View>
 
+
+
                         <Text style={styles.helper}>
                           {t("asset.imagesSelected", {
                             count: draft.images.length,
                           })}
                         </Text>
+
+
+                                                <TouchableOpacity
+  style={styles.isPresentRow}
+  onPress={() =>
+    setDraft((prev) => ({
+      ...prev,
+      isPresent: !prev.isPresent,
+    }))
+  }
+  activeOpacity={0.8}
+>
+  <Ionicons
+    name={draft.isPresent ? "checkbox" : "square-outline"}
+    size={22}
+    color={ACC}
+  />
+
+  <Text style={styles.isPresentText}>
+    {t("asset.assetIsPresent") || "Asset is present"}
+  </Text>
+</TouchableOpacity>
 
                         {draft.images.length > 0 && (
                           <View style={styles.previewGrid}>
@@ -1645,6 +1669,26 @@ footer: {
     fontSize: 12,
     fontStyle: "italic",
   },
+
+  isPresentRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 8,
+  marginTop: 12,
+  marginBottom: 4,
+  backgroundColor: SURFACE,
+  borderWidth: 1,
+  borderColor: BORDER,
+  borderRadius: 12,
+  paddingHorizontal: 10,
+  paddingVertical: 10,
+},
+
+isPresentText: {
+  color: TEXT,
+  fontSize: 14,
+  fontWeight: "600",
+},
 
 
 });
