@@ -800,6 +800,17 @@ useEffect(() => {
     return String(value || "").toLowerCase() === "vehicle" ? "vehicle" : "other";
   };
 
+  const normalizeLocalMedia = (items: any[] = []) => {
+  return items.map((item, index) => ({
+    ...item,
+    uri: item.uri || item.url || "",
+    url: item.url || item.uri || "",
+    name: item.name || `media_${Date.now()}_${index}`,
+    type: item.type || "application/octet-stream",
+    existing: item.existing ?? false,
+  }));
+};
+
   const buildLocalAsset = (draft: AssetDraft): AssetItem => {
     const normalizedAssetType = normalizeAssetType(draft.assetType as any);
     const isVehicle = normalizedAssetType === "vehicle";
@@ -824,8 +835,8 @@ useEffect(() => {
       notes: draft.notes || null,
       isPresent: draft.isPresent ?? true,
       createdBy: { id: "offline-user", fullName: "You", email: "" },
-      images: [],
-      voiceNotes: [],
+     images: normalizeLocalMedia(draft.images || []),
+    voiceNotes: normalizeLocalMedia(draft.voiceNotes || []),
     };
   };
 
@@ -942,6 +953,9 @@ useEffect(() => {
           isDone: draft.isDone ?? existingOfflineAsset.isDone,
           isPresent: draft.isPresent ?? existingOfflineAsset.isPresent,
           updatedAt: new Date().toISOString(),
+
+          images: normalizeLocalMedia(draft.images || []),
+          voiceNotes: normalizeLocalMedia(draft.voiceNotes || []),
         };
         await upsertOfflineAsset(updatedOfflineAsset);
       }
@@ -1003,13 +1017,13 @@ useEffect(() => {
   }, [folders, filteredAssets, searchQuery]);
 
 
-  const getAssetImageUri = (asset: AssetItem) => {
+ const getAssetImageUri = (asset: AssetItem) => {
   const image = asset.images?.find((img: any) => {
     const uri = img?.url || img?.uri;
     return typeof uri === "string" && uri.trim().length > 0;
   });
 
-  return image?.url || image?.url || null;
+  return image?.url || image?.uri || null;
 };
 
 const getValidAssetImages = (asset: AssetItem) => {
@@ -1383,7 +1397,7 @@ const getValidAssetImages = (asset: AssetItem) => {
                             {item.name}
                           </Text>
                         </View>
-                        {item.images && item.images.length > 0 && (
+                        {getValidAssetImages(item).length > 0 && (
                           <View style={styles.photoCountBadge}>
                             <Text style={styles.photoCountText}>
                               {getValidAssetImages(item).length}

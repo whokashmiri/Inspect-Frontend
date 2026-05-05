@@ -5,10 +5,10 @@
 import * as SecureStore from "expo-secure-store";
 
 // ─── Config ────────────────────────────────────────────────────────────────
-// export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://api.167.71.231.64.nip.io/api/v1";
+export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://api.167.71.231.64.nip.io/api/v1";
 
 
-export const BASE_URL = process.env.EXPO_PUBLIC_API_URL 
+// export const BASE_URL = process.env.EXPO_PUBLIC_API_URL 
 
 const TOKEN_KEY = "auth.accessToken";
 const REFRESH_KEY = "auth.refreshToken";
@@ -272,6 +272,40 @@ export interface ProjectStats {
   incompleteAssets: number;
   assetsWithNotes: number;
 }
+
+export type InspectorFileType =
+  | "excel"
+  | "pdf"
+  | "word"
+  | "image"
+  | "audio"
+  | "other";
+
+export interface InspectorFile {
+  id: string;
+  name: string;
+  type: InspectorFileType;
+  url: string;
+  uploadedBy: string;
+  createdAt: string;
+  storage?: string;
+  spacesKey?: string;
+  mimeType?: string;
+  sizeBytes?: number;
+}
+
+export interface ListInspectorFilesResponse {
+  files: InspectorFile[];
+}
+
+export interface GetInspectorFileResponse {
+  file: InspectorFile;
+}
+
+export interface DownloadInspectorFileResponse {
+  url: string;
+  file: InspectorFile;
+}
 export interface Project {
   id: string;
   name: string;
@@ -283,6 +317,9 @@ export interface Project {
   company: ProjectCompany | null;
   user: ProjectUser | null;
   stats?: ProjectStats;
+  reportType?: string;
+  reportData?: Record<string, any>;
+  inspectorFiles?: InspectorFile[];
 
 
   
@@ -379,6 +416,30 @@ export const projectApi = {
     request<ListProjectsResponse>("/projects", {
       method: "GET",
     }),
+
+  listInspectorFiles: (projectId: string) =>
+    request<ListInspectorFilesResponse>(
+      `/projects/${projectId}/inspector-files`,
+      {
+        method: "GET",
+      }
+    ),
+
+  getInspectorFile: (projectId: string, fileId: string) =>
+    request<GetInspectorFileResponse>(
+      `/projects/${projectId}/inspector-files/${fileId}`,
+      {
+        method: "GET",
+      }
+    ),
+
+  downloadInspectorFile: (projectId: string, fileId: string) =>
+    request<DownloadInspectorFileResponse>(
+      `/projects/${projectId}/inspector-files/${fileId}/download`,
+      {
+        method: "GET",
+      }
+    ),
 };
 
 
@@ -398,6 +459,7 @@ export interface FolderItem {
 export interface AssetImageItem {
   id: string;
   url: string;
+  uri: string;
   publicId: string | null;
   createdAt: string;
 }

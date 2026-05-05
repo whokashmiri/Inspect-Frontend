@@ -11,12 +11,11 @@
     },
     "ios": {
       "supportsTablet": false,
-       "bundleIdentifier": "com.anonymous.batchcam",
+      "bundleIdentifier": "com.anonymous.batchcam",
       "infoPlist": {
         "NSCameraUsageDescription": "BatchCam needs camera access to capture photos",
         "NSPhotoLibraryAddUsageDescription": "BatchCam needs access to save photos to your library."
       }
-     
     },
     "android": {
       "usesCleartextTraffic": true,
@@ -61,7 +60,8 @@
       "expo-font",
       "expo-sqlite",
       "expo-audio",
-      "expo-router"
+      "expo-router",
+      "expo-sharing"
     ],
     "extra": {
       "eas": {

@@ -9,14 +9,17 @@ import {
   ActivityIndicator,
   TextInput,
   Modal,
+  Linking
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import home from "./home";
 import { useTranslation } from "react-i18next";
+import * as MediaLibrary from "expo-media-library";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
 
 import { useAuth } from "../../api/AuthContext";
-import { projectApi, Project, ApiError } from "../../api/api";
+import { projectApi, Project, ApiError , InspectorFile, } from "../../api/api";
 import { PendingItem } from "../offline/types";
 import {
   safeApiCall,
@@ -56,17 +59,26 @@ export default function ProjectScreen() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [filter, setFilter] = useState<FilterType>("new");
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
+ 
   const [globalError, setGlobalError] = useState<string | null>(null);
 
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [projectName, setProjectName] = useState("");
+
+  const [viewingFileId, setViewingFileId] = useState<string | null>(null);
+const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
+
+  
   const [pendingProjects, setPendingProjects] = useState<PendingItem[]>([]);
 
   const [downloadedProjectIds, setDownloadedProjectIds] = useState<string[]>([]);
   const [projectPendingMap, setProjectPendingMap] = useState<Record<string, number>>({});
   const [downloadingProjectId, setDownloadingProjectId] = useState<string | null>(null);
   const [removingProjectId, setRemovingProjectId] = useState<string | null>(null);
+
+  const [filesModalVisible, setFilesModalVisible] = useState(false);
+  const [selectedProjectForFiles, setSelectedProjectForFiles] =
+  useState<Project | null>(null);
+  const [inspectorFiles, setInspectorFiles] = useState<InspectorFile[]>([]);
+  const [filesLoading, setFilesLoading] = useState(false);
 
   useEffect(() => {
     fetchProjects();
@@ -286,6 +298,145 @@ export default function ProjectScreen() {
 
   if (!loaded) return null;
 
+
+  
+
+  async function openInspectorFilesModal(project: Project) {
+  try {
+    setSelectedProjectForFiles(project);
+    setFilesModalVisible(true);
+    setFilesLoading(true);
+
+    const result = await projectApi.listInspectorFiles(project.id);
+    setInspectorFiles(result.files || []);
+  } catch (error: any) {
+    Alert.alert(
+      "Files error",
+      error?.message || "Could not load inspector files"
+    );
+  } finally {
+    setFilesLoading(false);
+  }
+}
+
+async function openInspectorFile(file: InspectorFile) {
+  try {
+    if (!file.url) {
+      Alert.alert("File unavailable", "This file does not have a valid URL.");
+      return;
+    }
+
+    const canOpen = await Linking.canOpenURL(file.url);
+
+    if (!canOpen) {
+      Alert.alert("Cannot open file", "No app found to open this file.");
+      return;
+    }
+
+    const result = await projectApi.downloadInspectorFile(
+  selectedProjectForFiles!.id,
+  file.id
+);
+
+await Linking.openURL(result.url);
+  } catch (error: any) {
+    Alert.alert("Open failed", error?.message || "Could not open file.");
+  }
+}
+
+function getFileIcon(type: InspectorFile["type"]) {
+  if (type === "pdf") return "document-text-outline";
+  if (type === "excel") return "grid-outline";
+  if (type === "word") return "document-outline";
+  if (type === "image") return "image-outline";
+  if (type === "audio") return "musical-notes-outline";
+  return "attach-outline";
+}
+
+function formatFileSize(sizeBytes?: number) {
+  if (!sizeBytes) return "";
+  if (sizeBytes < 1024) return `${sizeBytes} B`;
+  if (sizeBytes < 1024 * 1024) return `${Math.round(sizeBytes / 1024)} KB`;
+  return `${(sizeBytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+
+
+async function viewInspectorFile(file: InspectorFile) {
+  try {
+    if (!selectedProjectForFiles) return;
+
+    setViewingFileId(file.id);
+
+    const result = await projectApi.downloadInspectorFile(
+      selectedProjectForFiles.id,
+      file.id
+    );
+
+    await Linking.openURL(result.url);
+  } catch (error: any) {
+    Alert.alert("View failed", error?.message || "Could not open file.");
+  } finally {
+    setViewingFileId(null);
+  }
+}
+
+
+
+
+
+
+async function downloadInspectorFile(file: InspectorFile) {
+  try {
+    if (!selectedProjectForFiles) return;
+     setDownloadingFileId(file.id);
+
+    const result = await projectApi.downloadInspectorFile(
+      selectedProjectForFiles.id,
+      file.id
+    );
+
+    const safeFileName = file.name.replace(/[\/\\?%*:|"<>]/g, "-");
+    const fileUri = FileSystem.documentDirectory + safeFileName;
+
+    const downloaded = await FileSystem.downloadAsync(result.url, fileUri);
+
+    // Save images directly to gallery
+    if (file.type === "image" || file.mimeType?.startsWith("image/")) {
+      const permission = await MediaLibrary.requestPermissionsAsync();
+
+      if (!permission.granted) {
+        Alert.alert(
+          "Permission required",
+          "Please allow photo access to save this image."
+        );
+        return;
+      }
+
+      await MediaLibrary.saveToLibraryAsync(downloaded.uri);
+
+      Alert.alert("Saved", "Image saved to your gallery.");
+      return;
+    }
+
+    // For PDF, Word, Excel, audio: open save/share sheet
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(downloaded.uri, {
+        mimeType: file.mimeType || undefined,
+        dialogTitle: "Save file",
+        UTI: file.mimeType || undefined,
+      });
+    } else {
+      Alert.alert("Downloaded", "File saved to app storage.");
+    }
+  } catch (error: any) {
+    Alert.alert("Download failed", error?.message || "Error downloading file");
+  }
+  finally {
+    setDownloadingFileId(null);
+  }
+}
+
   return (
     <View style={styles.flex}>
       <ScrollView contentContainerStyle={styles.scroll}>
@@ -421,13 +572,16 @@ export default function ProjectScreen() {
   </View>
 
   
-<View style={styles.statBox}>
-    <Text style={styles.statNumber}>{stats.assetsWithNotes}</Text>
-    <Text style={styles.statLabel}>
-      
-      {t("projectScreen.stats.assets")}
-    </Text>
-  </View>
+<Pressable
+  style={styles.statBox}
+  onPress={(e) => {
+    e.stopPropagation();
+    openInspectorFilesModal(project);
+  }}
+>
+  <Ionicons name="menu-outline" size={22} color={TEXT} />
+  <Text style={styles.statLabel}>Files</Text>
+</Pressable>
 
 </View>
 
@@ -537,6 +691,93 @@ export default function ProjectScreen() {
             })}
           </View>
         )}
+
+
+
+<Modal
+  visible={filesModalVisible}
+  transparent
+  animationType="fade"
+  onRequestClose={() => setFilesModalVisible(false)}
+>
+  <View style={styles.modalOverlay}>
+    <View style={styles.filesModalCard}>
+      <View style={styles.filesModalHeader}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.modalTitle}>Inspector Files</Text>
+          <Text style={styles.filesModalSubtitle} numberOfLines={1}>
+            {selectedProjectForFiles?.name}
+          </Text>
+        </View>
+
+        <Pressable
+          style={styles.filesCloseBtn}
+          onPress={() => setFilesModalVisible(false)}
+        >
+          <Ionicons name="close" size={20} color={TEXT} />
+        </Pressable>
+      </View>
+
+      {filesLoading ? (
+        <ActivityIndicator color={ACC} style={{ marginTop: 24 }} />
+      ) : inspectorFiles.length === 0 ? (
+        <View style={styles.emptyWrap}>
+          <Text style={styles.emptyText}>No inspector files found</Text>
+        </View>
+      ) : (
+        <ScrollView style={{ maxHeight: 420 }}>
+          {inspectorFiles.map((file) => (
+            <View key={file.id} style={styles.fileRow}>
+              <View style={styles.fileIconBox}>
+                <Ionicons
+                  name={getFileIcon(file.type) as any}
+                  size={22}
+                  color={ACC}
+                />
+              </View>
+
+              <View style={styles.fileInfo}>
+                <Text style={styles.fileName} numberOfLines={2}>
+                  {file.name}
+                </Text>
+                <Text style={styles.fileMeta}>
+                  {file.type.toUpperCase()}
+                  {file.sizeBytes ? ` • ${formatFileSize(file.sizeBytes)}` : ""}
+                </Text>
+              </View>
+
+              <View style={styles.fileActions}>
+                <Pressable
+                  style={[styles.fileActionBtn, styles.viewBtn]}
+                  onPress={() => viewInspectorFile(file)}
+                  disabled={viewingFileId === file.id || downloadingFileId === file.id}
+                  >
+                {viewingFileId === file.id ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+              <Ionicons name="eye-outline" size={18} color="#fff" />
+                   )}
+                </Pressable>
+
+                <Pressable
+  style={[styles.fileActionBtn, styles.downloadBtn]}
+  onPress={() => downloadInspectorFile(file)}
+  disabled={viewingFileId === file.id || downloadingFileId === file.id}
+>
+  {downloadingFileId === file.id ? (
+    <ActivityIndicator size="small" color="#fff" />
+  ) : (
+    <Ionicons name="download-outline" size={18} color="#fff" />
+  )}
+</Pressable>
+              </View>
+            </View>
+          ))}
+        </ScrollView>
+      )}
+    </View>
+  </View>
+</Modal>
       </ScrollView>
     </View>
   );
@@ -844,4 +1085,107 @@ statLabel: {
   btnDisabled: {
     opacity: 0.65,
   },
+
+
+
+  filesModalCard: {
+  backgroundColor: "#ffffff",
+  borderWidth: 1,
+  borderColor: BORDER,
+  borderRadius: 18,
+  padding: 16,
+  maxHeight: "80%",
+},
+
+filesModalHeader: {
+  flexDirection: "row",
+  alignItems: "center",
+  marginBottom: 14,
+},
+
+filesModalSubtitle: {
+  color: MUTED,
+  fontSize: 11,
+  marginTop: -8,
+},
+
+filesCloseBtn: {
+  width: 36,
+  height: 36,
+  borderRadius: 10,
+  backgroundColor: SURFACE,
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+fileRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  borderWidth: 1,
+  borderColor: BORDER,
+  backgroundColor: SURFACE,
+  borderRadius: 12,
+  padding: 10,
+  marginBottom: 10,
+},
+
+fileIconBox: {
+  width: 42,
+  height: 42,
+  borderRadius: 10,
+  backgroundColor: "#ffffff",
+  alignItems: "center",
+  justifyContent: "center",
+  marginRight: 10,
+},
+
+fileInfo: {
+  flex: 1,
+},
+
+fileName: {
+  color: TEXT,
+  fontSize: 12,
+  fontFamily: fonts.inter.semiBold as unknown as string,
+},
+
+fileMeta: {
+  color: MUTED,
+  fontSize: 10,
+  marginTop: 4,
+},
+
+fileOpenBtn: {
+  width: 36,
+  height: 36,
+  borderRadius: 10,
+  backgroundColor: ACC,
+  alignItems: "center",
+  justifyContent: "center",
+  marginLeft: 8,
+},
+
+
+
+
+fileActions: {
+  flexDirection: "row",
+  gap: 8,
+},
+
+fileActionBtn: {
+  width: 36,
+  height: 36,
+  borderRadius: 8,
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+viewBtn: {
+  backgroundColor: "#767B91",
+},
+
+downloadBtn: {
+  backgroundColor: "#2A324B",
+},
 });
