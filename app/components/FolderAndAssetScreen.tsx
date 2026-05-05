@@ -1837,20 +1837,36 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
 
-  filterRow: { flexDirection: "row", gap: 8, marginBottom: 12 },
+  filterRow: {
+  flexDirection: "row",
+  gap: 8,
+  marginBottom: 12,
+  borderBottomWidth: 1,
+  borderBottomColor: BORDER,
+},
   filterBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    backgroundColor: SURFACE,
-    borderRadius: 12,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: BORDER,
-  },
-  filterBtnActive: { backgroundColor: ACC, borderColor: ACC },
-  filterText: { color: MUTED, fontSize: 12, fontWeight: "500" },
-  filterTextActive: { color: "#ffffff", fontWeight: "600" },
+  flex: 1,
+  paddingVertical: 10,
+  paddingHorizontal: 12,
+  backgroundColor: "transparent",
+  alignItems: "center",
+  borderBottomWidth: 2,
+  borderBottomColor: "transparent",
+},
+ filterBtnActive: {
+  borderBottomColor: ACC,
+},
+  filterText: {
+  color: MUTED,
+  fontSize: 12,
+  fontWeight: "500",
+},
+
+
+  filterTextActive: {
+  color: ACC,
+  fontWeight: "700",
+},
 
   searchInput: {
     backgroundColor: SURFACE,
