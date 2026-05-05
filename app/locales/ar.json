@@ -143,7 +143,10 @@
   "common": {
     "error": "خطأ",
     "validation": "تنبيه",
-    "cancel": "إلغاء"
+    "cancel": "إلغاء",
+    "confirm": "تأكيد",
+"remove": "إزالة"
+
   },
   "asset": {
     "createAsset": "إنشاء أصل",
@@ -197,7 +200,9 @@
     "stopRecordingAndSave": "إيقاف التسجيل والحفظ",
     "playbackNotAvailable": "التشغيل غير متاح",
     "remoteVoicePlaybackMessage": "لا يمكن تشغيل الملاحظات الصوتية المحفوظة داخل شاشة التعديل. يمكنك الاستماع إليها بعد حفظ الأصل.",
-    "couldNotPlayVoiceNote": "تعذر تشغيل الملاحظة الصوتية."
+    "couldNotPlayVoiceNote": "تعذر تشغيل الملاحظة الصوتية.",
+    "removeNotesConfirm": "إزالة الملاحظات؟"
+
   },
   "camera": {
     "close": "إغلاق",

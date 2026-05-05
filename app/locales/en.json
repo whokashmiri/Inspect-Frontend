@@ -143,7 +143,9 @@
   "common": {
     "error": "Error",
     "validation": "Validation",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "remove": "Remove"
   },
   "asset": {
     "createAsset": "Create Asset",
@@ -197,7 +199,8 @@
     "stopRecordingAndSave": "Stop Recording & Save",
     "playbackNotAvailable": "Playback not available",
     "remoteVoicePlaybackMessage": "Voice notes from saved assets cannot be played in the editor. You can listen to them after saving the asset.",
-    "couldNotPlayVoiceNote": "Could not play voice note."
+    "couldNotPlayVoiceNote": "Could not play voice note.",
+    "removeNotesConfirm":"Remove Notes?"
 },
   "camera": {
     "close": "Close",
