@@ -11,7 +11,7 @@ import { normalizeCode } from "../components/utils/codeScannerUtils";
 import { useTranslation } from "react-i18next"; // ← i18n
 
 import {
-  Alert,
+
   FlatList,
   Modal,
   RefreshControl,
@@ -83,6 +83,8 @@ export default function FolderAndAssetScreen({ route }: Props) {
   const [selectedRawDataFilters, setSelectedRawDataFilters] = useState<
   { key: string; value: string }[]
 >([]);
+
+const [showFullProjectName, setShowFullProjectName] = useState(false);
   const [advancedSearchResults, setAdvancedSearchResults] = useState<AssetItem[]>([]);
   const [advancedSearchLoading, setAdvancedSearchLoading] = useState(false);
   const [advancedSearchPage, setAdvancedSearchPage] = useState(1);
@@ -191,6 +193,9 @@ const handleBackPress = async () => {
   const autoEnterRootAttemptedRef = useRef(false);
   const adminRootFolderIdRef = useRef<string | null>(null);
   const downloadCheckCompletedRef = useRef(false);
+
+   const assetSubmitLockRef = useRef(false);
+
 
   const openFolderModal = () => {
     setFolderModalVisible(true);
@@ -454,10 +459,10 @@ let matchedAssets = allAssets.filter((asset: any) => {
             : nextAssets.length === SEARCH_PAGE_SIZE
         );
       } catch (error: any) {
-        Alert.alert(
-          t("folderAssetScreen.searchError.title"),
-          error?.message || t("folderAssetScreen.searchError.defaultMessage")
-        );
+        showSnackbar(
+  error?.message || t("folderAssetScreen.searchError.defaultMessage"),
+  "error"
+);
       } finally {
         setAdvancedSearchLoading(false);
       }
@@ -508,20 +513,17 @@ let matchedAssets = allAssets.filter((asset: any) => {
 setCodeScannerVisible(false);
 
 if (!foundAsset) {
-  Alert.alert(
-    t("folderAssetScreen.codeScanner.notFoundTitle"),
-    t("folderAssetScreen.codeScanner.notFoundMessage")
-  );
+  showSnackbar(t("folderAssetScreen.codeScanner.notFoundMessage"), "error");
   return;
 }
 
 setEditingAsset(foundAsset);
 setAssetModalVisible(true);
     } catch (error: any) {
-      Alert.alert(
-        t("folderAssetScreen.codeScanner.notFoundTitle"),
-        error?.message || t("folderAssetScreen.codeScanner.notFoundMessage")
-      );
+      showSnackbar(
+  error?.message || t("folderAssetScreen.codeScanner.notFoundMessage"),
+  "error"
+);
     } finally {
       setCodeLookupLoading(false);
     }
@@ -617,8 +619,8 @@ const autoEnterAdminRootFolder = useCallback(async () => {
     try {
       if (options?.showSkeleton) {
         setContentLoading(true);
-        setFolders([]);
-        setAssets([]);
+        // setFolders([]);
+        // setAssets([]);
       }
 
       if (projectId.startsWith("offline_")) {
@@ -691,10 +693,7 @@ const handleSyncNow = useCallback(
 
     if (offlineState) {
       if (!silent) {
-        Alert.alert(
-          t("folderAssetScreen.sync.offlineAlert"),
-          t("folderAssetScreen.sync.offlineMessage")
-        );
+        showSnackbar(t("folderAssetScreen.sync.offlineMessage"), "info");
       }
       return;
     }
@@ -704,10 +703,7 @@ const handleSyncNow = useCallback(
 
     if (latestPendingCount <= 0) {
       if (!silent) {
-        Alert.alert(
-          t("folderAssetScreen.sync.allSyncedAlert"),
-          t("folderAssetScreen.sync.allSyncedMessage")
-        );
+        showSnackbar(t("folderAssetScreen.sync.allSyncedMessage"), "success");
       }
       return;
     }
@@ -765,10 +761,7 @@ useEffect(() => {
 
   const handleCreateFolder = async () => {
     if (!folderName.trim()) {
-      Alert.alert(
-        t("folderAssetScreen.folderModal.validationTitle"),
-        t("folderAssetScreen.folderModal.validationMessage")
-      );
+      showSnackbar(t("folderAssetScreen.folderModal.validationMessage"), "error");
       return;
     }
     const payload = {
@@ -789,24 +782,21 @@ useEffect(() => {
           localFolder.id = result.localId;
           await upsertOfflineFolder(localFolder);
         }
-        Alert.alert(t("folderAssetScreen.folderModal.offlineTitle"), result.message);
+        showSnackbar(result.message, "info");
       } else {
         if (downloadedOffline) {
           await upsertOfflineFolder(result.folder);
         }
-        Alert.alert(
-          t("folderAssetScreen.folderModal.successTitle"),
-          t("folderAssetScreen.folderModal.successMessage")
-        );
+        showSnackbar(t("folderAssetScreen.folderModal.successMessage"), "success");
       }
       setFolderName("");
       setFolderModalVisible(false);
       await loadContents(currentFolderId, { showSkeleton: true });
     } catch (error: any) {
-      Alert.alert(
-        t("folderAssetScreen.folderModal.errorTitle"),
-        error.message || t("folderAssetScreen.folderModal.errorMessage")
-      );
+     showSnackbar(
+  error.message || t("folderAssetScreen.folderModal.errorMessage"),
+  "error"
+);
     }
   };
 
@@ -857,6 +847,10 @@ useEffect(() => {
   };
 
   const createAssetAsync = async (draft: AssetDraft) => {
+
+    const clientMutationId =
+  (draft as any).clientMutationId ||
+  `asset_${projectId}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
     const newImages = (draft.images || []).filter(
       (item: any) => item.uri && !item.uri.startsWith("http")
     );
@@ -866,6 +860,7 @@ useEffect(() => {
     const normalizedAssetType = normalizeAssetType(draft.assetType as any);
     const isVehicle = normalizedAssetType === "vehicle";
     const payload = {
+      clientMutationId,
       projectId,
       name: draft.name,
       writtenDescription: draft.writtenDescription || null,
@@ -983,24 +978,32 @@ useEffect(() => {
     await loadContents(currentFolderId, { showSkeleton: true });
   };
 
-  const submitAssetInBackground = async (draft: AssetDraft, isEdit: boolean) => {
-    setPendingAssetSaveCount((count) => count + 1);
-    try {
-      if (isEdit) {
-        await updateAssetAsync(draft);
-      } else {
-        await createAssetAsync(draft);
-      }
-    } catch (error: any) {
-      showSnackbar(
-        error?.message || t("folderAssetScreen.snackbar.saveFailed"),
-        "error"
-      );
-    } finally {
-      setPendingAssetSaveCount((count) => Math.max(0, count - 1));
-    }
-  };
 
+const submitAssetInBackground = async (draft: AssetDraft, isEdit: boolean) => {
+  if (assetSubmitLockRef.current) return;
+
+  assetSubmitLockRef.current = true;
+
+  closeAssetModal(); 
+
+  setPendingAssetSaveCount((count) => count + 1);
+
+  try {
+    if (isEdit) {
+      await updateAssetAsync(draft);
+    } else {
+      await createAssetAsync(draft);
+    }
+  } catch (error: any) {
+    showSnackbar(
+      error?.message || t("folderAssetScreen.snackbar.saveFailed"),
+      "error"
+    );
+  } finally {
+    assetSubmitLockRef.current = false;
+    setPendingAssetSaveCount((count) => Math.max(0, count - 1));
+  }
+};
   const openEditAsset = (asset: AssetItem) => {
     setEditingAsset(asset);
     setAssetModalVisible(true);
@@ -1064,26 +1067,49 @@ const getValidAssetImages = (asset: AssetItem) => {
 
   return (
     <SafeAreaView style={styles.flex} edges={["left", "right", "bottom"]}>
+      <TouchableWithoutFeedback
+  onPress={() => {
+    setShowFullProjectName(false);
+    Keyboard.dismiss();
+  }}
+>
       <View style={styles.container}>
         {/* ── Header ── */}
         <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.title}>{projectName}</Text>
-            <Text style={styles.subtitle}>
-              {t("folderAssetScreen.header.subtitle")}
-            </Text>
-          </View>
-          <TouchableOpacity
-            style={styles.dashboardBtn}
-            onPress={() => router.push("/(app)/project")}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.dashboardBtnText}>
-              {t("folderAssetScreen.header.dashboardBtn")}
-            </Text>
-          </TouchableOpacity>
-        </View>
+  <View style={styles.titleWrap}>
+    <TouchableOpacity
+      activeOpacity={0.8}
+      onPress={(e) => {
+        e.stopPropagation?.();
+        setShowFullProjectName(true);
+      }}
+    >
+      <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">
+        {projectName}
+      </Text>
+    </TouchableOpacity>
 
+    {showFullProjectName && (
+      <View style={styles.fullTitlePopup}>
+        <Text style={styles.fullTitleText}>{projectName}</Text>
+      </View>
+    )}
+
+    <Text style={styles.subtitle}>
+      {t("folderAssetScreen.header.subtitle")}
+    </Text>
+  </View>
+
+  <TouchableOpacity
+    style={styles.dashboardBtn}
+    onPress={() => router.push("/(app)/project")}
+    activeOpacity={0.85}
+  >
+    <Text style={styles.dashboardBtnText}>
+      {t("folderAssetScreen.header.dashboardBtn")}
+    </Text>
+  </TouchableOpacity>
+</View>
         {/* ── Offline badge ── */}
         {downloadedOffline && !isOnline && (
           <Text style={styles.offlineModeText}>
@@ -1178,37 +1204,54 @@ const getValidAssetImages = (asset: AssetItem) => {
         </View>
 
         {/* ── Advanced search row ── */}
-        <View style={styles.advancedSearchRow}>
-          <TextInput
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder={
-              selectedRawDataFilters.length > 0
-                ? t("folderAssetScreen.search.placeholderWithKey", {
-                     key: selectedRawDataFilters
-                     .map((filter) => `${filter.key}: ${filter.value}`)
-                      .join(", "),
-                  })
-                : t("folderAssetScreen.search.placeholderAll")
-            }
-            placeholderTextColor="#767B91"
-            style={styles.advancedSearchInput}
-          />
-          <TouchableOpacity
-            style={styles.rawKeyPicker}
-            onPress={() => setRawKeyModalVisible(true)}
-          >
-            <Text style={styles.rawKeyPickerText} numberOfLines={1}>
-              {selectedRawDataFilters.length > 0
-                  ? `${selectedRawDataFilters.length} selected`
-                  : t("folderAssetScreen.search.fieldPickerLabel")}
-            </Text>
-            <Ionicons name="chevron-down" size={14} color="#2A324B" />
-          </TouchableOpacity>
-        </View>
+   <View style={styles.advancedSearchRow}>
+  <View style={styles.searchInputWrap}>
+    <TextInput
+      value={searchQuery}
+      onChangeText={setSearchQuery}
+      placeholder={
+        selectedRawDataFilters.length > 0
+          ? t("folderAssetScreen.search.placeholderWithKey", {
+              key: selectedRawDataFilters
+                .map((filter) => `${filter.key}: ${filter.value}`)
+                .join(", "),
+            })
+          : t("folderAssetScreen.search.placeholderAll")
+      }
+      placeholderTextColor="#767B91"
+      style={styles.advancedSearchInput}
+    />
+
+    {!!searchQuery.trim() && (
+      <TouchableOpacity
+        style={styles.searchClearBtn}
+        onPress={() => {
+          setSearchQuery("");
+          setDebouncedSearchQuery("");
+          setAdvancedSearchResults([]);
+        }}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="close-circle" size={18} color={MUTED} />
+      </TouchableOpacity>
+    )}
+  </View>
+
+  <TouchableOpacity
+    style={styles.rawKeyPicker}
+    onPress={() => setRawKeyModalVisible(true)}
+  >
+    <Text style={styles.rawKeyPickerText} numberOfLines={1}>
+      {selectedRawDataFilters.length > 0
+        ? `${selectedRawDataFilters.length} selected`
+        : t("folderAssetScreen.search.fieldPickerLabel")}
+    </Text>
+    <Ionicons name="chevron-down" size={14} color="#2A324B" />
+  </TouchableOpacity>
+</View>
 
         {/* ── Content ── */}
-        {loading || contentLoading ? (
+        {loading && folders.length === 0 && assets.length === 0 ? (
           <View
             style={[
               styles.listContent,
@@ -1807,6 +1850,7 @@ const getValidAssetImages = (asset: AssetItem) => {
           </View>
         )}
       </View>
+      </TouchableWithoutFeedback>
     </SafeAreaView>
   );
 }
@@ -1880,29 +1924,73 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
-  title: {
-    fontSize: 15,
-    fontWeight: "400",
-    color: TEXT,
-    marginTop: 4,
-    textTransform: "uppercase",
-  },
+
   subtitle: { color: MUTED, marginTop: 0, marginBottom: 4, fontSize: 10 },
 
-  headerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  dashboardBtn: {
-    backgroundColor: ACC,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: ACC,
-  },
+ headerRow: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: 4,
+  position: "relative",
+  zIndex: 50,
+},
+
+titleWrap: {
+  flex: 1,
+  marginRight: 10,
+  position: "relative",
+  zIndex: 60,
+},
+title: {
+  fontSize: 15,
+  fontWeight: "400",
+  color: TEXT,
+  marginTop: 4,
+  textTransform: "uppercase",
+  maxWidth: "100%",
+},
+
+fullTitlePopup: {
+  position: "absolute",
+  top: 24,
+  left: 0,
+  right: -120,
+  backgroundColor: "#ffffff",
+  borderWidth: 1,
+  borderColor: BORDER,
+  borderRadius: 12,
+  paddingHorizontal: 12,
+  paddingVertical: 10,
+  zIndex: 999,
+  elevation: 12,
+},
+
+fullTitleText: {
+  color: TEXT,
+  fontSize: 13,
+  fontWeight: "700",
+  lineHeight: 18,
+},
+
+dashboardBtn: {
+  backgroundColor: ACC,
+  borderRadius: 999,
+  paddingHorizontal: 14,
+  paddingVertical: 8,
+  borderWidth: 1,
+  borderColor: ACC,
+  flexShrink: 0,
+  zIndex: 40,
+},
+
+searchInputWrap: {
+  flex: 1,
+  position: "relative",
+},
+
+
+
   dashboardBtnText: { color: "#ffffff", fontSize: 12, fontWeight: "700" },
 
   offlineModeBadge: {
@@ -2224,17 +2312,26 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 12,
   },
+  searchClearBtn: {
+  position: "absolute",
+  right: 10,
+  top: 0,
+  bottom: 0,
+  justifyContent: "center",
+  alignItems: "center",
+},
   advancedSearchInput: {
-    flex: 1,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: SURFACE,
-    borderWidth: 1,
-    borderColor: BORDER,
-    color: TEXT,
-    paddingHorizontal: 14,
-    fontSize: 14,
-  },
+  height: 44,
+  borderRadius: 14,
+  backgroundColor: SURFACE,
+  borderWidth: 1,
+  borderColor: BORDER,
+  color: TEXT,
+  paddingLeft: 14,
+  paddingRight: 38,
+  fontSize: 14,
+},
+
   rawKeyPicker: {
     height: 44,
     minWidth: 96,

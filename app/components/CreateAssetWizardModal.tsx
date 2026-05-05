@@ -26,6 +26,8 @@ import AssetCameraModal from "./AssetCameraModal";
 import { AssetDraft, AssetMediaInput } from "./utils/types";
 import { AudioModule, RecordingPresets, useAudioRecorder } from "expo-audio";
 
+const [submitting, setSubmitting] = useState(false);
+
 type AssetCondition = "" | "New" | "Used" | "Damaged" | "Good";
 type AssetType = "Other" | "Vehicle";
 type CameraMode = "photos" | "scan";
@@ -126,6 +128,7 @@ const showSnackbar = (
       setDraft(getInitialDraft(initialData));
       setIsRecording(false);
       setCameraMode("photos");
+      setSubmitting(false);
     } else {
       stopVoicePlayback();
     }
@@ -361,55 +364,52 @@ const showSnackbar = (
   };
 
   const handleFinish = async () => {
-    if (!draft.name?.trim()) {
-      Alert.alert(t("common.validation"), t("asset.assetNameRequired"));
-      return;
-    }
+  if (submitting) return;
 
-    if (isRecording) {
-      Alert.alert(
-        t("asset.recordingInProgress"),
-        t("asset.stopRecordingBeforeSaving"),
-        [
-          {
-            text: t("asset.stopRecordingAndSave"),
-            onPress: async () => {
-              try {
-                await stopRecording();
-                handleFinish();
-              } catch {
-                Alert.alert(t("common.error"), t("asset.couldNotStopRecording"));
-              }
-            },
+  if (!draft.name?.trim()) {
+    Alert.alert(t("common.validation"), t("asset.assetNameRequired"));
+    return;
+  }
+
+  if (isRecording) {
+    Alert.alert(
+      t("asset.recordingInProgress"),
+      t("asset.stopRecordingBeforeSaving"),
+      [
+        {
+          text: t("asset.stopRecordingAndSave"),
+          onPress: async () => {
+            try {
+              await stopRecording();
+              handleFinish();
+            } catch {
+              Alert.alert(t("common.error"), t("asset.couldNotStopRecording"));
+            }
           },
-          {
-            text: t("common.cancel"),
-            style: "cancel",
-          },
-        ]
-      );
+        },
+        {
+          text: t("common.cancel"),
+          style: "cancel",
+        },
+      ]
+    );
 
-      return;
-    }
+    return;
+  }
 
-    let submitPromise: Promise<void>;
+  setSubmitting(true);
 
-    try {
-      submitPromise = Promise.resolve(onSubmit(draft));
-    } catch (error: any) {
-      Alert.alert(
-        t("common.error"),
-        error?.message || t("asset.failedToSaveAsset")
-      );
-      return;
-    }
-
-    handleClose();
-
-    submitPromise.catch((error) => {
-      showSnackbar(error?.message || t("asset.failedToSaveAsset"), "error");
-    });
-  };
+  try {
+    await onSubmit(draft);
+    await handleClose();
+  } catch (error: any) {
+    setSubmitting(false);
+    Alert.alert(
+      t("common.error"),
+      error?.message || t("asset.failedToSaveAsset")
+    );
+  }
+};
 
   return (
     <>
@@ -1037,13 +1037,18 @@ const showSnackbar = (
       </TouchableOpacity>
     ) : (
       <TouchableOpacity
-        style={[styles.primaryBtn, styles.nextBtn]}
-        onPress={handleFinish}
-      >
-        <Text style={styles.primaryText}>
-          {mode === "edit" ? t("asset.saveChanges") : t("asset.finish")}
-        </Text>
-      </TouchableOpacity>
+  style={[styles.primaryBtn, styles.nextBtn, submitting && { opacity: 0.6 }]}
+  onPress={handleFinish}
+  disabled={submitting}
+>
+  <Text style={styles.primaryText}>
+    {submitting
+      ? t("asset.saving") || "Saving..."
+      : mode === "edit"
+      ? t("asset.saveChanges")
+      : t("asset.finish")}
+  </Text>
+</TouchableOpacity>
     )}
   </View>
 </View>
