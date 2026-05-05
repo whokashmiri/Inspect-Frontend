@@ -1,10 +1,14 @@
 // offline/index.ts or offline/safeApiCall.ts
 
 import NetInfo from "@react-native-community/netinfo";
-import { savePending, initStorage } from "./storage";
+import { savePending, initStorage, getPendingAssetItemId } from "./storage";
 import { PendingItem, OfflineResult, OfflineAction } from "./types";
 import { getCachedUser, isOfflineSessionValid } from "./authStorage";
 import { persistOfflineMediaPayload } from "./mediaStorage";
+
+import * as Crypto from "expo-crypto";
+
+
 
 function extractLocalMediaUris(payload: any, type: OfflineAction): string[] {
   if ((type !== "createAsset" && type !== "updateAsset") || !payload) return [];
@@ -60,12 +64,19 @@ export async function safeApiCall<T>(
     );
   }
 
-
+  // For updateAsset, check if there's already a pending item for this asset
+  // to avoid incrementing sync count for multiple edits of the same asset
+  let localId = Crypto.randomUUID();
   
-
-  const localId = `offline_${Date.now()}_${Math.random()
-    .toString(36)
-    .slice(2, 11)}`;
+  if (options.type === "updateAsset" && fallbackPayload?.assetId) {
+    const existingPendingId = await getPendingAssetItemId(
+      fallbackPayload.assetId,
+      options.projectId
+    );
+    if (existingPendingId) {
+      localId = existingPendingId;
+    }
+  }
 
   const payloadToSave = shouldPersistMedia(options.type)
     ? await persistOfflineMediaPayload(fallbackPayload)

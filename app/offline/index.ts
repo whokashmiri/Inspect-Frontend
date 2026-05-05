@@ -20,6 +20,7 @@ export {
   getPendingCount,
   getPendingByProjectId,
   getPendingCountByProjectId,
+  getPendingAssetItemId,
   saveProjectOffline,
   saveFoldersOffline,
   saveAssetsOffline,

@@ -522,6 +522,39 @@ export async function updatePayload(id: string, payload: Record<string, any>): P
   ]);
 }
 
+/**
+ * Find pending item for asset update - checks for existing updateAsset or createAsset
+ * with same assetId to prevent duplicate sync counts for multiple edits
+ */
+export async function getPendingAssetItemId(
+  assetId: string,
+  projectId?: string
+): Promise<string | null> {
+  await initStorage();
+
+  const rows = await db.getAllAsync<{ id: string; payload: string }>(
+    `SELECT id, payload FROM pending_queue 
+     WHERE status = 'pending' AND (type = 'updateAsset' OR type = 'createAsset')
+     ${projectId ? 'AND projectId = ?' : ''}
+     ORDER BY createdAt DESC;`,
+    projectId ? [projectId] : []
+  );
+
+  for (const row of rows) {
+    try {
+      const payload = JSON.parse(row.payload);
+      // Check if this is an update to the same asset
+      if (payload?.assetId === assetId) {
+        return row.id;
+      }
+    } catch {
+      // ignore malformed rows
+    }
+  }
+
+  return null;
+}
+
 /* -------------------- Offline downloaded project cache -------------------- */
 
 export async function saveProjectOffline(project: any) {

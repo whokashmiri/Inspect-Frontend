@@ -26,7 +26,7 @@ import AssetCameraModal from "./AssetCameraModal";
 import { AssetDraft, AssetMediaInput } from "./utils/types";
 import { AudioModule, RecordingPresets, useAudioRecorder } from "expo-audio";
 
-const [submitting, setSubmitting] = useState(false);
+
 
 type AssetCondition = "" | "New" | "Used" | "Damaged" | "Good";
 type AssetType = "Other" | "Vehicle";
@@ -77,6 +77,8 @@ export default function CreateAssetWizardModal({
 const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
   const [notesModalVisible, setNotesModalVisible] = useState(false);
 
+  const [submitting, setSubmitting] = useState(false);
+
 
   const [snackbar, setSnackbar] = useState<{
   message: string;
@@ -84,6 +86,11 @@ const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
 } | null>(null);
 
 const snackbarTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+ const soundObjectRef = useRef<any>(null);
+  const [playingIndex, setPlayingIndex] = useState<number | null>(null);
+
+  const scrollRef = useRef<ScrollView>(null);
+  const fieldPositions = useRef<Record<string, number>>({});
 
 const showSnackbar = (
   message: string,
@@ -104,11 +111,7 @@ const showSnackbar = (
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
 
-  const soundObjectRef = useRef<any>(null);
-  const [playingIndex, setPlayingIndex] = useState<number | null>(null);
-
-  const scrollRef = useRef<ScrollView>(null);
-  const fieldPositions = useRef<Record<string, number>>({});
+ 
 
   const [draft, setDraft] = useState<AssetDraft>(
     getInitialDraft(initialData)
@@ -424,7 +427,8 @@ const showSnackbar = (
             <KeyboardAvoidingView
               style={styles.keyboardWrap}
               behavior={Platform.OS === "ios" ? "padding" : "height"}
-              keyboardVerticalOffset={Platform.OS === "ios" ? 24 : 20}
+              keyboardVerticalOffset={0}
+              enabled={false}
             >
               <TouchableWithoutFeedback>
                 <View
@@ -459,10 +463,8 @@ const showSnackbar = (
                     contentContainerStyle={styles.scrollContent}
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
-                    keyboardDismissMode={
-                      Platform.OS === "ios" ? "interactive" : "on-drag"
-                    }
-                    automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+                    keyboardDismissMode="on-drag"
+                    nestedScrollEnabled={true}
                   >
                     {step === 1 && (
                       <>

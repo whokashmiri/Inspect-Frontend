@@ -6,6 +6,7 @@ export type OfflineAction =
 
 export interface PendingItem {
   id: string;
+  
   type: OfflineAction;
   payload: Record<string, any>;
   projectId?: string;
