@@ -109,7 +109,9 @@
     "actions": {
       "newFolder": "مجلد جديد",
       "newAsset": "أصل جديد",
-      "back": "رجوع"
+      "back": "رجوع",
+      "clear": "مسح"
+
     },
     "folderModal": {
       "title": "إنشاء مجلد جديد",

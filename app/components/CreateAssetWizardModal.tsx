@@ -75,6 +75,26 @@ export default function CreateAssetWizardModal({
 const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
   const [notesModalVisible, setNotesModalVisible] = useState(false);
 
+
+  const [snackbar, setSnackbar] = useState<{
+  message: string;
+  type: "success" | "error" | "info";
+} | null>(null);
+
+const snackbarTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+const showSnackbar = (
+  message: string,
+  type: "success" | "error" | "info" = "info"
+) => {
+  if (snackbarTimeout.current) {
+    clearTimeout(snackbarTimeout.current);
+  }
+
+  setSnackbar({ message, type });
+  snackbarTimeout.current = setTimeout(() => setSnackbar(null), 3000);
+};
+
   const { width } = useWindowDimensions();
 
   const isSmallScreen = width < 380;
@@ -91,6 +111,14 @@ const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
   const [draft, setDraft] = useState<AssetDraft>(
     getInitialDraft(initialData)
   );
+
+  useEffect(() => {
+  return () => {
+    if (snackbarTimeout.current) {
+      clearTimeout(snackbarTimeout.current);
+    }
+  };
+}, []);
 
   useEffect(() => {
     if (visible) {
@@ -129,7 +157,7 @@ const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
 
   const next = () => {
     if (step === 1 && !draft.name?.trim()) {
-      Alert.alert(t("common.validation"), t("asset.assetNameRequired"));
+     showSnackbar(t("asset.assetNameRequired"), "error");
       scrollToField("name");
       return;
     }
@@ -173,10 +201,8 @@ const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
         await ImagePicker.requestMediaLibraryPermissionsAsync();
 
       if (!permission.granted) {
-        Alert.alert(
-          t("asset.permissionRequired"),
-          t("asset.photoPermissionMessage")
-        );
+        showSnackbar(t("asset.photoPermissionMessage"), "error");
+
         return;
       }
 
@@ -200,7 +226,7 @@ const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
         images: [...prev.images, ...mapped],
       }));
     } catch {
-      Alert.alert(t("common.error"), t("asset.unablePickImages"));
+     showSnackbar(t("asset.unablePickImages"), "error");
     }
   };
 
@@ -209,10 +235,7 @@ const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
       const status = await AudioModule.requestRecordingPermissionsAsync();
 
       if (!status.granted) {
-        Alert.alert(
-          t("asset.permissionRequired"),
-          t("asset.microphonePermissionMessage")
-        );
+        showSnackbar(t("asset.microphonePermissionMessage"), "error");
         return;
       }
 
@@ -220,8 +243,7 @@ const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
       recorder.record();
       setIsRecording(true);
     } catch (error) {
-      console.error("Start recording failed:", error);
-      Alert.alert(t("common.error"), t("asset.couldNotStartRecording"));
+     showSnackbar(t("asset.couldNotStartRecording"), "error");
     }
   };
 
@@ -246,8 +268,7 @@ const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
         }));
       }
     } catch (error) {
-      console.error("Stop recording failed:", error);
-      Alert.alert(t("common.error"), t("asset.couldNotStopRecording"));
+      showSnackbar(t("asset.couldNotStopRecording"), "error");
     }
   };
 
@@ -289,8 +310,7 @@ const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
         }
       });
     } catch (error) {
-      console.error("Error playing voice note:", error);
-      Alert.alert(t("common.error"), t("asset.couldNotPlayVoiceNote"));
+      showSnackbar(t("asset.couldNotPlayVoiceNote"), "error");
     }
   };
 
@@ -387,10 +407,7 @@ const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
     handleClose();
 
     submitPromise.catch((error) => {
-      Alert.alert(
-        t("common.error"),
-        error?.message || t("asset.failedToSaveAsset")
-      );
+      showSnackbar(error?.message || t("asset.failedToSaveAsset"), "error");
     });
   };
 
@@ -1086,6 +1103,22 @@ const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
   setNotesModalVisible(false);
 }}
       />
+
+
+      {snackbar && (
+  <View
+    style={[
+      styles.snackbar,
+      snackbar.type === "error"
+        ? styles.snackbarError
+        : snackbar.type === "success"
+        ? styles.snackbarSuccess
+        : styles.snackbarInfo,
+    ]}
+  >
+    <Text style={styles.snackbarText}>{snackbar.message}</Text>
+  </View>
+)}
     </>
   );
 }
@@ -1203,6 +1236,37 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+
+  snackbar: {
+  position: "absolute",
+  left: 20,
+  right: 20,
+  bottom: 40,
+  paddingVertical: 12,
+  paddingHorizontal: 16,
+  borderRadius: 14,
+  zIndex: 9999,
+  elevation: 10,
+},
+
+snackbarText: {
+  color: "#ffffff",
+  fontSize: 13,
+  fontWeight: "600",
+  textAlign: "center",
+},
+
+snackbarSuccess: {
+  backgroundColor: ACC,
+},
+
+snackbarError: {
+  backgroundColor: "#FF6B6B",
+},
+
+snackbarInfo: {
+  backgroundColor: MUTED,
+},
 
   scrollContent: {
     paddingBottom: 24,
