@@ -149,8 +149,24 @@ const [rawDataKeyValues, setRawDataKeyValues] = useState<string[]>([]);
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const SEARCH_PAGE_SIZE = 15;
 
- const handleBackPress = async () => {
+const handleBackPress = async () => {
   if (navigatingFolderId) return;
+
+  const isSearching =
+    searchQuery.trim().length > 0 || selectedRawDataFilters.length > 0;
+
+  if (isSearching) {
+    setSearchQuery("");
+    setDebouncedSearchQuery("");
+    setSelectedRawDataFilters([]);
+    setAdvancedSearchResults([]);
+    setAdvancedSearchPage(1);
+    setAdvancedSearchHasMore(true);
+    setActiveRawDataKey(null);
+    setRawDataKeyValues([]);
+    setRawKeyModalVisible(false);
+    return;
+  }
 
   if (
     adminRootFolderIdRef.current &&
@@ -1467,8 +1483,10 @@ const getValidAssetImages = (asset: AssetItem) => {
           ]}
         >
           <Text style={styles.backText}>
-            {t("folderAssetScreen.actions.back")}
-          </Text>
+  {isAdvancedSearching
+    ? t("folderAssetScreen.actions.clear") || "Clear"
+    : t("folderAssetScreen.actions.back")}
+</Text>
         </TouchableOpacity>
 
         {/* ── Bottom action bar (inside folder only) ── */}
