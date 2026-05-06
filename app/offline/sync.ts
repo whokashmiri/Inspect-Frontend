@@ -1,3 +1,6 @@
+
+
+//sync.ts
 import { Alert } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
 import { projectApi, projectContentApi, authApi, tokenStore } from "../../api/api";

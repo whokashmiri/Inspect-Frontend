@@ -1,7 +1,7 @@
-// offline/index.ts or offline/safeApiCall.ts
+// offline/wrapper.ts
 
 import NetInfo from "@react-native-community/netinfo";
-import { savePending, initStorage, getPendingAssetItemId } from "./storage";
+import { savePending, initStorage, getPendingAssetItemId , getPendingAssetItem } from "./storage";
 import { PendingItem, OfflineResult, OfflineAction } from "./types";
 import { getCachedUser, isOfflineSessionValid } from "./authStorage";
 import { persistOfflineMediaPayload } from "./mediaStorage";
@@ -66,32 +66,60 @@ export async function safeApiCall<T>(
 
   // For updateAsset, check if there's already a pending item for this asset
   // to avoid incrementing sync count for multiple edits of the same asset
-  let localId = Crypto.randomUUID();
-  
-  if (options.type === "updateAsset" && fallbackPayload?.assetId) {
-    const existingPendingId = await getPendingAssetItemId(
-      fallbackPayload.assetId,
-      options.projectId
-    );
-    if (existingPendingId) {
-      localId = existingPendingId;
-    }
+let localId = Crypto.randomUUID();
+let pendingType = options.type;
+
+const assetId = String(fallbackPayload?.assetId || "");
+
+const isLocalAssetId =
+  assetId.startsWith("offline_") || assetId.includes("-");
+
+if (options.type === "updateAsset" && assetId) {
+   const existingPending = await getPendingAssetItem(assetId, options.projectId);
+
+  if (existingPending) {
+    localId = existingPending.id;
   }
 
-  const payloadToSave = shouldPersistMedia(options.type)
-    ? await persistOfflineMediaPayload(fallbackPayload)
-    : fallbackPayload;
+  if (isLocalAssetId) {
+    pendingType = "createAsset";
 
-  const pending: Omit<PendingItem, "status" | "retryCount" | "lastAttempt"> = {
-    id: localId,
-    type: options.type,
-    payload: payloadToSave,
-    projectId: options.projectId,
-    localMediaUris:
-      options.localMediaUris ??
-      extractLocalMediaUris(payloadToSave, options.type),
-    createdAt: Date.now(),
-  };
+    fallbackPayload = {
+       ...(existingPending?.payload || {}),
+      ...fallbackPayload,
+      offlineId: assetId,
+
+
+       parent:
+        fallbackPayload.parent ??
+        existingPending?.payload?.parent ??
+        existingPending?.payload?.folderId ??
+        null,
+
+      folderId:
+        fallbackPayload.folderId ??
+        existingPending?.payload?.folderId ??
+        existingPending?.payload?.parent ??
+        null,
+    };
+
+    delete fallbackPayload.assetId;
+  }
+}
+const payloadToSave = shouldPersistMedia(pendingType)
+  ? await persistOfflineMediaPayload(fallbackPayload)
+  : fallbackPayload;
+
+const pending: Omit<PendingItem, "status" | "retryCount" | "lastAttempt"> = {
+  id: localId,
+  type: pendingType,
+  payload: payloadToSave,
+  projectId: options.projectId,
+  localMediaUris:
+    options.localMediaUris ??
+    extractLocalMediaUris(payloadToSave, pendingType),
+  createdAt: Date.now(),
+};
 
   await savePending(pending);
 

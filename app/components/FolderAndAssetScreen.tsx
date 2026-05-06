@@ -9,6 +9,7 @@ import { mapAssetToDraft } from "./utils/assetMapper";
 import CodeScannerModal from "../components/CodeScannerModal";
 import { normalizeCode } from "../components/utils/codeScannerUtils";
 import { useTranslation } from "react-i18next"; // ← i18n
+import { useAuth } from "../../api/AuthContext";
 
 import {
 Alert,
@@ -77,7 +78,9 @@ const ITEM_SIZE =
   NUM_COLUMNS;
 
 export default function FolderAndAssetScreen({ route }: Props) {
-  const { t } = useTranslation(); // ← i18n hook
+  const { t } = useTranslation(); 
+
+  const { user } = useAuth();
 
   const [rawDataKeys, setRawDataKeys] = useState<string[]>([]);
   const [selectedRawDataFilters, setSelectedRawDataFilters] = useState<
@@ -1097,6 +1100,12 @@ const openAssetImageViewer = (asset: AssetItem) => {
   closeAssetMenu();
 };
 
+const canEditAssetName = !editingAsset
+  ? true
+  : editingAsset.id?.startsWith("offline_")
+  ? true
+  : editingAsset.createdBy?.id === user?.id;
+
 const handleDeleteAsset = async (asset: AssetItem) => {
   closeAssetMenu();
 
@@ -1981,7 +1990,7 @@ const handleDeleteAsset = async (asset: AssetItem) => {
 
         {/* ── Asset wizard modal ── */}
         <CreateAssetWizardModal
-          disableAssetName={!!editingAsset}
+          disableAssetName={!!editingAsset && !canEditAssetName}
           visible={assetModalVisible}
           onClose={closeAssetModal}
           onSubmit={(draft) => submitAssetInBackground(draft, !!editingAsset)}

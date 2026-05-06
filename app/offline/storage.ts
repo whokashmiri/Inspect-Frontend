@@ -532,10 +532,10 @@ export async function getPendingAssetItemId(
 ): Promise<string | null> {
   await initStorage();
 
-  const rows = await db.getAllAsync<{ id: string; payload: string }>(
-    `SELECT id, payload FROM pending_queue 
+  const rows = await db.getAllAsync<{ id: string; type: string; payload: string }>(
+    `SELECT id, type, payload FROM pending_queue 
      WHERE status = 'pending' AND (type = 'updateAsset' OR type = 'createAsset')
-     ${projectId ? 'AND projectId = ?' : ''}
+     ${projectId ? "AND projectId = ?" : ""}
      ORDER BY createdAt DESC;`,
     projectId ? [projectId] : []
   );
@@ -543,8 +543,13 @@ export async function getPendingAssetItemId(
   for (const row of rows) {
     try {
       const payload = JSON.parse(row.payload);
-      // Check if this is an update to the same asset
-      if (payload?.assetId === assetId) {
+
+      if (
+        row.id === assetId ||
+        payload?.assetId === assetId ||
+        payload?.localId === assetId ||
+        payload?.offlineId === assetId
+      ) {
         return row.id;
       }
     } catch {
@@ -555,6 +560,51 @@ export async function getPendingAssetItemId(
   return null;
 }
 
+
+export async function getPendingAssetItem(
+  assetId: string,
+  projectId?: string
+): Promise<PendingItem | null> {
+  await initStorage();
+
+  const rows = await db.getAllAsync<PendingQueueRow>(
+    `SELECT * FROM pending_queue 
+     WHERE status = 'pending' AND (type = 'updateAsset' OR type = 'createAsset')
+     ${projectId ? "AND projectId = ?" : ""}
+     ORDER BY createdAt DESC;`,
+    projectId ? [projectId] : []
+  );
+
+  for (const row of rows) {
+    try {
+      const payload = JSON.parse(row.payload);
+
+      if (
+        row.id === assetId ||
+        payload?.assetId === assetId ||
+        payload?.localId === assetId ||
+        payload?.offlineId === assetId
+      ) {
+        return {
+          id: row.id,
+          type: row.type,
+          payload,
+          projectId: row.projectId ?? undefined,
+          localMediaUris: row.localMediaUris ? JSON.parse(row.localMediaUris) : [],
+          createdAt: Number(row.createdAt),
+          status: row.status,
+          retryCount: Number(row.retryCount ?? 0),
+          lastAttempt:
+            row.lastAttempt === null || row.lastAttempt === undefined
+              ? null
+              : Number(row.lastAttempt),
+        };
+      }
+    } catch {}
+  }
+
+  return null;
+}
 /* -------------------- Offline downloaded project cache -------------------- */
 
 export async function saveProjectOffline(project: any) {
