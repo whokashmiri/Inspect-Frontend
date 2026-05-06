@@ -562,6 +562,66 @@ const showSnackbar = (
 </TouchableOpacity>
 
 
+<Text style={styles.fieldLabel}>
+  {t("asset.assetIsPresent") || "Asset is present"}
+</Text>
+
+<View style={styles.radioRow}>
+  <TouchableOpacity
+    style={styles.radioOption}
+    onPress={() =>
+      setDraft((prev) => ({
+        ...prev,
+        isPresent: true,
+      }))
+    }
+    activeOpacity={0.8}
+  >
+    <Ionicons
+      name={draft.isPresent ? "radio-button-on" : "radio-button-off"}
+      size={22}
+      color={ACC}
+    />
+    <Text style={styles.radioText}>{t("common.yes") || "Yes"}</Text>
+  </TouchableOpacity>
+
+  <TouchableOpacity
+    style={styles.radioOption}
+    onPress={async () => {
+      const updatedDraft = {
+        ...draft,
+        isPresent: false,
+      };
+
+      setDraft(updatedDraft);
+
+      if (submitting) return;
+
+      setSubmitting(true);
+
+      try {
+        await onSubmit(updatedDraft);
+        await handleClose();
+      } catch (error: any) {
+        setSubmitting(false);
+        Alert.alert(
+          t("common.error"),
+          error?.message || t("asset.failedToSaveAsset")
+        );
+      }
+    }}
+    activeOpacity={0.8}
+  >
+    <Ionicons
+      name={!draft.isPresent ? "radio-button-on" : "radio-button-off"}
+      size={22}
+      color={ACC}
+    />
+    <Text style={styles.radioText}>{t("common.no") || "No"}</Text>
+  </TouchableOpacity>
+</View>
+
+
 
                         <Text style={styles.fieldLabel}>
 
@@ -793,26 +853,6 @@ const showSnackbar = (
                         </Text>
 
 
-                                                <TouchableOpacity
-  style={styles.isPresentRow}
-  onPress={() =>
-    setDraft((prev) => ({
-      ...prev,
-      isPresent: !prev.isPresent,
-    }))
-  }
-  activeOpacity={0.8}
->
-  <Ionicons
-    name={draft.isPresent ? "checkbox" : "square-outline"}
-    size={22}
-    color={ACC}
-  />
-
-  <Text style={styles.isPresentText}>
-    {t("asset.assetIsPresent") || "Asset is present"}
-  </Text>
-</TouchableOpacity>
 
                         {draft.images.length > 0 && (
                           <View style={styles.previewGrid}>
@@ -1303,6 +1343,32 @@ snackbarInfo: {
     alignItems: "center",
     justifyContent: "center",
   },
+
+
+  radioRow: {
+  flexDirection: "row",
+  gap: 10,
+  marginBottom: 12,
+},
+
+radioOption: {
+  flex: 1,
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 8,
+  backgroundColor: SURFACE,
+  borderWidth: 1,
+  borderColor: BORDER,
+  borderRadius: 12,
+  paddingHorizontal: 12,
+  paddingVertical: 10,
+},
+
+radioText: {
+  color: TEXT,
+  fontSize: 14,
+  fontWeight: "600",
+},
 
 notesCheckRow: {
   flexDirection: "row",

@@ -145,7 +145,10 @@
     "validation": "تنبيه",
     "cancel": "إلغاء",
     "confirm": "تأكيد",
-"remove": "إزالة"
+"remove": "إزالة",
+"yes": "نعم",
+"no": "لا"
+
 
   },
   "asset": {
