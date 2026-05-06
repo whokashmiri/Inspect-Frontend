@@ -456,6 +456,11 @@ export interface FolderItem {
   };
 }
 
+export interface DeleteAssetResponse {
+  success: boolean;
+  message: string;
+}
+
 export interface AssetImageItem {
   id: string;
   url: string;
@@ -764,6 +769,11 @@ const localVoiceNotes = getLocalUploadFiles(payload.voiceNotes);
     },
   });
 },
+
+deleteAsset: (assetId: string) =>
+  request<DeleteAssetResponse>(`/projects/assets/${assetId}`, {
+    method: "DELETE",
+  }),
 
 
  advancedGetRawDataKeys: (projectId: string) => {

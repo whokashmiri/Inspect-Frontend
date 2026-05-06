@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+
 import {
   Alert,
   View,
@@ -72,6 +73,8 @@ const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
   const [downloadedProjectIds, setDownloadedProjectIds] = useState<string[]>([]);
   const [projectPendingMap, setProjectPendingMap] = useState<Record<string, number>>({});
   const [downloadingProjectId, setDownloadingProjectId] = useState<string | null>(null);
+// const [autoRefreshingIds, setAutoRefreshingIds] = useState<string[]>([]);
+
   const [removingProjectId, setRemovingProjectId] = useState<string | null>(null);
 
   const [filesModalVisible, setFilesModalVisible] = useState(false);
@@ -80,9 +83,11 @@ const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
   const [inspectorFiles, setInspectorFiles] = useState<InspectorFile[]>([]);
   const [filesLoading, setFilesLoading] = useState(false);
 
-  useEffect(() => {
-    fetchProjects();
-  }, [isOnline, selectedCompanyId]);
+
+
+  const autoRefreshStartedRef = React.useRef(false);
+const autoRefreshRunningRef = React.useRef(false);
+
 
   const refreshPendingProjects = useCallback(async () => {
     const pending = await getPending("pending");
@@ -111,6 +116,60 @@ const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
       }, {})
     );
   }, [selectedCompanyId]);
+
+
+  useEffect(() => {
+    fetchProjects();
+  }, [isOnline, selectedCompanyId]);
+
+
+
+useEffect(() => {
+  const autoRefreshDownloadedProjects = async () => {
+    if (autoRefreshStartedRef.current) return;
+    if (autoRefreshRunningRef.current) return;
+    if (!isOnline) return;
+    if (loading) return;
+    if (projects.length === 0) return;
+    if (downloadedProjectIds.length === 0) return;
+
+    autoRefreshStartedRef.current = true;
+    autoRefreshRunningRef.current = true;
+
+    try {
+      for (const project of projects) {
+        const isDownloaded = downloadedProjectIds.includes(project.id);
+        if (!isDownloaded) continue;
+
+        try {
+          setDownloadingProjectId(project.id);
+
+          await downloadProjectForOffline(project);
+          await refreshDownloadedProjects();
+        } catch (error) {
+          console.warn("Auto refresh failed:", project.id, error);
+        } finally {
+          setDownloadingProjectId(null);
+        }
+      }
+    } finally {
+      autoRefreshRunningRef.current = false;
+    }
+  };
+
+  autoRefreshDownloadedProjects();
+}, [
+  isOnline,
+  loading,
+  projects,
+  downloadedProjectIds,
+  refreshDownloadedProjects,
+]);
+
+useEffect(() => {
+  autoRefreshStartedRef.current = false;
+  autoRefreshRunningRef.current = false;
+}, [selectedCompanyId]);
 
   useEffect(() => {
     refreshPendingProjects();
@@ -506,6 +565,7 @@ async function downloadInspectorFile(file: InspectorFile) {
             {filteredProjects.map((project) => {
               const isOfflineCreated = project.id.startsWith("offline_");
               const isDownloaded = downloadedProjectIds.includes(project.id);
+              
               const isDownloading = downloadingProjectId === project.id;
               const isRemoving = removingProjectId === project.id;
               const pendingForProject = projectPendingMap[project.id] ?? 0;

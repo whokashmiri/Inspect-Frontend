@@ -11,7 +11,7 @@ import { normalizeCode } from "../components/utils/codeScannerUtils";
 import { useTranslation } from "react-i18next"; // ← i18n
 
 import {
-
+Alert,
   FlatList,
   Modal,
   RefreshControl,
@@ -83,6 +83,13 @@ export default function FolderAndAssetScreen({ route }: Props) {
   const [selectedRawDataFilters, setSelectedRawDataFilters] = useState<
   { key: string; value: string }[]
 >([]);
+
+const [assetMenuVisible, setAssetMenuVisible] = useState(false);
+const [selectedAssetForMenu, setSelectedAssetForMenu] = useState<AssetItem | null>(null);
+
+const [imageViewerVisible, setImageViewerVisible] = useState(false);
+const [viewerImages, setViewerImages] = useState<string[]>([]);
+const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
 
 const [showFullProjectName, setShowFullProjectName] = useState(false);
   const [advancedSearchResults, setAdvancedSearchResults] = useState<AssetItem[]>([]);
@@ -1065,6 +1072,62 @@ const getValidAssetImages = (asset: AssetItem) => {
 
   if (!loaded) return null;
 
+const openAssetMenu = (asset: AssetItem) => {
+  setSelectedAssetForMenu(asset);
+  setAssetMenuVisible(true);
+};
+
+const closeAssetMenu = () => {
+  setSelectedAssetForMenu(null);
+  setAssetMenuVisible(false);
+};
+
+const openAssetImageViewer = (asset: AssetItem) => {
+  const images = getValidAssetImages(asset)
+    .map((img: any) => img.url || img.uri)
+    .filter(Boolean);
+
+  if (images.length === 0) {
+    showSnackbar("No images found for this asset", "info");
+    return;
+  }
+
+  setViewerImages(images);
+  setImageViewerVisible(true);
+  closeAssetMenu();
+};
+
+const handleDeleteAsset = async (asset: AssetItem) => {
+  closeAssetMenu();
+
+  Alert.alert(
+    "Delete asset",
+    `Are you sure you want to delete "${asset.name}"?`,
+    [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            setDeletingAssetId(asset.id);
+
+            await projectContentApi.deleteAsset(asset.id);
+
+            showSnackbar("Asset deleted successfully", "success");
+            await loadContents(currentFolderId, { showSkeleton: true });
+          } catch (error: any) {
+            showSnackbar(error?.message || "Could not delete asset", "error");
+          } finally {
+            setDeletingAssetId(null);
+          }
+        },
+      },
+    ]
+  );
+};
+  
+
   return (
     <SafeAreaView style={styles.flex} edges={["left", "right", "bottom"]}>
       <TouchableWithoutFeedback
@@ -1472,6 +1535,21 @@ const getValidAssetImages = (asset: AssetItem) => {
                             />
                           </View>
                         )}
+
+                        <TouchableOpacity
+  style={styles.assetMenuBtn}
+  onPress={(e) => {
+    e.stopPropagation();
+    openAssetMenu(item);
+  }}
+  activeOpacity={0.8}
+>
+  {deletingAssetId === item.id ? (
+    <ActivityIndicator size="small" color="#fff" />
+  ) : (
+    <Ionicons name="ellipsis-vertical" size={16} color="#fff" />
+  )}
+</TouchableOpacity>
                         <View style={styles.syncTickBadge}>
                           <Ionicons
                             name={
@@ -1635,6 +1713,83 @@ const getValidAssetImages = (asset: AssetItem) => {
             </View>
           </TouchableWithoutFeedback>
         </Modal>
+
+        <Modal
+  visible={assetMenuVisible}
+  transparent
+  animationType="fade"
+  onRequestClose={closeAssetMenu}
+>
+  <TouchableWithoutFeedback onPress={closeAssetMenu}>
+    <View style={styles.menuOverlay}>
+      <TouchableWithoutFeedback>
+        <View style={styles.assetMenuCard}>
+          <TouchableOpacity
+            style={styles.assetMenuOption}
+            onPress={() => {
+              if (selectedAssetForMenu) {
+                openAssetImageViewer(selectedAssetForMenu);
+              }
+            }}
+          >
+            <Ionicons name="eye-outline" size={20} color={TEXT} />
+            <Text style={styles.assetMenuOptionText}>View</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.assetMenuOption}
+            onPress={() => {
+              if (selectedAssetForMenu) {
+                handleDeleteAsset(selectedAssetForMenu);
+              }
+            }}
+          >
+            <Ionicons name="trash-outline" size={20} color="#FF4444" />
+            <Text style={[styles.assetMenuOptionText, { color: "#FF4444" }]}>
+              Delete
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableWithoutFeedback>
+    </View>
+  </TouchableWithoutFeedback>
+</Modal>
+
+
+
+<Modal
+  visible={imageViewerVisible}
+  transparent={false}
+  animationType="fade"
+  onRequestClose={() => setImageViewerVisible(false)}
+>
+  <View style={styles.viewerContainer}>
+    <TouchableOpacity
+      style={styles.viewerCloseBtn}
+      onPress={() => setImageViewerVisible(false)}
+    >
+      <Ionicons name="close" size={26} color="#fff" />
+    </TouchableOpacity>
+
+<FlatList
+  data={viewerImages}
+  keyExtractor={(item, index) => `${item}-${index}`}
+  showsVerticalScrollIndicator={false}
+  pagingEnabled
+  snapToAlignment="start"
+  decelerationRate="fast"
+  renderItem={({ item }) => (
+    <View style={styles.viewerImagePage}>
+      <Image
+        source={{ uri: item }}
+        style={styles.viewerImage}
+        resizeMode="cover"
+      />
+    </View>
+  )}
+/>
+  </View>
+</Modal>
 
         {/* ── Raw key picker modal ── */}
         <Modal
@@ -1987,6 +2142,81 @@ dashboardBtn: {
 searchInputWrap: {
   flex: 1,
   position: "relative",
+},
+
+
+assetMenuBtn: {
+  position: "absolute",
+  top: 6,
+  left: 6,
+  width: 26,
+  height: 26,
+  borderRadius: 13,
+  backgroundColor: "rgba(42,50,75,0.75)",
+  alignItems: "center",
+  justifyContent: "center",
+  zIndex: 30,
+},
+
+menuOverlay: {
+  flex: 1,
+  backgroundColor: "rgba(0,0,0,0.25)",
+  justifyContent: "center",
+  alignItems: "center",
+},
+
+assetMenuCard: {
+  width: 190,
+  backgroundColor: "#ffffff",
+  borderRadius: 16,
+  borderWidth: 1,
+  borderColor: BORDER,
+  overflow: "hidden",
+},
+
+assetMenuOption: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 10,
+  paddingVertical: 14,
+  paddingHorizontal: 16,
+  borderBottomWidth: 1,
+  borderBottomColor: BORDER,
+},
+
+assetMenuOptionText: {
+  color: TEXT,
+  fontSize: 15,
+  fontWeight: "700",
+},
+
+viewerContainer: {
+  flex: 1,
+  backgroundColor: "#000",
+},
+
+viewerCloseBtn: {
+  position: "absolute",
+  top: 45,
+  right: 20,
+  width: 42,
+  height: 42,
+  borderRadius: 21,
+  backgroundColor: "rgba(0,0,0,0.55)",
+  alignItems: "center",
+  justifyContent: "center",
+  zIndex: 20,
+},
+
+viewerImagePage: {
+  width: SCREEN_WIDTH,
+  height: Dimensions.get("window").height,
+  backgroundColor: "#000",
+},
+
+viewerImage: {
+  width: "100%",
+  height: "100%",
 },
 
 
