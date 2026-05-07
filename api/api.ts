@@ -244,6 +244,27 @@ export interface ProjectUser {
   role: string | null;
 }
 
+export interface ProjectLocation {
+  region?: string;
+  city?: string;
+  latitude?: number;
+  longitude?: number;
+  mapUrl?: string;
+}
+
+export interface ProjectContact {
+  type: "primary" | "secondary" | "other" | string;
+  phone: string;
+}
+
+export interface ListProjectLocationsResponse {
+  locations: ProjectLocation[];
+}
+
+export interface ListProjectContactsResponse {
+  contacts: ProjectContact[];
+}
+
 export interface UploadedImageInput {
   url: string;
   publicId: string;
@@ -320,6 +341,9 @@ export interface Project {
   reportType?: string;
   reportData?: Record<string, any>;
   inspectorFiles?: InspectorFile[];
+
+   locations?: ProjectLocation[];
+  contacts?: ProjectContact[];
 
 
   
@@ -440,6 +464,21 @@ export const projectApi = {
         method: "GET",
       }
     ),
+    listLocations: (projectId: string) =>
+  request<ListProjectLocationsResponse>(
+    `/projects/${projectId}/locations`,
+    {
+      method: "GET",
+    }
+  ),
+
+listContacts: (projectId: string) =>
+  request<ListProjectContactsResponse>(
+    `/projects/${projectId}/contacts`,
+    {
+      method: "GET",
+    }
+  ),
 };
 
 

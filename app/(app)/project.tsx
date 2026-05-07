@@ -20,7 +20,12 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 
 import { useAuth } from "../../api/AuthContext";
-import { projectApi, Project, ApiError , InspectorFile, } from "../../api/api";
+import { projectApi,
+  Project,
+  ApiError, 
+  InspectorFile, 
+  ProjectContact,
+  ProjectLocation, } from "../../api/api";
 import { PendingItem } from "../offline/types";
 import {
   safeApiCall,
@@ -30,6 +35,7 @@ import {
   isProjectDownloaded,
   clearOfflineProject,
   getPendingCountByProjectId,
+
 } from "../offline";
 import { downloadProjectForOffline } from "../offline/downloader";
 import { useFonts } from "expo-font";
@@ -77,7 +83,18 @@ const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
 
   const [removingProjectId, setRemovingProjectId] = useState<string | null>(null);
 
-  const [filesModalVisible, setFilesModalVisible] = useState(false);
+  
+
+  type ProjectInfoTab = "assets" | "contacts" | "locations";
+
+const [projectInfoModalVisible, setProjectInfoModalVisible] = useState(false);
+const [activeInfoTab, setActiveInfoTab] = useState<ProjectInfoTab | null>(null);
+
+const [projectContacts, setProjectContacts] = useState<ProjectContact[]>([]);
+const [projectLocations, setProjectLocations] = useState<ProjectLocation[]>([]);
+
+const [contactsLoading, setContactsLoading] = useState(false);
+const [locationsLoading, setLocationsLoading] = useState(false);
   const [selectedProjectForFiles, setSelectedProjectForFiles] =
   useState<Project | null>(null);
   const [inspectorFiles, setInspectorFiles] = useState<InspectorFile[]>([]);
@@ -360,21 +377,17 @@ useEffect(() => {
 
   
 
-  async function openInspectorFilesModal(project: Project) {
+async function openProjectInfoModal(project: Project) {
   try {
     setSelectedProjectForFiles(project);
-    setFilesModalVisible(true);
-    setFilesLoading(true);
+    setProjectInfoModalVisible(true);
+    setActiveInfoTab(null);
 
-    const result = await projectApi.listInspectorFiles(project.id);
-    setInspectorFiles(result.files || []);
+    setInspectorFiles([]);
+    setProjectContacts([]);
+    setProjectLocations([]);
   } catch (error: any) {
-    Alert.alert(
-      "Files error",
-      error?.message || "Could not load inspector files"
-    );
-  } finally {
-    setFilesLoading(false);
+    Alert.alert("Error", error?.message || "Could not open project info");
   }
 }
 
@@ -496,6 +509,91 @@ async function downloadInspectorFile(file: InspectorFile) {
   }
 }
 
+
+async function toggleAssetsSection() {
+  if (!selectedProjectForFiles) return;
+
+  if (activeInfoTab === "assets") {
+    setActiveInfoTab(null);
+    return;
+  }
+
+  setActiveInfoTab("assets");
+
+  try {
+    setFilesLoading(true);
+    const result = await projectApi.listInspectorFiles(selectedProjectForFiles.id);
+    setInspectorFiles(result.files || []);
+  } catch (error: any) {
+    Alert.alert("Files error", error?.message || "Could not load inspector files");
+  } finally {
+    setFilesLoading(false);
+  }
+}
+
+async function toggleContactsSection() {
+  if (!selectedProjectForFiles) return;
+
+  if (activeInfoTab === "contacts") {
+    setActiveInfoTab(null);
+    return;
+  }
+
+  setActiveInfoTab("contacts");
+
+  try {
+    setContactsLoading(true);
+    const result = await projectApi.listContacts(selectedProjectForFiles.id);
+    setProjectContacts(result.contacts || []);
+  } catch (error: any) {
+    Alert.alert("Contacts error", error?.message || "Could not load contacts");
+  } finally {
+    setContactsLoading(false);
+  }
+}
+
+async function toggleLocationsSection() {
+  if (!selectedProjectForFiles) return;
+
+  if (activeInfoTab === "locations") {
+    setActiveInfoTab(null);
+    return;
+  }
+
+  setActiveInfoTab("locations");
+
+  try {
+    setLocationsLoading(true);
+    const result = await projectApi.listLocations(selectedProjectForFiles.id);
+    setProjectLocations(result.locations || []);
+  } catch (error: any) {
+    Alert.alert("Locations error", error?.message || "Could not load locations");
+  } finally {
+    setLocationsLoading(false);
+  }
+}
+
+async function openPhone(phone: string) {
+  const cleanPhone = phone.trim();
+  if (!cleanPhone) return;
+
+  await Linking.openURL(`tel:${cleanPhone}`);
+}
+
+async function openLocation(location: ProjectLocation) {
+  const url =
+    location.mapUrl ||
+    (location.latitude && location.longitude
+      ? `https://www.google.com/maps/search/?api=1&query=${location.latitude},${location.longitude}`
+      : null);
+
+  if (!url) {
+    Alert.alert("Location unavailable", "No map URL or coordinates found.");
+    return;
+  }
+
+  await Linking.openURL(url);
+}
   return (
     <View style={styles.flex}>
       <ScrollView contentContainerStyle={styles.scroll}>
@@ -636,7 +734,7 @@ async function downloadInspectorFile(file: InspectorFile) {
   style={styles.statBox}
   onPress={(e) => {
     e.stopPropagation();
-    openInspectorFilesModal(project);
+    openProjectInfoModal(project);
   }}
 >
   <Ionicons name="menu-outline" size={22} color={TEXT} />
@@ -755,16 +853,16 @@ async function downloadInspectorFile(file: InspectorFile) {
 
 
 <Modal
-  visible={filesModalVisible}
+  visible={projectInfoModalVisible}
   transparent
   animationType="fade"
-  onRequestClose={() => setFilesModalVisible(false)}
+  onRequestClose={() => setProjectInfoModalVisible(false)}
 >
   <View style={styles.modalOverlay}>
     <View style={styles.filesModalCard}>
       <View style={styles.filesModalHeader}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.modalTitle}>Inspector Files</Text>
+          <Text style={styles.modalTitle}>Project Info</Text>
           <Text style={styles.filesModalSubtitle} numberOfLines={1}>
             {selectedProjectForFiles?.name}
           </Text>
@@ -772,69 +870,179 @@ async function downloadInspectorFile(file: InspectorFile) {
 
         <Pressable
           style={styles.filesCloseBtn}
-          onPress={() => setFilesModalVisible(false)}
+          onPress={() => setProjectInfoModalVisible(false)}
         >
           <Ionicons name="close" size={20} color={TEXT} />
         </Pressable>
       </View>
 
-      {filesLoading ? (
-        <ActivityIndicator color={ACC} style={{ marginTop: 24 }} />
-      ) : inspectorFiles.length === 0 ? (
-        <View style={styles.emptyWrap}>
-          <Text style={styles.emptyText}>No inspector files found</Text>
-        </View>
-      ) : (
-        <ScrollView style={{ maxHeight: 420 }}>
-          {inspectorFiles.map((file) => (
-            <View key={file.id} style={styles.fileRow}>
-              <View style={styles.fileIconBox}>
-                <Ionicons
-                  name={getFileIcon(file.type) as any}
-                  size={22}
-                  color={ACC}
-                />
-              </View>
+      <View style={styles.infoButtonsRow}>
+        <Pressable
+          style={[
+            styles.infoTabBtn,
+            activeInfoTab === "assets" && styles.infoTabBtnActive,
+          ]}
+          onPress={toggleAssetsSection}
+        >
+          <Ionicons name="document-attach-outline" size={17} color={activeInfoTab === "assets" ? "#fff" : TEXT} />
+          <Text style={[styles.infoTabText, activeInfoTab === "assets" && styles.infoTabTextActive]}>
+            Assets
+          </Text>
+        </Pressable>
 
-              <View style={styles.fileInfo}>
-                <Text style={styles.fileName} numberOfLines={2}>
-                  {file.name}
-                </Text>
-                <Text style={styles.fileMeta}>
-                  {file.type.toUpperCase()}
-                  {file.sizeBytes ? ` • ${formatFileSize(file.sizeBytes)}` : ""}
-                </Text>
-              </View>
+        <Pressable
+          style={[
+            styles.infoTabBtn,
+            activeInfoTab === "contacts" && styles.infoTabBtnActive,
+          ]}
+          onPress={toggleContactsSection}
+        >
+          <Ionicons name="call-outline" size={17} color={activeInfoTab === "contacts" ? "#fff" : TEXT} />
+          <Text style={[styles.infoTabText, activeInfoTab === "contacts" && styles.infoTabTextActive]}>
+            Contact
+          </Text>
+        </Pressable>
 
-              <View style={styles.fileActions}>
+        <Pressable
+          style={[
+            styles.infoTabBtn,
+            activeInfoTab === "locations" && styles.infoTabBtnActive,
+          ]}
+          onPress={toggleLocationsSection}
+        >
+          <Ionicons name="location-outline" size={17} color={activeInfoTab === "locations" ? "#fff" : TEXT} />
+          <Text style={[styles.infoTabText, activeInfoTab === "locations" && styles.infoTabTextActive]}>
+            Location
+          </Text>
+        </Pressable>
+      </View>
+
+      <ScrollView style={{ maxHeight: 420 }}>
+        {activeInfoTab === "assets" && (
+          <>
+            {filesLoading ? (
+              <ActivityIndicator color={ACC} style={{ marginTop: 24 }} />
+            ) : inspectorFiles.length === 0 ? (
+              <View style={styles.emptyWrap}>
+                <Text style={styles.emptyText}>No inspector files found</Text>
+              </View>
+            ) : (
+              inspectorFiles.map((file) => (
+                <View key={file.id} style={styles.fileRow}>
+                  <View style={styles.fileIconBox}>
+                    <Ionicons
+                      name={getFileIcon(file.type) as any}
+                      size={22}
+                      color={ACC}
+                    />
+                  </View>
+
+                  <View style={styles.fileInfo}>
+                    <Text style={styles.fileName} numberOfLines={2}>
+                      {file.name}
+                    </Text>
+                    <Text style={styles.fileMeta}>
+                      {file.type.toUpperCase()}
+                      {file.sizeBytes ? ` • ${formatFileSize(file.sizeBytes)}` : ""}
+                    </Text>
+                  </View>
+
+                  <View style={styles.fileActions}>
+                    <Pressable
+                      style={[styles.fileActionBtn, styles.viewBtn]}
+                      onPress={() => viewInspectorFile(file)}
+                      disabled={viewingFileId === file.id || downloadingFileId === file.id}
+                    >
+                      {viewingFileId === file.id ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Ionicons name="eye-outline" size={18} color="#fff" />
+                      )}
+                    </Pressable>
+
+                    <Pressable
+                      style={[styles.fileActionBtn, styles.downloadBtn]}
+                      onPress={() => downloadInspectorFile(file)}
+                      disabled={viewingFileId === file.id || downloadingFileId === file.id}
+                    >
+                      {downloadingFileId === file.id ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Ionicons name="download-outline" size={18} color="#fff" />
+                      )}
+                    </Pressable>
+                  </View>
+                </View>
+              ))
+            )}
+          </>
+        )}
+
+        {activeInfoTab === "contacts" && (
+          <>
+            {contactsLoading ? (
+              <ActivityIndicator color={ACC} style={{ marginTop: 24 }} />
+            ) : projectContacts.length === 0 ? (
+              <View style={styles.emptyWrap}>
+                <Text style={styles.emptyText}>No contacts found</Text>
+              </View>
+            ) : (
+              projectContacts.map((contact, index) => (
                 <Pressable
-                  style={[styles.fileActionBtn, styles.viewBtn]}
-                  onPress={() => viewInspectorFile(file)}
-                  disabled={viewingFileId === file.id || downloadingFileId === file.id}
-                  >
-                {viewingFileId === file.id ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-              <Ionicons name="eye-outline" size={18} color="#fff" />
-                   )}
+                  key={`${contact.phone}-${index}`}
+                  style={styles.infoRow}
+                  onPress={() => openPhone(contact.phone)}
+                >
+                  <Ionicons name="call-outline" size={22} color={ACC} />
+
+                  <View style={styles.infoTextWrap}>
+                    <Text style={styles.fileName}>{contact.phone}</Text>
+                    <Text style={styles.fileMeta}>{contact.type}</Text>
+                  </View>
+
+                  <Ionicons name="open-outline" size={18} color={MUTED} />
                 </Pressable>
+              ))
+            )}
+          </>
+        )}
 
-                <Pressable
-  style={[styles.fileActionBtn, styles.downloadBtn]}
-  onPress={() => downloadInspectorFile(file)}
-  disabled={viewingFileId === file.id || downloadingFileId === file.id}
->
-  {downloadingFileId === file.id ? (
-    <ActivityIndicator size="small" color="#fff" />
-  ) : (
-    <Ionicons name="download-outline" size={18} color="#fff" />
-  )}
-</Pressable>
+        {activeInfoTab === "locations" && (
+          <>
+            {locationsLoading ? (
+              <ActivityIndicator color={ACC} style={{ marginTop: 24 }} />
+            ) : projectLocations.length === 0 ? (
+              <View style={styles.emptyWrap}>
+                <Text style={styles.emptyText}>No locations found</Text>
               </View>
-            </View>
-          ))}
-        </ScrollView>
-      )}
+            ) : (
+              projectLocations.map((location, index) => (
+                <Pressable
+                  key={`${location.latitude}-${location.longitude}-${index}`}
+                  style={styles.infoRow}
+                  onPress={() => openLocation(location)}
+                >
+                  <Ionicons name="location-outline" size={22} color={ACC} />
+
+                  <View style={styles.infoTextWrap}>
+                    <Text style={styles.fileName}>
+                      {location.city || "Location"}
+                    </Text>
+                    <Text style={styles.fileMeta}>
+                      {location.region || ""}
+                      {location.latitude && location.longitude
+                        ? ` • ${location.latitude}, ${location.longitude}`
+                        : ""}
+                    </Text>
+                  </View>
+
+                  <Ionicons name="map-outline" size={18} color={MUTED} />
+                </Pressable>
+              ))
+            )}
+          </>
+        )}
+      </ScrollView>
     </View>
   </View>
 </Modal>
@@ -921,6 +1129,55 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontFamily: fonts.inter.semiBold as unknown as string,
   },
+
+  infoButtonsRow: {
+  flexDirection: "row",
+  gap: 8,
+  marginBottom: 14,
+},
+
+infoTabBtn: {
+  flex: 1,
+  backgroundColor: SURFACE,
+  borderWidth: 1,
+  borderColor: BORDER,
+  borderRadius: 10,
+  paddingVertical: 10,
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 4,
+},
+
+infoTabBtnActive: {
+  backgroundColor: ACC,
+  borderColor: ACC,
+},
+
+infoTabText: {
+  color: TEXT,
+  fontSize: 10,
+  fontFamily: fonts.inter.medium as unknown as string,
+},
+
+infoTabTextActive: {
+  color: "#ffffff",
+},
+
+infoRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  borderWidth: 1,
+  borderColor: BORDER,
+  backgroundColor: SURFACE,
+  borderRadius: 12,
+  padding: 12,
+  marginBottom: 10,
+  gap: 10,
+},
+
+infoTextWrap: {
+  flex: 1,
+},
 
   errorBanner: {
     backgroundColor: "rgba(255, 69, 58, 0.12)",
