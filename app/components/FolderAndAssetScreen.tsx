@@ -207,6 +207,8 @@ const handleBackPress = async () => {
 
    const assetSubmitLockRef = useRef(false);
 
+   const assetWizardInputRef = useRef<TextInput>(null);
+
 
   const openFolderModal = () => {
     setFolderModalVisible(true);
@@ -724,7 +726,7 @@ const handleSyncNow = useCallback(
     try {
       await syncQueue();
       await refreshPendingCount();
-      await loadContents(currentFolderId);
+      // await loadContents(currentFolderId);
     } finally {
       setIsSyncing(false);
     }
@@ -893,11 +895,47 @@ useEffect(() => {
       isDone: draft.isDone ?? false,
       isPresent: draft.isPresent ?? true,
     };
-    const result = await safeApiCall(
-      () => projectContentApi.createAsset(payload),
-      payload,
-      { type: "createAsset", projectId }
-    );
+
+
+   const optimisticAsset = buildLocalAsset(draft);
+optimisticAsset.id = clientMutationId;
+
+setAssets((prev) => [optimisticAsset, ...prev]);
+
+const result = await safeApiCall(
+  () => projectContentApi.createAsset(payload),
+  payload,
+  { type: "createAsset", projectId }
+);
+
+await refreshPendingCount();
+
+if ("offline" in result) {
+  if (downloadedOffline) {
+    optimisticAsset.id = result.localId;
+    await upsertOfflineAsset(optimisticAsset);
+  }
+
+  setAssets((prev) =>
+    prev.map((asset) =>
+      asset.id === clientMutationId
+        ? { ...optimisticAsset, id: result.localId }
+        : asset
+    )
+  );
+
+  showSnackbar(result.message, "info");
+} else {
+  if (downloadedOffline) await upsertOfflineAsset(result.asset);
+
+  setAssets((prev) =>
+    prev.map((asset) =>
+      asset.id === clientMutationId ? result.asset : asset
+    )
+  );
+
+  showSnackbar(t("folderAssetScreen.snackbar.assetCreated"), "success");
+}
     
     await refreshPendingCount();
     if ("offline" in result) {
@@ -1667,9 +1705,16 @@ const handleDeleteAsset = async (asset: AssetItem) => {
             <TouchableOpacity
               style={styles.secondaryBtn}
               onPress={() => {
-                setEditingAsset(null);
-                setAssetModalVisible(true);
-              }}
+  Keyboard.dismiss();
+  setEditingAsset(null);
+  setAssetModalVisible(true);
+
+  requestAnimationFrame(() => {
+    setTimeout(() => {
+      assetWizardInputRef.current?.focus();
+    }, 80);
+  });
+}}
               activeOpacity={0.85}
             >
 
@@ -2020,6 +2065,7 @@ const handleDeleteAsset = async (asset: AssetItem) => {
 
         {/* ── Asset wizard modal ── */}
         <CreateAssetWizardModal
+          firstInputRef={assetWizardInputRef}
           disableAssetName={!!editingAsset && !canEditAssetName}
           visible={assetModalVisible}
           onClose={closeAssetModal}

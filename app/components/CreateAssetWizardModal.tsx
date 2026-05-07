@@ -1,5 +1,5 @@
 // CreateAssetWizardModal.tsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {RefObject, useEffect, useMemo, useRef, useState } from "react";
 import {
   Modal,
   View,
@@ -26,10 +26,6 @@ import AssetCameraModal from "./AssetCameraModal";
 import { AssetDraft, AssetMediaInput } from "./utils/types";
 import { AudioModule, RecordingPresets, useAudioRecorder } from "expo-audio";
 
-
-
-type AssetCondition = "" | "New" | "Used" | "Damaged" | "Good";
-type AssetType = "Other" | "Vehicle";
 type CameraMode = "photos" | "scan";
 
 
@@ -40,6 +36,7 @@ type Props = {
   mode?: "create" | "edit";
   initialData?: Partial<AssetDraft>;
   disableAssetName?: boolean;
+  firstInputRef?: RefObject<TextInput | null>;
 };
 
 const getInitialDraft = (
@@ -68,6 +65,8 @@ export default function CreateAssetWizardModal({
   mode = "create",
   initialData,
   disableAssetName = false,
+  firstInputRef,
+
 }: Props) {
   const { t, i18n } = useTranslation();
   const isRTL = i18n.language === "ar" || i18n.dir?.() === "rtl";
@@ -426,8 +425,8 @@ const showSnackbar = (
           <View style={styles.overlay}>
             <KeyboardAvoidingView
               style={styles.keyboardWrap}
-              behavior={Platform.OS === "ios" ? "padding" : "height"}
-              keyboardVerticalOffset={0}
+               behavior={Platform.OS === "ios" ? "padding" : "position"}
+                keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
               enabled={false}
             >
               <TouchableWithoutFeedback>
@@ -478,6 +477,8 @@ const showSnackbar = (
                           </Text>
 
                           <TextInput
+                           ref={firstInputRef}
+                          autoFocus={visible && mode === "create"}
                             placeholder={t("asset.assetName")}
                             placeholderTextColor="#767B91"
                             value={draft.name}
