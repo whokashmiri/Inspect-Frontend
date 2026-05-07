@@ -105,6 +105,9 @@ const [showFullProjectName, setShowFullProjectName] = useState(false);
   const [activeRawDataKey, setActiveRawDataKey] = useState<string | null>(null);
 const [rawDataKeyValues, setRawDataKeyValues] = useState<string[]>([]);
 
+const [unsyncedAssetIds, setUnsyncedAssetIds] = useState<string[]>([]);
+
+
 
   const getNestedRawDataValue = (rawData: any, key?: string | null) => {
     if (!rawData || !key) return rawData;
@@ -208,6 +211,7 @@ const handleBackPress = async () => {
    const assetSubmitLockRef = useRef(false);
 
    const assetWizardInputRef = useRef<TextInput>(null);
+   const autoSyncLockRef = useRef(false);
 
 
   const openFolderModal = () => {
@@ -305,13 +309,6 @@ const handleBackPress = async () => {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      const count = await getPendingCount();
-      setPendingCount(count);
-    }, 5000);
-    return () => clearInterval(interval);
-  }, []);
 
 useEffect(() => {
   const checkDownloaded = async () => {
@@ -699,12 +696,9 @@ const onRefresh = async () => {
     }
     await loadContents(currentFolderId);
   };
-
 const handleSyncNow = useCallback(
   async (silent = false) => {
-    const offlineState = isOnline === false || isOnline === null;
-
-    if (offlineState) {
+    if (isOnline !== true) {
       if (!silent) {
         showSnackbar(t("folderAssetScreen.sync.offlineMessage"), "info");
       }
@@ -725,22 +719,57 @@ const handleSyncNow = useCallback(
 
     try {
       await syncQueue();
+
       await refreshPendingCount();
+
+      setUnsyncedAssetIds([]);
+
       // await loadContents(currentFolderId);
     } finally {
       setIsSyncing(false);
     }
   },
-  [isOnline, currentFolderId, loadContents, refreshPendingCount, t]
+  [isOnline, currentFolderId, refreshPendingCount, loadContents, t]
 );
 // Auto-sync whenever we come online and there are pending items
 useEffect(() => {
-  if (isOnline !== true) return;
-  if (pendingCount <= 0) return;
-  if (isSyncing) return;
+  const runAutoSync = async () => {
+    if (isOnline !== true) return;
+    if (isSyncing) return;
+    if (autoSyncLockRef.current) return;
 
-  handleSyncNow(true);
+    const latestPendingCount = await getPendingCount();
+    setPendingCount(latestPendingCount);
+
+    if (latestPendingCount <= 0) return;
+
+    autoSyncLockRef.current = true;
+
+    try {
+      await handleSyncNow(true);
+    } finally {
+      autoSyncLockRef.current = false;
+    }
+  };
+
+  runAutoSync();
 }, [isOnline, pendingCount, isSyncing, handleSyncNow]);
+
+
+useEffect(() => {
+  const interval = setInterval(async () => {
+    const count = await getPendingCount();
+    setPendingCount(count);
+
+    if (isOnline === true && count > 0 && !isSyncing) {
+      handleSyncNow(true);
+    }
+  }, 5000);
+
+  return () => clearInterval(interval);
+}, [isOnline, isSyncing, handleSyncNow]);
+
+
   const openFolder = async (folder: FolderItem) => {
     if (navigatingFolderId) return;
     setNavigatingFolderId(folder.id);
@@ -899,6 +928,7 @@ useEffect(() => {
 
    const optimisticAsset = buildLocalAsset(draft);
 optimisticAsset.id = clientMutationId;
+setUnsyncedAssetIds((prev) => [...prev, clientMutationId]);
 
 setAssets((prev) => [optimisticAsset, ...prev]);
 
@@ -942,6 +972,10 @@ if ("offline" in result) {
       if (downloadedOffline) {
         const localAsset = buildLocalAsset(draft);
         localAsset.id = result.localId;
+        setUnsyncedAssetIds((prev) => [
+  ...prev.filter((id) => id !== clientMutationId),
+  result.localId,
+]);
         await upsertOfflineAsset(localAsset);
       }
       showSnackbar(result.message, "info");
@@ -1197,6 +1231,15 @@ const handleDeleteAsset = async (asset: AssetItem) => {
         },
       },
     ]
+  );
+};
+
+
+const isAssetSynced = (asset: AssetItem) => {
+  return (
+    !asset.id?.startsWith("offline_") &&
+    !asset.id?.startsWith("asset_") &&
+    !unsyncedAssetIds.includes(asset.id)
   );
 };
   
@@ -1626,19 +1669,11 @@ const handleDeleteAsset = async (asset: AssetItem) => {
   )}
 </TouchableOpacity>
                         <View style={styles.syncTickBadge}>
-                          <Ionicons
-                            name={
-                              item.id?.startsWith("offline_")
-                                ? "checkmark"
-                                : "checkmark-done"
-                            }
-                            size={12}
-                            color={
-                              item.id?.startsWith("offline_")
-                                ? "#fff"
-                                : "#F7C59F"
-                            }
-                          />
+                         <Ionicons
+  name={isAssetSynced(item) ? "checkmark-done" : "checkmark"}
+  size={12}
+  color={isAssetSynced(item) ? "#F7C59F" : "#9CA3AF"}
+/>
                         </View>
                       </TouchableOpacity>
                     </View>
