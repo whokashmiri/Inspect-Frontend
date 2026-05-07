@@ -10,6 +10,7 @@ import CodeScannerModal from "../components/CodeScannerModal";
 import { normalizeCode } from "../components/utils/codeScannerUtils";
 import { useTranslation } from "react-i18next"; // ← i18n
 import { useAuth } from "../../api/AuthContext";
+import ImageViewer from "react-native-image-zoom-viewer";
 
 import {
 Alert,
@@ -1046,14 +1047,29 @@ const submitAssetInBackground = async (draft: AssetDraft, isEdit: boolean) => {
   }, [folders, filteredAssets, searchQuery]);
 
 
- const getAssetImageUri = (asset: AssetItem) => {
+const getCloudinaryImageUrl = (url: string, width = 800) => {
+  if (!url || !url.includes("/image/upload/")) return url;
+
+  return url.replace(
+    "/image/upload/",
+    `/image/upload/f_auto,q_auto,w_${width},c_limit/`
+  );
+};
+
+const getThumbnailUrl = (url: string) => getCloudinaryImageUrl(url, 200);
+const getViewerUrl = (url: string) => getCloudinaryImageUrl(url, 600);
+
+const getAssetImageUri = (asset: AssetItem) => {
   const image = asset.images?.find((img: any) => {
     const uri = img?.url || img?.uri;
     return typeof uri === "string" && uri.trim().length > 0;
   });
 
-  return image?.url || image?.uri || null;
+  const uri = image?.url || image?.uri || null;
+
+  return uri ? getThumbnailUrl(uri) : null;
 };
+
 
 const getValidAssetImages = (asset: AssetItem) => {
   return (asset.images || []).filter((img: any) => {
@@ -1085,19 +1101,29 @@ const closeAssetMenu = () => {
   setAssetMenuVisible(false);
 };
 
+
+const closeImageViewer = () => {
+  setImageViewerVisible(false);
+  setViewerImages([]);
+};
+
 const openAssetImageViewer = (asset: AssetItem) => {
   const images = getValidAssetImages(asset)
     .map((img: any) => img.url || img.uri)
-    .filter(Boolean);
+    .filter(Boolean)
+    .map((url: string) => getViewerUrl(url));
 
   if (images.length === 0) {
     showSnackbar("No images found for this asset", "info");
     return;
   }
 
-  setViewerImages(images);
-  setImageViewerVisible(true);
   closeAssetMenu();
+
+  setTimeout(() => {
+    setViewerImages(images);
+    setImageViewerVisible(true);
+  }, 100);
 };
 
 const canEditAssetName = !editingAsset
@@ -1322,6 +1348,8 @@ const handleDeleteAsset = async (asset: AssetItem) => {
   </TouchableOpacity>
 </View>
 
+{!imageViewerVisible && (
+  <>
         {/* ── Content ── */}
         {loading && folders.length === 0 && assets.length === 0 ? (
           <View
@@ -1658,6 +1686,9 @@ const handleDeleteAsset = async (asset: AssetItem) => {
           </View>
         )}
 
+ </>
+)}
+
         {/* ── Create folder modal ── */}
         <Modal
           visible={folderModalVisible}
@@ -1770,33 +1801,32 @@ const handleDeleteAsset = async (asset: AssetItem) => {
   visible={imageViewerVisible}
   transparent={false}
   animationType="fade"
-  onRequestClose={() => setImageViewerVisible(false)}
+  onRequestClose={closeImageViewer}
 >
   <View style={styles.viewerContainer}>
+    <ImageViewer
+      imageUrls={viewerImages.map((url) => ({ url }))}
+      backgroundColor="#000"
+      enableImageZoom={true}
+      enableSwipeDown={true}
+      onSwipeDown={closeImageViewer}
+      onCancel={closeImageViewer}
+      saveToLocalByLongPress={false}
+      renderIndicator={(currentIndex, allSize) => (
+        <View style={styles.viewerIndicator}>
+          <Text style={styles.viewerIndicatorText}>
+            {currentIndex} / {allSize}
+          </Text>
+        </View>
+      )}
+    />
+
     <TouchableOpacity
       style={styles.viewerCloseBtn}
-      onPress={() => setImageViewerVisible(false)}
+      onPress={closeImageViewer}
     >
       <Ionicons name="close" size={26} color="#fff" />
     </TouchableOpacity>
-
-<FlatList
-  data={viewerImages}
-  keyExtractor={(item, index) => `${item}-${index}`}
-  showsVerticalScrollIndicator={false}
-  pagingEnabled
-  snapToAlignment="start"
-  decelerationRate="fast"
-  renderItem={({ item }) => (
-    <View style={styles.viewerImagePage}>
-      <Image
-        source={{ uri: item }}
-        style={styles.viewerImage}
-        resizeMode="cover"
-      />
-    </View>
-  )}
-/>
   </View>
 </Modal>
 
@@ -2217,17 +2247,36 @@ viewerCloseBtn: {
   zIndex: 20,
 },
 
+viewerListContent: {
+  paddingTop: 80,
+  paddingBottom: 40,
+},
+
 viewerImagePage: {
   width: SCREEN_WIDTH,
-  height: Dimensions.get("window").height,
+  height: 360,
   backgroundColor: "#000",
+  justifyContent: "center",
+  alignItems: "center",
+  marginBottom: 12,
 },
 
-viewerImage: {
-  width: "100%",
-  height: "100%",
+viewerIndicator: {
+  position: "absolute",
+  top: 50,
+  alignSelf: "center",
+  backgroundColor: "rgba(0,0,0,0.55)",
+  paddingHorizontal: 12,
+  paddingVertical: 6,
+  borderRadius: 12,
+  zIndex: 30,
 },
 
+viewerIndicatorText: {
+  color: "#fff",
+  fontSize: 13,
+  fontWeight: "600",
+},
 
 
   dashboardBtnText: { color: "#ffffff", fontSize: 12, fontWeight: "700" },

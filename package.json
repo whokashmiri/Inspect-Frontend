@@ -39,6 +39,7 @@
     "react-native": "0.83.6",
     "react-native-fast-opencv": "^0.4.8",
     "react-native-gesture-handler": "~2.30.0",
+    "react-native-image-zoom-viewer": "^3.0.1",
     "react-native-localize": "^3.7.0",
     "react-native-reanimated": "^4.2.1",
     "react-native-safe-area-context": "~5.6.2",
