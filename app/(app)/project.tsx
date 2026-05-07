@@ -13,7 +13,8 @@ import {
   Linking
 } from "react-native";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons ,Entypo } from "@expo/vector-icons";
+
 import { useTranslation } from "react-i18next";
 import * as MediaLibrary from "expo-media-library";
 import * as FileSystem from "expo-file-system/legacy";
@@ -737,8 +738,9 @@ async function openLocation(location: ProjectLocation) {
     openProjectInfoModal(project);
   }}
 >
-  <Ionicons name="menu-outline" size={22} color={TEXT} />
-  <Text style={styles.statLabel}>Files</Text>
+  {/* <Ionicons name="dots-three-vertical" size={22} color={TEXT} /> */}
+  <Entypo name="dots-three-vertical" size={24} color={TEXT} />
+  {/* <Text style={styles.statLabel}>Files</Text> */}
 </Pressable>
 
 </View>
