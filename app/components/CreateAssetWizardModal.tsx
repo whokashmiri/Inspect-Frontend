@@ -103,9 +103,18 @@ const showSnackbar = (
   snackbarTimeout.current = setTimeout(() => setSnackbar(null), 3000);
 };
 
-  const { width } = useWindowDimensions();
+ const { width, height } = useWindowDimensions();
 
-  const isSmallScreen = width < 380;
+
+const isSmallScreen = width < 380 || height < 700;
+const isTablet = width >= 768;
+
+const modalWidth = Math.min(width * 0.92, isTablet ? 560 : 420);
+const modalMaxHeight = height * 0.92;
+const modalMinHeight = Math.min(height * 0.7, 560);
+
+const notesModalWidth = Math.min(width * 0.92, isTablet ? 480 : 420);
+const notesModalMaxHeight = height * 0.78;
 
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
@@ -137,11 +146,13 @@ const showSnackbar = (
   }, [visible, initialData]);
 
   const previewSize = useMemo(() => {
-    const horizontalPadding = 40;
-    const gridGapTotal = 4 * 8;
-    const available = width - horizontalPadding - gridGapTotal;
-    return Math.max(48, Math.floor(available / 5));
-  }, [width]);
+  const columns = width < 360 ? 3 : width < 600 ? 4 : 5;
+  const cardPadding = 32;
+  const gaps = (columns - 1) * 8;
+  const available = modalWidth - cardPadding - gaps;
+
+  return Math.max(58, Math.floor(available / columns));
+}, [width, modalWidth]);
 
   const setFieldPosition = (key: string) => (e: LayoutChangeEvent) => {
     fieldPositions.current[key] = e.nativeEvent.layout.y;
@@ -433,7 +444,14 @@ const showSnackbar = (
                 <View
                   style={[
                     styles.modalCard,
-                    isSmallScreen && styles.modalCardSmall,
+                        {
+                        width: modalWidth,
+                        maxHeight: modalMaxHeight,
+                        minHeight: modalMinHeight,
+                        borderRadius: isSmallScreen ? 18 : 24,
+                        padding: isSmallScreen ? 12 : 16,
+                  },
+
                   ]}
                 >
                   <View style={styles.header}>
@@ -1181,6 +1199,14 @@ const NotesModal: React.FC<{
  const { t, i18n } = useTranslation();
 const isRTL = i18n.language === "ar" || i18n.dir?.() === "rtl";
 
+const { width, height } = useWindowDimensions();
+
+const isSmallScreen = width < 380 || height < 700;
+const isTablet = width >= 768;
+
+const notesModalWidth = Math.min(width * 0.92, isTablet ? 480 : 420);
+const notesModalMaxHeight = height * 0.78;
+
 
   useEffect(() => {
     setCurrentNotes(notes);
@@ -1191,7 +1217,17 @@ const isRTL = i18n.language === "ar" || i18n.dir?.() === "rtl";
       <TouchableWithoutFeedback onPress={onCancel}>
         <View style={styles.overlay}>
           <TouchableWithoutFeedback>
-            <View style={[styles.modalCard, styles.modalCardSmall]}>
+            <View
+  style={[
+    styles.modalCardSmall,
+    {
+      width: notesModalWidth,
+      maxHeight: notesModalMaxHeight,
+      borderRadius: isSmallScreen ? 18 : 24,
+      padding: isSmallScreen ? 12 : 16,
+    },
+  ]}
+>
               <View style={styles.header}>
                 <Text style={styles.title}>Notes</Text>
                 <TouchableOpacity onPress={onCancel} style={styles.closeBtn}>
@@ -1257,29 +1293,46 @@ const styles = StyleSheet.create({
   },
 
   modalCard: {
-    width: "100%",
-    maxWidth: 420,
-    maxHeight: "94%",
-    minHeight: "70%",
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 24,
-    padding: 16,
-  },
+  backgroundColor: "#ffffff",
+  borderWidth: 1,
+  borderColor: BORDER,
+  borderRadius: 24,
+  padding: 16,
+  alignSelf: "center",
 
-  modalCardSmall: {
-     width: "100%",
-    maxWidth: 420,
-    maxHeight: "80%",
-    minHeight: "30%",
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 24,
-    padding: 16,
-    alignSelf: "center",
-  },
+  ...Platform.select({
+    ios: {
+      shadowColor: "#000",
+      shadowOpacity: 0.12,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 6 },
+    },
+    android: {
+      elevation: 8,
+    },
+  }),
+},
+
+modalCardSmall: {
+  backgroundColor: "#ffffff",
+  borderWidth: 1,
+  borderColor: BORDER,
+  borderRadius: 24,
+  padding: 16,
+  alignSelf: "center",
+
+  ...Platform.select({
+    ios: {
+      shadowColor: "#000",
+      shadowOpacity: 0.1,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 5 },
+    },
+    android: {
+      elevation: 6,
+    },
+  }),
+},
 
   scrollView: {
     flex: 1,
