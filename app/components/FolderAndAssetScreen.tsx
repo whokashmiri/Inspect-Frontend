@@ -13,6 +13,7 @@ import { useAuth } from "../../api/AuthContext";
 import ImageViewer from "react-native-image-zoom-viewer";
 
 import {
+  useWindowDimensions,
 Alert,
   FlatList,
   Modal,
@@ -87,6 +88,16 @@ export default function FolderAndAssetScreen({ route }: Props) {
   const [selectedRawDataFilters, setSelectedRawDataFilters] = useState<
   { key: string; value: string }[]
 >([]);
+
+
+
+  const { width, height } = useWindowDimensions();
+  const isSmallScreen = width < 380 || height < 700;
+const isTablet = width >= 768;
+
+  const folderModalWidth = Math.min(width * 0.92, isTablet ? 460 : 400);
+const folderModalMaxHeight = height * 0.45;
+  
 
 const [assetMenuVisible, setAssetMenuVisible] = useState(false);
 const [selectedAssetForMenu, setSelectedAssetForMenu] = useState<AssetItem | null>(null);
@@ -1784,28 +1795,45 @@ const isAssetSynced = (asset: AssetItem) => {
             <View style={styles.modalOverlay}>
               <KeyboardAvoidingView
                 style={styles.modalKeyboardWrap}
-                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                behavior={Platform.OS === "ios" ? "padding" : undefined}
                 keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
               >
                 <TouchableWithoutFeedback>
-                  <View style={styles.modalCard}>
+                  <View
+  style={[
+    styles.modalCard,
+    {
+      width: folderModalWidth,
+      maxHeight: folderModalMaxHeight,
+      minHeight: 180,
+      borderRadius: isSmallScreen ? 18 : 24,
+      padding: isSmallScreen ? 14 : 18,
+    },
+  ]}
+>
                     <Text style={styles.modalTitle}>
                       {t("folderAssetScreen.folderModal.title")}
                     </Text>
-                    <TextInput
-                      ref={folderInputRef}
-                      style={styles.input}
-                      placeholder={t(
-                        "folderAssetScreen.folderModal.placeholder"
-                      )}
-                     placeholderTextColor="#767B91"
-                      value={folderName}
-                      onChangeText={setFolderName}
-                      returnKeyType="done"
-                      blurOnSubmit={false}
-                      showSoftInputOnFocus
-                      onSubmitEditing={handleCreateFolder}
-                    />
+<TextInput
+  ref={folderInputRef}
+  style={[
+    styles.input,
+    {
+      fontSize: isSmallScreen ? 14 : 16,
+      minHeight: isSmallScreen ? 46 : 52,
+    },
+  ]}
+  placeholder={t("folderAssetScreen.folderModal.placeholder")}
+  placeholderTextColor="#767B91"
+  value={folderName}
+  onChangeText={setFolderName}
+  returnKeyType="done"
+  blurOnSubmit={false}
+  showSoftInputOnFocus
+  onSubmitEditing={handleCreateFolder}
+/>
+
+
                     <View style={styles.modalActions}>
                       <TouchableOpacity
                         style={styles.modalCancelBtn}
@@ -2531,12 +2559,19 @@ viewerIndicatorText: {
     fontFamily: fonts.inter.semiBold as unknown as string,
   },
 
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(42,50,75,0.55)",
-    justifyContent: "center",
-  },
-  modalKeyboardWrap: { flex: 1, justifyContent: "flex-end" },
+ modalOverlay: {
+  flex: 1,
+  justifyContent: "center",
+  alignItems: "center",
+  paddingHorizontal: 16,
+  paddingVertical: 24,
+  backgroundColor: "rgba(0,0,0,0.45)",
+},
+  modalKeyboardWrap: {
+  width: "100%",
+  alignItems: "center",
+  justifyContent: "center",
+},
   modalCard: {
     backgroundColor: "#ffffff",
     padding: 15,

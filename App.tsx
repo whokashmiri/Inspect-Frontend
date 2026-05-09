@@ -2,11 +2,17 @@ import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect } from 'react';
 import { StyleSheet, Text, View  } from 'react-native';
 import { initOfflineSupport } from './app/offline';
-import i18n from "./app/i18n/i18n";
+import * as ScreenOrientation from "expo-screen-orientation";
+
 
 
 
 export default function App() {
+   useEffect(() => {
+    ScreenOrientation.lockAsync(
+      ScreenOrientation.OrientationLock.PORTRAIT_UP
+    );
+  }, []);
 
  
   useEffect(() => {
