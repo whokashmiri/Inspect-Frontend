@@ -630,27 +630,28 @@ async function openLocation(location: ProjectLocation) {
         </View>
 
         {/* ── Filter row ── */}
-        <View style={styles.filterRow}>
-          {(["recent", "new"] as const).map((item) => (
-            <Pressable
-              key={item}
-              onPress={() => setFilter(item)}
-              style={[
-                styles.filterBtn,
-                filter === item && styles.filterBtnActive,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.filterBtnText,
-                  filter === item && styles.filterBtnTextActive,
-                ]}
-              >
-                {t(`filters.${item}`)}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+       <View style={styles.filterRow}>
+  {(["recent", "new"] as const).map((item) => (
+    <Pressable
+      key={item}
+      onPress={() => setFilter(item)}
+      style={styles.filterTab}
+    >
+      <Text
+        style={[
+          styles.filterTabText,
+          filter === item && styles.filterTabTextActive,
+        ]}
+      >
+        {t(`filters.${item}`)}
+      </Text>
+
+      {filter === item && (
+        <View style={styles.filterActiveLine} />
+      )}
+    </Pressable>
+  ))}
+</View>
 
         {/* ── Content ── */}
         {loading ? (
@@ -1105,32 +1106,46 @@ const styles = StyleSheet.create({
     fontFamily: fonts.inter.semiBold as unknown as string,
   },
 
-  filterRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 5,
-  },
-  filterBtn: {
-    backgroundColor: SURFACE,
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  filterBtnActive: {
-    backgroundColor: ACC,
-    borderColor: ACC,
-  },
-  filterBtnText: {
-    color: MUTED,
-    fontSize: 12,
-  },
-  filterBtnTextActive: {
-    color: "#ffffff",
-    fontFamily: fonts.inter.semiBold as unknown as string,
-  },
+ 
+ filterRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  borderBottomWidth: 1,
+  borderBottomColor: "#E5E7EB",
+  marginBottom: 14,
+  paddingHorizontal: 4,
+},
+
+filterTab: {
+  paddingHorizontal: 18,
+  paddingVertical: 12,
+  marginRight: 12,
+  position: "relative",
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+filterTabText: {
+  fontSize: 15,
+  color: "#6B7280",
+  fontFamily: "Poppins_500Medium",
+},
+
+filterTabTextActive: {
+  color: "#111827",
+  fontFamily: "Poppins_700Bold",
+},
+
+filterActiveLine: {
+  position: "absolute",
+  bottom: -1,
+  left: 0,
+  right: 0,
+  height: 3,
+  borderRadius: 999,
+  backgroundColor: "#2A324B",
+},
+ 
 
   infoButtonsRow: {
   flexDirection: "row",
