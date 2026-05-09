@@ -815,7 +815,7 @@ async function openLocation(location: ProjectLocation) {
                               )}
                             </Pressable>
 
-                            <Pressable
+                            {/* <Pressable
                               style={[
                                 styles.iconBtn,
                                 styles.removeIconBtn,
@@ -840,7 +840,7 @@ async function openLocation(location: ProjectLocation) {
                                   color="#ff8b8b"
                                 />
                               )}
-                            </Pressable>
+                            </Pressable> */}
                           </>
                         )}
                       </View>
