@@ -1108,6 +1108,18 @@ const submitAssetInBackground = async (draft: AssetDraft, isEdit: boolean) => {
     setAssetModalVisible(false);
   };
 
+  const assetStats = useMemo(() => {
+  const total = assets.length;
+  const done = assets.filter((asset) => asset.isDone).length;
+  const incomplete = assets.filter((asset) => !asset.isDone).length;
+
+  return {
+    all: total,
+    done,
+    incomplete,
+  };
+}, [assets]);
+
   const filteredAssets = useMemo(() => {
     let filtered = assets;
     if (filter === "done") filtered = filtered.filter((a) => a.isDone);
@@ -1374,24 +1386,26 @@ const isAssetSynced = (asset: AssetItem) => {
         </View>
 
         {/* ── Filter row ── */}
-        <View style={styles.filterRow}>
-          {(["all", "done", "incomplete"] as const).map((f) => (
-            <TouchableOpacity
-              key={f}
-              style={[styles.filterBtn, filter === f && styles.filterBtnActive]}
-              onPress={() => setFilter(f)}
-            >
-              <Text
-                style={[
-                  styles.filterText,
-                  filter === f && styles.filterTextActive,
-                ]}
-              >
-                {t(`folderAssetScreen.filter.${f}`)}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+   <View style={styles.filterRow}>
+  {(["all", "done", "incomplete"] as const).map((f) => (
+    <TouchableOpacity
+      key={f}
+      style={[styles.filterBtn, filter === f && styles.filterBtnActive]}
+      onPress={() => setFilter(f)}
+    >
+      <Text
+        style={[
+          styles.filterText,
+          filter === f && styles.filterTextActive,
+        ]}
+      >
+         {t(`folderAssetScreen.filter.${f}`)} ({assetStats[f]})
+      </Text>
+
+      
+    </TouchableOpacity>
+  ))}
+</View>
 
         {/* ── Advanced search row ── */}
    <View style={styles.advancedSearchRow}>
