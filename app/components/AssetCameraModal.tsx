@@ -18,6 +18,7 @@ import {
   Camera,
   useCameraDevice,
   useCameraPermission,
+  useMicrophonePermission,
 } from "react-native-vision-camera";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -40,12 +41,12 @@ const AnimatedCamera = Animated.createAnimatedComponent(Camera);
 const SLIDER_WIDTH = width * 0.5;
 const SLIDER_THUMB = 26;
 
-type CameraMode = "photos" | "scan";
+type CameraMode = "photos" | "video" | "scan";
 
 type Props = {
   visible: boolean;
   onClose: () => void;
-  onDone: (images: any[]) => void;
+  onDone: (media: any[]) => void;
   mode?: CameraMode;
   onScanText?: (text: string) => void;
 };
@@ -60,6 +61,12 @@ export default function AssetCameraModal({
   const device = useCameraDevice("back");
   const insets = useSafeAreaInsets();
   const { hasPermission, requestPermission } = useCameraPermission();
+
+  const {
+  hasPermission: hasMicPermission,
+  requestPermission: requestMicPermission,
+} = useMicrophonePermission();
+
   const { t } = useTranslation();
 
   const [hasLiveCodeResult, setHasLiveCodeResult] = useState(false);
@@ -69,6 +76,9 @@ const lastScannedAtRef = useRef<number>(0);
   const camera = useRef<Camera>(null);
 
   const [photos, setPhotos] = useState<any[]>([]);
+  const [captureMode, setCaptureMode] = useState<"photo" | "video">("photo");
+const [videos, setVideos] = useState<any[]>([]);
+const [isRecordingVideo, setIsRecordingVideo] = useState(false);
   const [zoomDisplay, setZoomDisplay] = useState(1);
 
   const [torch, setTorch] = useState<"off" | "on">("off");
@@ -189,10 +199,20 @@ const lastScannedAtRef = useRef<number>(0);
   }, [hasPermission, requestPermission]);
 
   useEffect(() => {
+  if (visible && !hasMicPermission) {
+    requestMicPermission();
+  }
+}, [visible, hasMicPermission, requestMicPermission]);
+
+  useEffect(() => {
     if (!visible) {
       zoom.value = minZoom;
       zoomStart.value = minZoom;
       setZoomDisplay(minZoom);
+       setCaptureMode("photo");
+    setPhotos([]);
+    setVideos([]);
+    setIsRecordingVideo(false);
       setPhotos([]);
       setScanText("");
       setScanError("");
@@ -241,14 +261,22 @@ const lastScannedAtRef = useRef<number>(0);
   },
 });
 
-  const handleDismiss = () => {
-    setPhotos([]);
-    setScanText("");
-    setScanError("");
-    setLastCapturedScanPath(null);
-    setIsProcessingScan(false);
-    onClose();
-  };
+const handleDismiss = async () => {
+  if (isRecordingVideo) {
+    try {
+      await camera.current?.stopRecording();
+    } catch {}
+  }
+
+  setPhotos([]);
+  setVideos([]);
+  setScanText("");
+  setScanError("");
+  setLastCapturedScanPath(null);
+  setIsProcessingScan(false);
+  setIsRecordingVideo(false);
+  onClose();
+};
 
 
   const takePhoto = async () => {
@@ -294,23 +322,89 @@ const lastScannedAtRef = useRef<number>(0);
     }
   }
 };
-  const handlePrimaryDone = () => {
-    if (mode === "photos") {
-      onDone(photos);
-      setPhotos([]);
-      onClose();
-      return;
+
+const startVideoRecording = async () => {
+  if (!camera.current || isRecordingVideo) return;
+
+  try {
+    if (!hasMicPermission) {
+      const granted = await requestMicPermission();
+
+      if (!granted) {
+        return;
+      }
     }
 
-    const cleaned = scanText.trim();
-    if (!cleaned) return;
+    setIsRecordingVideo(true);
 
-    onScanText?.(cleaned);
-    setScanText("");
-    setScanError("");
-    setLastCapturedScanPath(null);
-    onClose();
-  };
+    camera.current.startRecording({
+      fileType: "mp4",
+      onRecordingFinished: (video) => {
+        setVideos((prev) => [
+          ...prev,
+          {
+            ...video,
+            mediaType: "video",
+          },
+        ]);
+        setIsRecordingVideo(false);
+      },
+      onRecordingError: (error) => {
+        console.log("VIDEO RECORDING ERROR:", error);
+        setIsRecordingVideo(false);
+      },
+    });
+  } catch (error) {
+    console.log("START VIDEO ERROR:", error);
+    setIsRecordingVideo(false);
+  }
+};
+
+const stopVideoRecording = async () => {
+  if (!camera.current || !isRecordingVideo) return;
+
+  try {
+    await camera.current.stopRecording();
+  } catch {
+    setIsRecordingVideo(false);
+  }
+};
+const handleCapturePress = async () => {
+  if (mode === "photos" && captureMode === "video") {
+    if (isRecordingVideo) {
+      await stopVideoRecording();
+    } else {
+      await startVideoRecording();
+    }
+    return;
+  }
+
+  await takePhoto();
+};
+
+ const handlePrimaryDone = () => {
+ if (mode === "photos") {
+  onDone([
+    ...photos.map((item) => ({ ...item, mediaType: "photo" })),
+    ...videos.map((item) => ({ ...item, mediaType: "video" })),
+  ]);
+
+  setPhotos([]);
+  setVideos([]);
+  onClose();
+  return;
+}
+
+
+  const cleaned = scanText.trim();
+  if (!cleaned) return;
+
+  onScanText?.(cleaned);
+  setScanText("");
+  setScanError("");
+  setLastCapturedScanPath(null);
+  onClose();
+};
 
   if (!device || !hasPermission) return null;
 
@@ -318,11 +412,17 @@ const lastScannedAtRef = useRef<number>(0);
   const activeStep =
     zoomSteps.find((s) => Math.abs(s - zoomDisplay) < 0.3) ?? null;
 
-  const doneDisabled =
-    mode === "photos" ? photos.length === 0 : !scanText.trim() || isProcessingScan;
+ const doneDisabled =
+  mode === "photos"
+    ? photos.length === 0 && videos.length === 0
+    : !scanText.trim() || isProcessingScan;
 
   return (
+
+
+    
     <Modal visible={visible} animationType="fade" statusBarTranslucent>
+      
       <View style={styles.container}>
         <StatusBar
           barStyle="light-content"
@@ -337,6 +437,8 @@ const lastScannedAtRef = useRef<number>(0);
             device={device}
             isActive={visible}
             photo
+            video
+            audio
             animatedProps={animatedProps}
             codeScanner={mode === "scan" ? codeScanner : undefined}
             torch={torch}
@@ -366,7 +468,11 @@ const lastScannedAtRef = useRef<number>(0);
 </TouchableOpacity>
             <View style={styles.modeBadge}>
               <Text style={styles.modeBadgeText}>
-  {mode === "scan" ? t("camera.scanMode") : t("camera.photoMode")}
+  {mode === "scan"
+  ? t("camera.scanMode")
+  : mode === "video"
+  ? "Video Mode"
+  : t("camera.photoMode")}
 </Text>
             </View>
 
@@ -418,6 +524,46 @@ const lastScannedAtRef = useRef<number>(0);
           </Text>
         </View>
 
+        {mode === "photos" && (
+  <View style={styles.cameraModeToggle}>
+    <TouchableOpacity
+      style={[
+        styles.cameraModeBtn,
+        captureMode === "photo" && styles.cameraModeBtnActive,
+      ]}
+      onPress={() => setCaptureMode("photo")}
+      disabled={isRecordingVideo}
+    >
+      <Text
+        style={[
+          styles.cameraModeText,
+          captureMode === "photo" && styles.cameraModeTextActive,
+        ]}
+      >
+        Photo
+      </Text>
+    </TouchableOpacity>
+
+    <TouchableOpacity
+      style={[
+        styles.cameraModeBtn,
+        captureMode === "video" && styles.cameraModeBtnActive,
+      ]}
+      onPress={() => setCaptureMode("video")}
+      disabled={isRecordingVideo}
+    >
+      <Text
+        style={[
+          styles.cameraModeText,
+          captureMode === "video" && styles.cameraModeTextActive,
+        ]}
+      >
+        Video
+      </Text>
+    </TouchableOpacity>
+  </View>
+)}
+
         {mode === "scan" && (
           <View style={styles.scanCard}>
             <Text style={styles.scanCardTitle}>
@@ -458,16 +604,33 @@ const lastScannedAtRef = useRef<number>(0);
             <Text style={styles.btnText}>{t("commonT.cancel")}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[
-              styles.captureOuter,
-              isProcessingScan && styles.captureOuterDisabled,
-            ]}
-            onPress={takePhoto}
-            disabled={isProcessingScan}
-          >
-            <View style={styles.captureInner} />
-          </TouchableOpacity>
+    <View style={styles.captureCenter}>
+  <TouchableOpacity
+    style={[
+      styles.captureOuter,
+      isProcessingScan && styles.captureOuterDisabled,
+    ]}
+    onPress={handleCapturePress}
+    disabled={isProcessingScan}
+  >
+    <View
+      style={[
+        styles.captureInner,
+        mode === "photos" &&
+          captureMode === "video" &&
+          styles.videoCaptureInner,
+        isRecordingVideo && styles.videoRecordingInner,
+      ]}
+    />
+  </TouchableOpacity>
+
+  {mode === "photos" && captureMode === "video" && (
+    <Text style={styles.recordHintText}>
+      {isRecordingVideo ? "Tap to stop" : "Tap to record"}
+    </Text>
+  )}
+</View>
+
 
           <TouchableOpacity
             style={[styles.smallBtn, doneDisabled && styles.smallBtnDisabled]}
@@ -476,12 +639,12 @@ const lastScannedAtRef = useRef<number>(0);
           >
             <Text
             style={[styles.btnText, doneDisabled && styles.btnTextDisabled]}>
-            {mode === "photos"
-            ? t("camera.doneWithCount", { count: photos.length })
-              : scanText
-              ? t("camera.useResult")
-              : t("camera.scan")}
-              </Text>
+           {mode === "photos"
+  ? `Done (${photos.length + videos.length})`
+  : scanText
+  ? t("camera.useResult")
+  : t("camera.scan")}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -560,7 +723,7 @@ const styles = StyleSheet.create({
 
   zoomRow: {
     position: "absolute",
-    bottom: 190,
+    bottom: 220,
     alignSelf: "center",
     flexDirection: "row",
     gap: 8,
@@ -582,7 +745,7 @@ const styles = StyleSheet.create({
 
   sliderWrapper: {
     position: "absolute",
-    bottom: 145,
+    bottom: 175,
     alignSelf: "center",
     flexDirection: "row",
     alignItems: "center",
@@ -668,6 +831,65 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 20,
   },
+
+
+cameraModeToggle: {
+  position: "absolute",
+  bottom: 155,
+  alignSelf: "center",
+  flexDirection: "row",
+  // backgroundColor: "rgba(0,0,0,0.45)",
+  borderRadius: 999,
+  padding: 4,
+  zIndex: 20,
+},
+
+
+captureCenter: {
+  alignItems: "center",
+  justifyContent: "center",
+  width: 96,
+},
+
+recordHintText: {
+  marginTop: 6,
+  color: "#fff",
+  fontSize: 11,
+  fontWeight: "700",
+  textAlign: "center",
+},
+cameraModeBtn: {
+  paddingHorizontal: 18,
+  paddingVertical: 8,
+  borderRadius: 999,
+},
+
+cameraModeBtnActive: {
+  backgroundColor: "#ffffff",
+},
+
+cameraModeText: {
+  color: "#ffffff",
+  fontSize: 10,
+  fontWeight: "500",
+},
+
+cameraModeTextActive: {
+  color: "#111827",
+},
+  
+
+
+  videoCaptureInner: {
+  backgroundColor: "#FF3B30",
+},
+
+videoRecordingInner: {
+  width: 34,
+  height: 34,
+  borderRadius: 8,
+  backgroundColor: "#FF3B30",
+},
 
   scanHintText: {
     color: "#bcbcbc",

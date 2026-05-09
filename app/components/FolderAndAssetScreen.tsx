@@ -11,6 +11,7 @@ import { normalizeCode } from "../components/utils/codeScannerUtils";
 import { useTranslation } from "react-i18next"; // ← i18n
 import { useAuth } from "../../api/AuthContext";
 import ImageViewer from "react-native-image-zoom-viewer";
+import { Video, ResizeMode } from "expo-av";
 
 import {
   useWindowDimensions,
@@ -118,6 +119,9 @@ const [rawDataKeyValues, setRawDataKeyValues] = useState<string[]>([]);
 
 const [unsyncedAssetIds, setUnsyncedAssetIds] = useState<string[]>([]);
 
+const [videoViewerVisible, setVideoViewerVisible] = useState(false);
+const [viewerVideoUrl, setViewerVideoUrl] = useState<string | null>(null);
+
 
 
   const getNestedRawDataValue = (rawData: any, key?: string | null) => {
@@ -147,6 +151,27 @@ const [unsyncedAssetIds, setUnsyncedAssetIds] = useState<string[]>([]);
     }
     return false;
   };
+
+
+  const isVideoMedia = (item: any) => {
+  const url = item?.url || item?.uri || "";
+  return (
+    item?.mediaType === "video" ||
+    item?.mimeType?.startsWith?.("video/") ||
+    item?.type?.startsWith?.("video/") ||
+    url.includes("/video/upload/") ||
+    url.toLowerCase().endsWith(".mp4") ||
+    url.toLowerCase().endsWith(".mov")
+  );
+};
+
+const getAssetVideos = (asset: AssetItem) => {
+  return (asset.images || []).filter(isVideoMedia);
+};
+
+const getAssetImagesOnly = (asset: AssetItem) => {
+  return (asset.images || []).filter((item: any) => !isVideoMedia(item));
+};
 
   const extractRawDataKeys = (
     obj: any,
@@ -1155,14 +1180,31 @@ const getThumbnailUrl = (url: string) => getCloudinaryImageUrl(url, 200);
 const getViewerUrl = (url: string) => getCloudinaryImageUrl(url, 600);
 
 const getAssetImageUri = (asset: AssetItem) => {
-  const image = asset.images?.find((img: any) => {
+  const image = getAssetImagesOnly(asset).find((img: any) => {
     const uri = img?.url || img?.uri;
     return typeof uri === "string" && uri.trim().length > 0;
   });
 
   const uri = image?.url || image?.uri || null;
-
   return uri ? getThumbnailUrl(uri) : null;
+};
+
+const openAssetVideoViewer = (asset: AssetItem) => {
+  const videos = getAssetVideos(asset);
+
+  if (videos.length === 0) {
+    showSnackbar("No videos found for this asset", "info");
+    return;
+  }
+
+  const videoUrl:any = videos[0].url || videos[0].uri;
+
+  closeAssetMenu();
+
+  setTimeout(() => {
+    setViewerVideoUrl(videoUrl);
+    setVideoViewerVisible(true);
+  }, 100);
 };
 
 
@@ -1202,25 +1244,38 @@ const closeImageViewer = () => {
   setViewerImages([]);
 };
 
+// MOVE the video modal OUTSIDE the !imageViewerVisible block
+// and fix openAssetImageViewer to handle mixed media assets
+
+// 1. Fix openAssetImageViewer to check images-only array
 const openAssetImageViewer = (asset: AssetItem) => {
-  const images = getValidAssetImages(asset)
+  const videos = getAssetVideos(asset);
+  const images = getAssetImagesOnly(asset)
     .map((img: any) => img.url || img.uri)
     .filter(Boolean)
     .map((url: string) => getViewerUrl(url));
 
-  if (images.length === 0) {
-    showSnackbar("No images found for this asset", "info");
+  closeAssetMenu();
+
+  if (images.length > 0) {
+    setTimeout(() => {
+      setViewerImages(images);
+      setImageViewerVisible(true);
+    }, 100);
     return;
   }
 
-  closeAssetMenu();
+  if (videos.length > 0) {
+    const videoUrl: any = videos[0].url || videos[0].uri;
+    setTimeout(() => {
+      setViewerVideoUrl(videoUrl);
+      setVideoViewerVisible(true);   // ← this was being swallowed
+    }, 100);
+    return;
+  }
 
-  setTimeout(() => {
-    setViewerImages(images);
-    setImageViewerVisible(true);
-  }, 100);
+  showSnackbar("No media found for this asset", "info");
 };
-
 const canEditAssetName = !editingAsset
   ? true
   : editingAsset.id?.startsWith("offline_")
@@ -1920,6 +1975,38 @@ const isAssetSynced = (asset: AssetItem) => {
 
 
 <Modal
+  visible={videoViewerVisible}
+  transparent={false}
+  animationType="fade"
+  onRequestClose={() => {
+    setVideoViewerVisible(false);
+    setViewerVideoUrl(null);
+  }}
+>
+  <View style={styles.viewerContainer}>
+    {viewerVideoUrl && (
+      <Video
+        source={{ uri: viewerVideoUrl }}
+        style={styles.videoPlayer}
+        useNativeControls
+        resizeMode={ResizeMode.CONTAIN}
+        shouldPlay
+      />
+    )}
+
+    <TouchableOpacity
+      style={styles.viewerCloseBtn}
+      onPress={() => {
+        setVideoViewerVisible(false);
+        setViewerVideoUrl(null);
+      }}
+    >
+      <Ionicons name="close" size={26} color="#fff" />
+    </TouchableOpacity>
+  </View>
+</Modal>
+
+<Modal
   visible={imageViewerVisible}
   transparent={false}
   animationType="fade"
@@ -2204,6 +2291,12 @@ const styles = StyleSheet.create({
   marginBottom: 12,
   borderBottomWidth: 1,
   borderBottomColor: BORDER,
+},
+
+videoPlayer: {
+  width: "100%",
+  height: "100%",
+  backgroundColor: "#000",
 },
   filterBtn: {
   flex: 1,

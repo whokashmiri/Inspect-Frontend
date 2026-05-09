@@ -5,10 +5,10 @@
 import * as SecureStore from "expo-secure-store";
 
 // ─── Config ────────────────────────────────────────────────────────────────
-export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://api.167.71.231.64.nip.io/api/v1";
+// export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://api.167.71.231.64.nip.io/api/v1";
 
 
-// export const BASE_URL = process.env.EXPO_PUBLIC_API_URL 
+export const BASE_URL = process.env.EXPO_PUBLIC_API_URL 
 
 const TOKEN_KEY = "auth.accessToken";
 const REFRESH_KEY = "auth.refreshToken";
@@ -39,6 +39,9 @@ export interface AssetMediaInput {
   publicId?: string | null;
   duration?: number | null;
   existing?: boolean;
+  mediaType?: "image" | "video";
+  mimeType?: string | null;
+  thumbnailUrl?: string | null;
 }
 
 
@@ -231,6 +234,24 @@ export async function loginAndSave(username: string, password: string) {
   return res;
 }
 
+
+function getExistingUploadedMedia(files?: AssetMediaInput[]) {
+  return (files || [])
+    .filter((file) => {
+      return typeof file.url === "string" && file.url.startsWith("http");
+    })
+    .map((file) => ({
+      url: file.url!,
+      publicId: file.publicId ?? null,
+      mediaType:
+        file.mediaType ??
+        (file.type?.startsWith("video/") ? "video" : "image"),
+      mimeType: file.mimeType ?? file.type ?? null,
+      duration: file.duration ?? null,
+      thumbnailUrl: file.thumbnailUrl ?? null,
+    }));
+}
+
 // ─── Projects ───────────────────────────────────────────────────────────────
 
 export interface ProjectCompany {
@@ -360,7 +381,7 @@ export interface ListProjectsResponse {
 export const mediaApi = {
   signUpload: (payload: {
     projectId: string;
-    mediaType: "image" | "voice";
+    mediaType: "image" | "voice" | "video";
   }) =>
     request<CloudinarySignUploadResponse>("/media/sign-upload", {
       method: "POST",
@@ -374,7 +395,7 @@ export const mediaApi = {
 async function uploadSingleFileToCloudinary(params: {
   file: UploadFileInput;
   projectId: string;
-  mediaType: "image" | "voice";
+  mediaType: "image" | "voice" | "video";
 }) {
   const signData = await mediaApi.signUpload({
     projectId: params.projectId,
@@ -386,9 +407,13 @@ async function uploadSingleFileToCloudinary(params: {
   form.append("file", {
     uri: params.file.uri,
     name: params.file.name,
-    type:
-      params.file.type ||
-      (params.mediaType === "voice" ? "audio/m4a" : "image/jpeg"),
+   type:
+  params.file.type ||
+  (params.mediaType === "voice"
+    ? "audio/m4a"
+    : params.mediaType === "video"
+    ? "video/mp4"
+    : "image/jpeg"),
   } as any);
 
   form.append("api_key", signData.apiKey);
@@ -415,18 +440,34 @@ async function uploadSingleFileToCloudinary(params: {
   }
 
   if (params.mediaType === "voice") {
-    return {
-      url: data.secure_url,
-      publicId: data.public_id,
-      duration:
-        typeof data.duration === "number" ? Math.round(data.duration) : null,
-    };
-  }
-
   return {
     url: data.secure_url,
     publicId: data.public_id,
+    duration:
+      typeof data.duration === "number" ? Math.round(data.duration) : null,
   };
+}
+
+const isVideo = params.mediaType === "video";
+
+return {
+  url: data.secure_url,
+  publicId: data.public_id,
+  mediaType: isVideo ? "video" : "image",
+  mimeType: params.file.type,
+  duration:
+    isVideo && typeof data.duration === "number"
+      ? Math.round(data.duration)
+      : null,
+  thumbnailUrl: isVideo
+    ? data.secure_url.replace(
+        "/video/upload/",
+        "/video/upload/so_1,f_jpg/"
+      )
+    : null,
+};
+
+ 
 }
 
 export const projectApi = {
@@ -503,9 +544,13 @@ export interface DeleteAssetResponse {
 export interface AssetImageItem {
   id: string;
   url: string;
-  uri: string;
+  uri?: string;
   publicId: string | null;
   createdAt: string;
+  mediaType?: "image" | "video";
+  mimeType?: string | null;
+  duration?: number | null;
+  thumbnailUrl?: string | null;
 }
 
 export interface AssetVoiceNoteItem {
@@ -595,6 +640,14 @@ function getLocalUploadFiles(files?: AssetMediaInput[]): UploadFileInput[] {
     }));
 }
 
+function isVideoFile(file: UploadFileInput) {
+  return (
+    file.type?.startsWith("video/") ||
+    file.name?.toLowerCase().endsWith(".mp4") ||
+    file.name?.toLowerCase().endsWith(".mov")
+  );
+}
+
 
 export interface AdvancedRawDataKeysResponse {
   keys: string[];
@@ -641,7 +694,12 @@ export const projectContentApi = {
   hasNotes?: boolean;
   notes?: string | null;
 }) => {
-  const localImages = getLocalUploadFiles(payload.images);
+  const localMedia = getLocalUploadFiles(payload.images);
+const localImages = localMedia.filter((file) => !isVideoFile(file));
+const localVideos = localMedia.filter(isVideoFile);
+
+const existingMedia = getExistingUploadedMedia(payload.images);
+
 const localVoiceNotes = getLocalUploadFiles(payload.voiceNotes);
   const uploadedImages = await uploadFilesInBatches(
     localImages,
@@ -653,6 +711,17 @@ const localVoiceNotes = getLocalUploadFiles(payload.voiceNotes);
       }),
     3
   );
+
+  const uploadedVideos = await uploadFilesInBatches(
+  localVideos,
+  (video) =>
+    uploadSingleFileToCloudinary({
+      file: video,
+      projectId: payload.projectId,
+      mediaType: "video",
+    }),
+  1
+);
 
   const uploadedVoiceNotes = await uploadFilesInBatches(
     localVoiceNotes,
@@ -687,7 +756,7 @@ const localVoiceNotes = getLocalUploadFiles(payload.voiceNotes);
         isPresent: payload.isPresent ?? true,
         hasNotes: payload.hasNotes ?? false,
         notes: payload.notes ?? null,
-        images: uploadedImages,
+        images: [...existingMedia, ...uploadedImages, ...uploadedVideos],
         voiceNotes: uploadedVoiceNotes,
       },
     }
@@ -763,7 +832,12 @@ updateAsset: async (payload: {
   isPresent?: boolean;
 }) => {
 
-  const localImages = getLocalUploadFiles(payload.images);
+  const localMedia = getLocalUploadFiles(payload.images);
+const localImages = localMedia.filter((file) => !isVideoFile(file));
+const localVideos = localMedia.filter(isVideoFile);
+
+const existingMedia = getExistingUploadedMedia(payload.images);
+
 const localVoiceNotes = getLocalUploadFiles(payload.voiceNotes);
   const uploadedImages = await uploadFilesInBatches(
    localImages,
@@ -775,6 +849,17 @@ const localVoiceNotes = getLocalUploadFiles(payload.voiceNotes);
       }),
     3
   );
+
+  const uploadedVideos = await uploadFilesInBatches(
+  localVideos,
+  (video) =>
+    uploadSingleFileToCloudinary({
+      file: video,
+      projectId: payload.projectId,
+      mediaType: "video",
+    }),
+  1
+);
 
   const uploadedVoiceNotes = await uploadFilesInBatches(
     localVoiceNotes,
@@ -803,7 +888,7 @@ const localVoiceNotes = getLocalUploadFiles(payload.voiceNotes);
       notes: payload.notes,
       isDone: payload.isDone,
       isPresent: payload.isPresent,
-      images: uploadedImages,
+      images: [...existingMedia, ...uploadedImages, ...uploadedVideos],
       voiceNotes: uploadedVoiceNotes,
     },
   });

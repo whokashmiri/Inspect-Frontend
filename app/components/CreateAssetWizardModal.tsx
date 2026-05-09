@@ -1123,32 +1123,38 @@ const notesModalMaxHeight = height * 0.78;
       </Modal>
 
       <AssetCameraModal
-        visible={cameraOpen}
-        mode={cameraMode}
-        onClose={() => setCameraOpen(false)}
-        onDone={(photos: any[]) => {
-          if (cameraMode !== "photos") return;
+  visible={cameraOpen}
+  mode={cameraMode}
+  onClose={() => setCameraOpen(false)}
+  onDone={(media: any[]) => {
+    if (cameraMode !== "photos") return;
 
-          const mapped = photos.map((photo: any, index: number) => ({
-            uri: photo.path?.startsWith("file://")
-              ? photo.path
-              : `file://${photo.path}`,
-            name: `photo_${Date.now()}_${index}.jpg`,
-            type: "image/jpeg",
-          }));
+    const mapped = media.map((item: any, index: number) => {
+     const isVideo = item.mediaType === "video";
 
-          setDraft((prev) => ({
-            ...prev,
-            images: [...prev.images, ...mapped],
-          }));
-        }}
-        onScanText={(text: string) => {
-          if (cameraMode !== "scan") return;
+      return {
+        uri: item.path?.startsWith("file://")
+          ? item.path
+          : `file://${item.path}`,
+        name: isVideo
+          ? `video_${Date.now()}_${index}.mp4`
+        : `photo_${Date.now()}_${index}.jpg`,
+      type: isVideo ? "video/mp4" : "image/jpeg",
+      };
+    });
 
-          appendScannedTextToDescription(text);
-          setCameraOpen(false);
-        }}
-      />
+    setDraft((prev) => ({
+      ...prev,
+      images: [...prev.images, ...mapped],
+    }));
+  }}
+  onScanText={(text: string) => {
+    if (cameraMode !== "scan") return;
+
+    appendScannedTextToDescription(text);
+    setCameraOpen(false);
+  }}
+/>
 
       <NotesModal
         visible={notesModalVisible}
