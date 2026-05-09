@@ -11,7 +11,7 @@ import { normalizeCode } from "../components/utils/codeScannerUtils";
 import { useTranslation } from "react-i18next"; // ← i18n
 import { useAuth } from "../../api/AuthContext";
 import ImageViewer from "react-native-image-zoom-viewer";
-import { Video, ResizeMode } from "expo-av";
+import { VideoView, useVideoPlayer } from "expo-video";
 
 import {
   useWindowDimensions,
@@ -80,6 +80,21 @@ const ITEM_SIZE =
   (SCREEN_WIDTH - HORIZONTAL_PADDING * 2 - GRID_GAP * (NUM_COLUMNS - 1)) /
   NUM_COLUMNS;
 
+
+function MediaVideoPlayer({ uri }: { uri: string }) {
+  const player = useVideoPlayer(uri, (player) => {
+    player.loop = false;
+    player.play();
+  });
+
+  return (
+    <VideoView
+      player={player}
+      style={styles.videoPlayer}
+      nativeControls
+    />
+  );
+}
 export default function FolderAndAssetScreen({ route }: Props) {
   const { t } = useTranslation(); 
 
@@ -103,8 +118,7 @@ const folderModalMaxHeight = height * 0.45;
 const [assetMenuVisible, setAssetMenuVisible] = useState(false);
 const [selectedAssetForMenu, setSelectedAssetForMenu] = useState<AssetItem | null>(null);
 
-const [imageViewerVisible, setImageViewerVisible] = useState(false);
-const [viewerImages, setViewerImages] = useState<string[]>([]);
+
 const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
 
 const [showFullProjectName, setShowFullProjectName] = useState(false);
@@ -119,10 +133,20 @@ const [rawDataKeyValues, setRawDataKeyValues] = useState<string[]>([]);
 
 const [unsyncedAssetIds, setUnsyncedAssetIds] = useState<string[]>([]);
 
-const [videoViewerVisible, setVideoViewerVisible] = useState(false);
-const [viewerVideoUrl, setViewerVideoUrl] = useState<string | null>(null);
+
+const [mediaViewerVisible, setMediaViewerVisible] = useState(false);
+const [viewerMedia, setViewerMedia] = useState<any[]>([]);
+const [activeMediaIndex, setActiveMediaIndex] = useState(0);
 
 
+const closeMediaViewer = () => {
+  setMediaViewerVisible(false);
+
+  setTimeout(() => {
+    setViewerMedia([]);
+    setActiveMediaIndex(0);
+  }, 100);
+};
 
   const getNestedRawDataValue = (rawData: any, key?: string | null) => {
     if (!rawData || !key) return rawData;
@@ -1189,28 +1213,12 @@ const getAssetImageUri = (asset: AssetItem) => {
   return uri ? getThumbnailUrl(uri) : null;
 };
 
-const openAssetVideoViewer = (asset: AssetItem) => {
-  const videos = getAssetVideos(asset);
-
-  if (videos.length === 0) {
-    showSnackbar("No videos found for this asset", "info");
-    return;
-  }
-
-  const videoUrl:any = videos[0].url || videos[0].uri;
-
-  closeAssetMenu();
-
-  setTimeout(() => {
-    setViewerVideoUrl(videoUrl);
-    setVideoViewerVisible(true);
-  }, 100);
-};
 
 
-const getValidAssetImages = (asset: AssetItem) => {
-  return (asset.images || []).filter((img: any) => {
-    const uri = img?.url || img?.uri;
+
+const getValidAssetMedia = (asset: AssetItem) => {
+  return (asset.images || []).filter((media: any) => {
+    const uri = media?.url || media?.uri;
     return typeof uri === "string" && uri.trim().length > 0;
   });
 };
@@ -1239,43 +1247,32 @@ const closeAssetMenu = () => {
 };
 
 
-const closeImageViewer = () => {
-  setImageViewerVisible(false);
-  setViewerImages([]);
-};
+const openAssetMediaViewer = (asset: AssetItem) => {
+  const media = getValidAssetMedia(asset)
+    .map((item: any) => {
+      const uri = item.url || item.uri;
+      const isVideo = isVideoMedia(item);
 
-// MOVE the video modal OUTSIDE the !imageViewerVisible block
-// and fix openAssetImageViewer to handle mixed media assets
+      return {
+        uri: isVideo ? uri : getViewerUrl(uri),
+        mediaType: isVideo ? "video" : "image",
+      };
+    });
 
-// 1. Fix openAssetImageViewer to check images-only array
-const openAssetImageViewer = (asset: AssetItem) => {
-  const videos = getAssetVideos(asset);
-  const images = getAssetImagesOnly(asset)
-    .map((img: any) => img.url || img.uri)
-    .filter(Boolean)
-    .map((url: string) => getViewerUrl(url));
+  if (media.length === 0) {
+    showSnackbar("No media found for this asset", "info");
+    return;
+  }
 
   closeAssetMenu();
 
-  if (images.length > 0) {
-    setTimeout(() => {
-      setViewerImages(images);
-      setImageViewerVisible(true);
-    }, 100);
-    return;
-  }
-
-  if (videos.length > 0) {
-    const videoUrl: any = videos[0].url || videos[0].uri;
-    setTimeout(() => {
-      setViewerVideoUrl(videoUrl);
-      setVideoViewerVisible(true);   // ← this was being swallowed
-    }, 100);
-    return;
-  }
-
-  showSnackbar("No media found for this asset", "info");
+  setTimeout(() => {
+    setViewerMedia(media);
+    setActiveMediaIndex(0);
+    setMediaViewerVisible(true);
+  }, 100);
 };
+
 const canEditAssetName = !editingAsset
   ? true
   : editingAsset.id?.startsWith("offline_")
@@ -1509,7 +1506,7 @@ const isAssetSynced = (asset: AssetItem) => {
   </TouchableOpacity>
 </View>
 
-{!imageViewerVisible && (
+{!mediaViewerVisible && (
   <>
         {/* ── Content ── */}
         {loading && folders.length === 0 && assets.length === 0 ? (
@@ -1717,10 +1714,10 @@ const isAssetSynced = (asset: AssetItem) => {
                             {item.name}
                           </Text>
                         </View>
-                        {getValidAssetImages(item).length > 0 && (
+                        {getValidAssetMedia(item).length > 0 && (
                           <View style={styles.photoCountBadge}>
                             <Text style={styles.photoCountText}>
-                              {getValidAssetImages(item).length}
+                              {getValidAssetMedia(item).length}
                             </Text>
                           </View>
                         )}
@@ -1945,7 +1942,7 @@ const isAssetSynced = (asset: AssetItem) => {
             style={styles.assetMenuOption}
             onPress={() => {
               if (selectedAssetForMenu) {
-                openAssetImageViewer(selectedAssetForMenu);
+                openAssetMediaViewer(selectedAssetForMenu);
               }
             }}
           >
@@ -1973,69 +1970,71 @@ const isAssetSynced = (asset: AssetItem) => {
 </Modal>
 
 
-
 <Modal
-  visible={videoViewerVisible}
+  visible={mediaViewerVisible}
   transparent={false}
   animationType="fade"
-  onRequestClose={() => {
-    setVideoViewerVisible(false);
-    setViewerVideoUrl(null);
-  }}
+  onRequestClose={closeMediaViewer}
 >
   <View style={styles.viewerContainer}>
-    {viewerVideoUrl && (
-      <Video
-        source={{ uri: viewerVideoUrl }}
-        style={styles.videoPlayer}
-        useNativeControls
-        resizeMode={ResizeMode.CONTAIN}
-        shouldPlay
-      />
-    )}
+    {viewerMedia.length > 0 && (
+      <>
+        {viewerMedia[activeMediaIndex]?.mediaType === "video" ? (
+          
+           <MediaVideoPlayer
+    key={viewerMedia[activeMediaIndex].uri}
+    uri={viewerMedia[activeMediaIndex].uri}
+  />
+        ) : (
+          <Image
+            source={{ uri: viewerMedia[activeMediaIndex].uri }}
+            style={styles.viewerSingleImage}
+            resizeMode="contain"
+          />
+        )}
 
-    <TouchableOpacity
-      style={styles.viewerCloseBtn}
-      onPress={() => {
-        setVideoViewerVisible(false);
-        setViewerVideoUrl(null);
-      }}
-    >
-      <Ionicons name="close" size={26} color="#fff" />
-    </TouchableOpacity>
-  </View>
-</Modal>
-
-<Modal
-  visible={imageViewerVisible}
-  transparent={false}
-  animationType="fade"
-  onRequestClose={closeImageViewer}
->
-  <View style={styles.viewerContainer}>
-    <ImageViewer
-      imageUrls={viewerImages.map((url) => ({ url }))}
-      backgroundColor="#000"
-      enableImageZoom={true}
-      enableSwipeDown={true}
-      onSwipeDown={closeImageViewer}
-      onCancel={closeImageViewer}
-      saveToLocalByLongPress={false}
-      renderIndicator={(currentIndex, allSize) => (
         <View style={styles.viewerIndicator}>
           <Text style={styles.viewerIndicatorText}>
-            {currentIndex} / {allSize}
+            {activeMediaIndex + 1} / {viewerMedia.length}
           </Text>
         </View>
-      )}
-    />
 
-    <TouchableOpacity
-      style={styles.viewerCloseBtn}
-      onPress={closeImageViewer}
-    >
-      <Ionicons name="close" size={26} color="#fff" />
-    </TouchableOpacity>
+        {viewerMedia.length > 1 && (
+          <View style={styles.viewerNavRow}>
+            <TouchableOpacity
+              style={[
+                styles.viewerNavBtn,
+                activeMediaIndex === 0 && styles.viewerNavBtnDisabled,
+              ]}
+              disabled={activeMediaIndex === 0}
+              onPress={() => setActiveMediaIndex((prev) => Math.max(0, prev - 1))}
+            >
+              <Ionicons name="chevron-back" size={26} color="#fff" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.viewerNavBtn,
+                activeMediaIndex === viewerMedia.length - 1 &&
+                  styles.viewerNavBtnDisabled,
+              ]}
+              disabled={activeMediaIndex === viewerMedia.length - 1}
+              onPress={() =>
+                setActiveMediaIndex((prev) =>
+                  Math.min(viewerMedia.length - 1, prev + 1)
+                )
+              }
+            >
+              <Ionicons name="chevron-forward" size={26} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        )}
+      </>
+    )}
+
+    <TouchableOpacity style={styles.viewerCloseBtn} onPress={closeMediaViewer}>
+  <Ionicons name="close" size={26} color="#fff" />
+</TouchableOpacity>
   </View>
 </Modal>
 
@@ -2383,6 +2382,35 @@ fullTitleText: {
   lineHeight: 18,
 },
 
+
+viewerSingleImage: {
+  width: "100%",
+  height: "100%",
+  backgroundColor: "#000",
+},
+
+viewerNavRow: {
+  position: "absolute",
+  left: 20,
+  right: 20,
+  top: "50%",
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+},
+
+viewerNavBtn: {
+  width: 48,
+  height: 48,
+  borderRadius: 24,
+  backgroundColor: "rgba(0,0,0,0.55)",
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+viewerNavBtnDisabled: {
+  opacity: 0.25,
+},
 dashboardBtn: {
   backgroundColor: ACC,
   borderRadius: 999,
