@@ -905,12 +905,6 @@ captureCenter: {
   width: 96,
 },
 
-recordHintText: {
-  marginTop: 6,
-  color: "#fff",
-  fontSize: 8,
-  textAlign: "center",
-},
 cameraModeBtn: {
   paddingHorizontal: 15,
   paddingVertical: 3,
