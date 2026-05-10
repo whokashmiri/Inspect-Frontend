@@ -854,13 +854,12 @@ captureCenter: {
 recordHintText: {
   marginTop: 6,
   color: "#fff",
-  fontSize: 11,
-  fontWeight: "700",
+  fontSize: 8,
   textAlign: "center",
 },
 cameraModeBtn: {
-  paddingHorizontal: 18,
-  paddingVertical: 8,
+  paddingHorizontal: 15,
+  paddingVertical: 3,
   borderRadius: 999,
 },
 
@@ -870,7 +869,7 @@ cameraModeBtnActive: {
 
 cameraModeText: {
   color: "#ffffff",
-  fontSize: 10,
+  fontSize: 7,
   fontWeight: "500",
 },
 
