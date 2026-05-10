@@ -70,10 +70,9 @@ export default function AssetCameraModal({
   const { t } = useTranslation();
 
   const [hasLiveCodeResult, setHasLiveCodeResult] = useState(false);
-const lastScannedValueRef = useRef<string | null>(null);
-const lastScannedAtRef = useRef<number>(0);
 
-  const camera = useRef<Camera>(null);
+
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
 
   const [photos, setPhotos] = useState<any[]>([]);
   const [captureMode, setCaptureMode] = useState<"photo" | "video">("photo");
@@ -169,6 +168,11 @@ const [isRecordingVideo, setIsRecordingVideo] = useState(false);
     );
   };
 
+  const lastScannedValueRef = useRef<string | null>(null);
+const lastScannedAtRef = useRef<number>(0);
+
+  const camera = useRef<Camera>(null);
+
   const sliderPanResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -224,6 +228,28 @@ const [isRecordingVideo, setIsRecordingVideo] = useState(false);
       lastScannedAtRef.current = 0;
     }
   }, [visible, minZoom, zoom, zoomStart]);
+
+  useEffect(() => {
+  let interval: ReturnType<typeof setInterval> | null = null;
+
+  if (isRecordingVideo) {
+    setRecordingSeconds(0);
+
+    interval = setInterval(() => {
+      setRecordingSeconds((prev) => prev + 1);
+    }, 1000);
+  }
+
+  return () => {
+    if (interval) clearInterval(interval);
+  };
+}, [isRecordingVideo]);
+
+const formatRecordingTime = (seconds: number) => {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
+};
 
 
   const codeScanner = useCodeScanner({
@@ -599,6 +625,15 @@ const handleCapturePress = async () => {
           </View>
         )}
 
+        {mode === "photos" && captureMode === "video" && isRecordingVideo && (
+  <View style={styles.recordingTimerBadge}>
+    <View style={styles.recordingDot} />
+    <Text style={styles.recordingTimerText}>
+      {formatRecordingTime(recordingSeconds)}
+    </Text>
+  </View>
+)}
+
         <View style={[styles.bottomBar, { bottom: insets.bottom + 10 }]}>
           <TouchableOpacity style={styles.smallBtn} onPress={handleDismiss}>
             <Text style={styles.btnText}>{t("commonT.cancel")}</Text>
@@ -624,11 +659,6 @@ const handleCapturePress = async () => {
     />
   </TouchableOpacity>
 
-  {mode === "photos" && captureMode === "video" && (
-    <Text style={styles.recordHintText}>
-      {isRecordingVideo ? "Tap to stop" : "Tap to record"}
-    </Text>
-  )}
 </View>
 
 
@@ -683,6 +713,30 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
+
+  recordingTimerBadge: {
+  marginTop: 8,
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 6,
+  paddingHorizontal: 10,
+  paddingVertical: 4,
+  borderRadius: 999,
+ 
+},
+
+recordingDot: {
+  width: 7,
+  height: 7,
+  borderRadius: 4,
+  backgroundColor: "#FF3B30",
+},
+
+recordingTimerText: {
+  color: "#fff",
+  fontSize: 11,
+  fontWeight: "700",
+},
 
   topBtn: {
     paddingHorizontal: 14,
