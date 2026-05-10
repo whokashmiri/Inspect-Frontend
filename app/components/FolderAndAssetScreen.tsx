@@ -1,3 +1,5 @@
+
+//FolderAndAssetScreen.tsx
 import CreateAssetWizardModal from "./CreateAssetWizardModal";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "expo-router";
@@ -1319,6 +1321,16 @@ const isAssetSynced = (asset: AssetItem) => {
 };
   
 
+
+
+
+const imageViewerItems = viewerMedia
+  .filter((item) => item.mediaType === "image")
+  .map((item) => ({ url: item.uri }));
+
+const activeImageIndex = viewerMedia
+  .filter((item) => item.mediaType === "image")
+  .findIndex((item) => item.uri === viewerMedia[activeMediaIndex]?.uri);
   return (
     <SafeAreaView style={styles.flex} edges={["left", "right", "bottom"]}>
       <TouchableWithoutFeedback
@@ -1980,17 +1992,38 @@ const isAssetSynced = (asset: AssetItem) => {
     {viewerMedia.length > 0 && (
       <>
         {viewerMedia[activeMediaIndex]?.mediaType === "video" ? (
-          
-           <MediaVideoPlayer
-    key={viewerMedia[activeMediaIndex].uri}
-    uri={viewerMedia[activeMediaIndex].uri}
-  />
-        ) : (
-          <Image
-            source={{ uri: viewerMedia[activeMediaIndex].uri }}
-            style={styles.viewerSingleImage}
-            resizeMode="contain"
+          <MediaVideoPlayer
+            key={viewerMedia[activeMediaIndex].uri}
+            uri={viewerMedia[activeMediaIndex].uri}
           />
+        ) : (
+         <ImageViewer
+  imageUrls={imageViewerItems}
+  index={Math.max(activeImageIndex, 0)}
+  enableSwipeDown
+  onSwipeDown={closeMediaViewer}
+  backgroundColor="#000"
+  saveToLocalByLongPress={false}
+  renderIndicator={() => <></>}
+  onChange={(imageIndex) => {
+    if (imageIndex === undefined) return;
+
+    const imageItems = viewerMedia.filter(
+      (item) => item.mediaType === "image"
+    );
+
+    const selectedImage = imageItems[imageIndex];
+    if (!selectedImage) return;
+
+    const realIndex = viewerMedia.findIndex(
+      (item) => item.uri === selectedImage.uri
+    );
+
+    if (realIndex >= 0) {
+      setActiveMediaIndex(realIndex);
+    }
+  }}
+/>
         )}
 
         <View style={styles.viewerIndicator}>
@@ -2007,7 +2040,9 @@ const isAssetSynced = (asset: AssetItem) => {
                 activeMediaIndex === 0 && styles.viewerNavBtnDisabled,
               ]}
               disabled={activeMediaIndex === 0}
-              onPress={() => setActiveMediaIndex((prev) => Math.max(0, prev - 1))}
+              onPress={() =>
+                setActiveMediaIndex((prev) => Math.max(0, prev - 1))
+              }
             >
               <Ionicons name="chevron-back" size={26} color="#fff" />
             </TouchableOpacity>
@@ -2033,8 +2068,8 @@ const isAssetSynced = (asset: AssetItem) => {
     )}
 
     <TouchableOpacity style={styles.viewerCloseBtn} onPress={closeMediaViewer}>
-  <Ionicons name="close" size={26} color="#fff" />
-</TouchableOpacity>
+      <Ionicons name="close" size={26} color="#fff" />
+    </TouchableOpacity>
   </View>
 </Modal>
 
