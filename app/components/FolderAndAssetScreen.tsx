@@ -1757,6 +1757,21 @@ const activeImageIndex = viewerMedia
     <Ionicons name="ellipsis-vertical" size={16} color="#fff" />
   )}
 </TouchableOpacity>
+
+{getValidAssetMedia(item).length > 0 && (
+  <TouchableOpacity
+    style={styles.assetViewBtn}
+    onPress={(e) => {
+      e.stopPropagation();
+      openAssetMediaViewer(item);
+    }}
+    activeOpacity={0.8}
+  >
+    <Ionicons name="eye-outline" size={14} color="#fff" />
+  </TouchableOpacity>
+)}
+
+
                         <View style={styles.syncTickBadge}>
                          <Ionicons
   name={isAssetSynced(item) ? "checkmark-done" : "checkmark"}
@@ -2395,6 +2410,18 @@ title: {
   maxWidth: "100%",
 },
 
+assetViewBtn: {
+  position: "absolute",
+  bottom: 6,
+  left: 6,
+  width: 26,
+  height: 26,
+  borderRadius: 13,
+  backgroundColor: "rgba(42,50,75,0.75)",
+  alignItems: "center",
+  justifyContent: "center",
+  zIndex: 30,
+},
 fullTitlePopup: {
   position: "absolute",
   top: 24,
