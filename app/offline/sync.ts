@@ -1,7 +1,7 @@
 
 
 //sync.ts
-import { Alert } from "react-native";
+
 import NetInfo from "@react-native-community/netinfo";
 import { projectApi, projectContentApi, authApi, tokenStore } from "../../api/api";
 import { getPending, updateStatus, deletePending, updatePayload } from "./storage";
@@ -190,7 +190,7 @@ export async function syncQueue(): Promise<{
     }
 
     if (synced > 0) {
-      Alert.alert("Sync Complete", `${synced} item(s) synced.`);
+      console.log(`Sync Complete: ${synced} item(s) synced.`);
     }
 
     return {

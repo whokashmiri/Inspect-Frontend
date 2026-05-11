@@ -1323,17 +1323,6 @@ const isAssetSynced = (asset: AssetItem) => {
   );
 };
   
-
-
-
-
-const imageViewerItems = viewerMedia
-  .filter((item) => item.mediaType === "image")
-  .map((item) => ({ url: item.uri }));
-
-const activeImageIndex = viewerMedia
-  .filter((item) => item.mediaType === "image")
-  .findIndex((item) => item.uri === viewerMedia[activeMediaIndex]?.uri);
   return (
     <SafeAreaView style={styles.flex} edges={["left", "right", "bottom"]}>
       <TouchableWithoutFeedback
