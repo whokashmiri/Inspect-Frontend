@@ -1344,16 +1344,16 @@ modalCardSmall: {
     flex: 1,
   },
 
-  snackbar: {
+snackbar: {
   position: "absolute",
+  top: Platform.OS === "ios" ? 60 : 5,
   left: 20,
   right: 20,
-  bottom: 40,
   paddingVertical: 12,
   paddingHorizontal: 16,
   borderRadius: 14,
   zIndex: 9999,
-  elevation: 10,
+  elevation: 20,
 },
 
 snackbarText: {
