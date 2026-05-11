@@ -1994,7 +1994,7 @@ const activeImageIndex = viewerMedia
 </Modal>
 
 
-<Modal
+{/* <Modal
   visible={mediaViewerVisible}
   transparent={false}
   animationType="fade"
@@ -2079,6 +2079,66 @@ const activeImageIndex = viewerMedia
       </>
     )}
 
+    <TouchableOpacity style={styles.viewerCloseBtn} onPress={closeMediaViewer}>
+      <Ionicons name="close" size={26} color="#fff" />
+    </TouchableOpacity>
+  </View>
+</Modal> */}
+
+
+<Modal
+  visible={mediaViewerVisible}
+  transparent={false}
+  animationType="fade"
+  onRequestClose={closeMediaViewer}
+>
+  <View style={styles.viewerContainer}>
+    <FlatList
+      data={viewerMedia}
+      keyExtractor={(_, index) => `media-${index}`}
+      showsVerticalScrollIndicator={false}
+      pagingEnabled
+      snapToAlignment="start"
+      decelerationRate="fast"
+      onViewableItemsChanged={({ viewableItems }) => {
+        if (viewableItems.length > 0) {
+          setActiveMediaIndex(viewableItems[0].index ?? 0);
+        }
+      }}
+      viewabilityConfig={{ itemVisiblePercentThreshold: 50 }}
+      contentContainerStyle={{ flexGrow: 1 }}
+      renderItem={({ item }) => (
+  <View style={{ 
+    width: SCREEN_WIDTH, 
+    height: Dimensions.get("window").height,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#000"
+  }}>
+    {item.mediaType === "video" ? (
+      <MediaVideoPlayer key={item.uri} uri={item.uri} />
+    ) : (
+      <Image
+        source={{ uri: item.uri }}
+        style={{ 
+          width: SCREEN_WIDTH, 
+          height: Dimensions.get("window").height 
+        }}
+        resizeMode="contain"
+      />
+    )}
+  </View>
+)}
+    />
+
+    {/* Indicator */}
+    <View style={styles.viewerIndicator}>
+      <Text style={styles.viewerIndicatorText}>
+        {activeMediaIndex + 1} / {viewerMedia.length}
+      </Text>
+    </View>
+
+    {/* Close button */}
     <TouchableOpacity style={styles.viewerCloseBtn} onPress={closeMediaViewer}>
       <Ionicons name="close" size={26} color="#fff" />
     </TouchableOpacity>
