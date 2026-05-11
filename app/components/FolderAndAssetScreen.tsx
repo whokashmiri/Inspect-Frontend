@@ -134,6 +134,8 @@ const [showFullProjectName, setShowFullProjectName] = useState(false);
 const [rawDataKeyValues, setRawDataKeyValues] = useState<string[]>([]);
 
 const [unsyncedAssetIds, setUnsyncedAssetIds] = useState<string[]>([]);
+const [uploadingAssetIds, setUploadingAssetIds] = useState<string[]>([]); 
+
 
 
 const [mediaViewerVisible, setMediaViewerVisible] = useState(false);
@@ -269,8 +271,6 @@ const handleBackPress = async () => {
   const autoEnterRootAttemptedRef = useRef(false);
   const adminRootFolderIdRef = useRef<string | null>(null);
   const downloadCheckCompletedRef = useRef(false);
-
-   const assetSubmitLockRef = useRef(false);
 
    const assetWizardInputRef = useRef<TextInput>(null);
    const autoSyncLockRef = useRef(false);
@@ -991,6 +991,7 @@ useEffect(() => {
    const optimisticAsset = buildLocalAsset(draft);
 optimisticAsset.id = clientMutationId;
 setUnsyncedAssetIds((prev) => [...prev, clientMutationId]);
+setUploadingAssetIds((prev) => [...prev, clientMutationId]); 
 
 setAssets((prev) => [optimisticAsset, ...prev]);
 
@@ -1015,6 +1016,7 @@ if ("offline" in result) {
         : asset
     )
   );
+   setUploadingAssetIds((prev) => prev.filter((id) => id !== clientMutationId));
 
   showSnackbar(result.message, "info");
 } else {
@@ -1025,7 +1027,7 @@ if ("offline" in result) {
       asset.id === clientMutationId ? result.asset : asset
     )
   );
-
+  setUploadingAssetIds((prev) => prev.filter((id) => id !== clientMutationId));
   showSnackbar(t("folderAssetScreen.snackbar.assetCreated"), "success");
 }
     
@@ -1050,6 +1052,7 @@ if ("offline" in result) {
 
   const updateAssetAsync = async (draft: AssetDraft) => {
     if (!editingAsset) return;
+    setUploadingAssetIds((prev) => [...prev, editingAsset.id]);
     const newImages = (draft.images || []).filter(
       (item: any) => !item.existing && item.uri && !item.uri.startsWith("http")
     );
@@ -1120,15 +1123,12 @@ if ("offline" in result) {
       if (downloadedOffline) await upsertOfflineAsset(result.asset);
       showSnackbar(t("folderAssetScreen.snackbar.assetUpdated"), "success");
     }
+     setUploadingAssetIds((prev) => prev.filter((id) => id !== editingAsset.id));
     await loadContents(currentFolderId, { showSkeleton: true });
   };
 
 
 const submitAssetInBackground = async (draft: AssetDraft, isEdit: boolean) => {
-  if (assetSubmitLockRef.current) return;
-
-  assetSubmitLockRef.current = true;
-
   closeAssetModal(); 
 
   setPendingAssetSaveCount((count) => count + 1);
@@ -1145,7 +1145,6 @@ const submitAssetInBackground = async (draft: AssetDraft, isEdit: boolean) => {
       "error"
     );
   } finally {
-    assetSubmitLockRef.current = false;
     setPendingAssetSaveCount((count) => Math.max(0, count - 1));
   }
 };
@@ -1311,6 +1310,10 @@ const handleDeleteAsset = async (asset: AssetItem) => {
   );
 };
 
+
+const isAssetUploading = (asset: AssetItem) => {
+  return uploadingAssetIds.includes(asset.id);
+};
 
 const isAssetSynced = (asset: AssetItem) => {
   return (
@@ -1693,95 +1696,97 @@ const activeImageIndex = viewerMedia
                     );
                   }
 
-                  return (
-                    <View style={styles.gridItem}>
-                      <TouchableOpacity
-                        style={styles.gridCard}
-                        onPress={() => openEditAsset(item)}
-                        activeOpacity={0.85}
-                      >
-                        {getAssetImageUri(item) ? (
-                      <Image
-                        source={{ uri: getAssetImageUri(item)! }}
-                        style={styles.assetImageBackground}
-                        resizeMode="cover"
-                        />
-                      ) : (
-                          <View style={styles.iconWrap}>
-                            <Ionicons
-                              name="cube-outline"
-                              size={36}
-                              color={!item.isPresent ? "#FF4444" : "#fff"}
-                            />
-                          </View>
-                        )}
-                        {!item.isPresent && (
-                          <View style={styles.notPresentOverlay} />
-                        )}
-                        <View style={styles.assetNameOverlay}>
-                          <Text
-                            style={styles.gridTitleOverlay}
-                            numberOfLines={2}
-                          >
-                            {item.name}
-                          </Text>
-                        </View>
-                        {getValidAssetMedia(item).length > 0 && (
-                          <View style={styles.photoCountBadge}>
-                            <Text style={styles.photoCountText}>
-                              {getValidAssetMedia(item).length}
-                            </Text>
-                          </View>
-                        )}
-                        {(item as any).hasNotes && (
-                          <View style={styles.notesBadge}>
-                            <Ionicons
-                              name="document-text"
-                              size={12}
-                              color="#fff"
-                            />
-                          </View>
-                        )}
+                  
+                    return (
+  <View style={styles.gridItem}>
+    <TouchableOpacity
+      style={styles.gridCard}
+      onPress={() => openEditAsset(item)}
+      activeOpacity={0.85}
+    >
+      {getAssetImageUri(item) ? (
+        <Image
+          source={{ uri: getAssetImageUri(item)! }}
+          style={styles.assetImageBackground}
+          resizeMode="cover"
+        />
+      ) : (
+        <View style={styles.iconWrap}>
+          <Ionicons
+            name="cube-outline"
+            size={36}
+            color={!item.isPresent ? "#FF4444" : "#fff"}
+          />
+        </View>
+      )}
 
-                        <TouchableOpacity
-  style={styles.assetMenuBtn}
-  onPress={(e) => {
-    e.stopPropagation();
-    openAssetMenu(item);
-  }}
-  activeOpacity={0.8}
->
-  {deletingAssetId === item.id ? (
-    <ActivityIndicator size="small" color="#fff" />
-  ) : (
-    <Ionicons name="ellipsis-vertical" size={16} color="#fff" />
-  )}
-</TouchableOpacity>
+      {/* ── Uploading overlay ── */}
+      {isAssetUploading(item) && (
+        <View style={styles.uploadingOverlay}>
+          <ActivityIndicator size="small" color="#ffffff" />
+        </View>
+      )}
 
-{getValidAssetMedia(item).length > 0 && (
-  <TouchableOpacity
-    style={styles.assetViewBtn}
-    onPress={(e) => {
-      e.stopPropagation();
-      openAssetMediaViewer(item);
-    }}
-    activeOpacity={0.8}
-  >
-    <Ionicons name="eye-outline" size={14} color="#fff" />
-  </TouchableOpacity>
-)}
+      {!item.isPresent && <View style={styles.notPresentOverlay} />}
 
+      <View style={styles.assetNameOverlay}>
+        <Text style={styles.gridTitleOverlay} numberOfLines={2}>
+          {item.name}
+        </Text>
+      </View>
 
-                        <View style={styles.syncTickBadge}>
-                         <Ionicons
-  name={isAssetSynced(item) ? "checkmark-done" : "checkmark"}
-  size={12}
-  color={isAssetSynced(item) ? "#F7C59F" : "#9CA3AF"}
-/>
-                        </View>
-                      </TouchableOpacity>
-                    </View>
-                  );
+      {getValidAssetMedia(item).length > 0 && (
+        <View style={styles.photoCountBadge}>
+          <Text style={styles.photoCountText}>
+            {getValidAssetMedia(item).length}
+          </Text>
+        </View>
+      )}
+      {(item as any).hasNotes && (
+        <View style={styles.notesBadge}>
+          <Ionicons name="document-text" size={12} color="#fff" />
+        </View>
+      )}
+
+      <TouchableOpacity
+        style={styles.assetMenuBtn}
+        onPress={(e) => {
+          e.stopPropagation();
+          openAssetMenu(item);
+        }}
+        activeOpacity={0.8}
+      >
+        {deletingAssetId === item.id ? (
+          <ActivityIndicator size="small" color="#fff" />
+        ) : (
+          <Ionicons name="ellipsis-vertical" size={16} color="#fff" />
+        )}
+      </TouchableOpacity>
+
+      {getValidAssetMedia(item).length > 0 && (
+        <TouchableOpacity
+          style={styles.assetViewBtn}
+          onPress={(e) => {
+            e.stopPropagation();
+            openAssetMediaViewer(item);
+          }}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="eye-outline" size={14} color="#fff" />
+        </TouchableOpacity>
+      )}
+
+      <View style={styles.syncTickBadge}>
+        <Ionicons
+          name={isAssetSynced(item) ? "checkmark-done" : "checkmark"}
+          size={12}
+          color={isAssetSynced(item) ? "#F7C59F" : "#9CA3AF"}
+        />
+      </View>
+    </TouchableOpacity>
+  </View>
+);
+                 
                 }}
               />
             )}
@@ -1799,14 +1804,6 @@ const activeImageIndex = viewerMedia
         >
           <Ionicons name="barcode-outline" size={22} color="#ffffff" />
         </TouchableOpacity>
-
-        {/* ── Pending asset save loader ── */}
-        {pendingAssetSaveCount > 0 && (
-          <View style={[styles.pendingLoader, { bottom: Math.max(insets.bottom, 0) + 110 }]}>
-            <ActivityIndicator size="small" color="#000" />
-            <Text style={styles.pendingLoaderText}>{pendingAssetSaveCount}</Text>
-          </View>
-        )}
 
         {/* ── Back button ── */}
         <TouchableOpacity
@@ -2393,6 +2390,19 @@ videoPlayer: {
   marginBottom: 4,
   position: "relative",
   zIndex: 50,
+},
+
+uploadingOverlay: {
+  position: "absolute",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: "rgba(42,50,75,0.55)",
+  borderRadius: 15,
+  alignItems: "center",
+  justifyContent: "center",
+  zIndex: 20,
 },
 
 titleWrap: {
@@ -2998,19 +3008,7 @@ viewerIndicatorText: {
     fontWeight: "600",
   },
 
-  pendingLoader: {
-    position: "absolute",
-    right: 20,
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: SOFT,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    zIndex: 20,
-    elevation: 8,
-  },
+
   pendingLoaderText: {
     color: TEXT,
     fontSize: 14,
