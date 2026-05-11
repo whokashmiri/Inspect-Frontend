@@ -53,7 +53,7 @@ const getInitialDraft = (
   manufactureYear: initialData?.manufactureYear || "",
   kilometersDriven: initialData?.kilometersDriven || "",
   isPresent: initialData?.isPresent ?? true,
-  isDone: initialData?.isDone || false,
+  isDone: initialData?.isDone || true,
   hasNotes: initialData?.hasNotes ?? false,
   notes: initialData?.notes || "",
 });
