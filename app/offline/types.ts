@@ -1,6 +1,6 @@
 
 
-//types.ts
+//offline/types.ts
 export type OfflineAction =
   | "createProject"
   | "createFolder"

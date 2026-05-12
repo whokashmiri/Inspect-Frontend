@@ -1,11 +1,11 @@
 
 
-//sync.ts
+//offline/sync.ts
 
 import NetInfo from "@react-native-community/netinfo";
 import { projectApi, projectContentApi, authApi, tokenStore } from "../../api/api";
 import { getPending, updateStatus, deletePending, updatePayload } from "./storage";
-import { deleteOfflineImageFiles } from "./mediaStorage";
+import { deleteOfflineMediaFiles } from "./mediaStorage";
 import { PendingItem } from "./types";
 import {
   getCachedUser,
@@ -66,7 +66,7 @@ async function patchPendingProjectRefs(
     const payload = item.payload as Record<string, unknown>;
     if (payload?.projectId === localId) {
       const updatedPayload = { ...payload, projectId: remoteId };
-      updates.push(updatePayload(item.id, updatedPayload));
+      await updatePayload(item.id, updatedPayload);
       item.payload = updatedPayload;
     }
   }
@@ -98,8 +98,7 @@ async function patchPendingFolderRefs(
     }
 
     if (changed) {
-      updates.push(updatePayload(item.id, updatedPayload));
-      item.payload = updatedPayload;
+      await updatePayload(item.id, updatedPayload);
     }
   }
 
@@ -126,13 +125,13 @@ async function processQueueItem(
 
       case "createAsset": {
         await projectContentApi.createAsset(item.payload as any);
-        await deleteOfflineImageFiles(item.payload);
+        await deleteOfflineMediaFiles(item.payload);
         break;
       }
 
       case "updateAsset": {
         await projectContentApi.updateAsset(item.payload as any);
-        await deleteOfflineImageFiles(item.payload);
+        await deleteOfflineMediaFiles(item.payload);
         break;
       }
 
