@@ -1,3 +1,5 @@
+
+///offline/mediaStorage.ts
 import { Directory, File, Paths } from "expo-file-system";
 
 const OFFLINE_MEDIA_DIR = new Directory(Paths.document, "offline-media");
@@ -63,11 +65,34 @@ export async function persistOfflineMediaPayload(payload: any) {
   };
 }
 
-export async function deleteOfflineImageFiles(payload: any) {
-  const images = payload.images || [];
+// export async function deleteOfflineImageFiles(payload: any) {
+//   const images = payload.images || [];
 
-  for (const image of images) {
-    const uri = image?.uri;
+//   for (const image of images) {
+//     const uri = image?.uri;
+
+//     if (typeof uri === "string" && uri.startsWith(OFFLINE_MEDIA_DIR.uri)) {
+//       try {
+//         const file = new File(uri);
+
+//         if (file.exists) {
+//           file.delete();
+//         }
+//       } catch {
+//         console.warn(`Failed to delete offline image file: ${uri}`);
+//       }
+//     }
+//   }
+// }
+
+export async function deleteOfflineMediaFiles(payload: any) {
+  const mediaItems = [
+    ...(payload.images || []),
+    ...(payload.voiceNotes || []),
+  ];
+
+  for (const item of mediaItems) {
+    const uri = item?.uri;
 
     if (typeof uri === "string" && uri.startsWith(OFFLINE_MEDIA_DIR.uri)) {
       try {
@@ -77,7 +102,7 @@ export async function deleteOfflineImageFiles(payload: any) {
           file.delete();
         }
       } catch {
-        console.warn(`Failed to delete offline image file: ${uri}`);
+        console.warn(`Failed to delete offline media file: ${uri}`);
       }
     }
   }

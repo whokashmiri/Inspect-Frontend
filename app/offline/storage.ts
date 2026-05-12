@@ -3,11 +3,10 @@
 //offline/storage.ts
 import * as SQLite from "expo-sqlite";
 import { Platform } from "react-native";
+import { runDbTask } from "./dbQueue";
 import {
   PendingItem,
   OfflineProjectRecord,
-  OfflineFolderRecord,
-  OfflineAssetRecord,
 } from "./types";
 
 const DB_NAME = Platform.select({
@@ -398,21 +397,23 @@ export async function savePending(
     lastAttempt: null,
   };
 
-  await db.runAsync(
-    `INSERT OR REPLACE INTO pending_queue
-     (id, type, payload, projectId, localMediaUris, createdAt, status, retryCount, lastAttempt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
-    [
-      fullItem.id,
-      fullItem.type,
-      JSON.stringify(fullItem.payload),
-      fullItem.projectId ?? null,
-      JSON.stringify(fullItem.localMediaUris ?? []),
-      fullItem.createdAt,
-      fullItem.status,
-      fullItem.retryCount ?? 0,
-      fullItem.lastAttempt ?? null,
-    ]
+  await runDbTask(() =>
+    db.runAsync(
+      `INSERT OR REPLACE INTO pending_queue
+       (id, type, payload, projectId, localMediaUris, createdAt, status, retryCount, lastAttempt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+      [
+        fullItem.id,
+        fullItem.type,
+        JSON.stringify(fullItem.payload),
+        fullItem.projectId ?? null,
+        JSON.stringify(fullItem.localMediaUris ?? []),
+        fullItem.createdAt,
+        fullItem.status,
+        fullItem.retryCount ?? 0,
+        fullItem.lastAttempt ?? null,
+      ]
+    )
   );
 
   return fullItem.id;
@@ -484,20 +485,27 @@ export async function updateStatus(
 ): Promise<void> {
   await initStorage();
 
-  await db.runAsync(
-    `UPDATE pending_queue
-     SET status = ?,
-         retryCount = COALESCE(?, retryCount),
-         lastAttempt = ?
-     WHERE id = ?;`,
-    [status, retryCount ?? null, lastAttempt ?? null, id]
+  await runDbTask(() =>
+    db.runAsync(
+      `UPDATE pending_queue
+       SET status = ?,
+           retryCount = COALESCE(?, retryCount),
+           lastAttempt = ?
+       WHERE id = ?;`,
+      [status, retryCount ?? null, lastAttempt ?? null, id]
+    )
   );
 }
 
+
 export async function deletePending(id: string): Promise<void> {
   await initStorage();
-  await db.runAsync(`DELETE FROM pending_queue WHERE id = ?;`, [id]);
+
+  await runDbTask(() =>
+    db.runAsync(`DELETE FROM pending_queue WHERE id = ?;`, [id])
+  );
 }
+
 
 export async function getPendingCount(): Promise<number> {
   try {
@@ -513,14 +521,20 @@ export async function getPendingCount(): Promise<number> {
   }
 }
 
-export async function updatePayload(id: string, payload: Record<string, any>): Promise<void> {
+export async function updatePayload(
+  id: string,
+  payload: Record<string, any>
+): Promise<void> {
   await initStorage();
 
-  await db.runAsync(`UPDATE pending_queue SET payload = ? WHERE id = ?;`, [
-    JSON.stringify(payload),
-    id,
-  ]);
+  await runDbTask(() =>
+    db.runAsync(`UPDATE pending_queue SET payload = ? WHERE id = ?;`, [
+      JSON.stringify(payload),
+      id,
+    ])
+  );
 }
+
 
 /**
  * Find pending item for asset update - checks for existing updateAsset or createAsset
@@ -610,78 +624,98 @@ export async function getPendingAssetItem(
 export async function saveProjectOffline(project: any) {
   await initStorage();
 
-  await db.runAsync(
-    `INSERT OR REPLACE INTO offline_projects
-     (id, companyId, userId, data, downloadedAt)
-     VALUES (?, ?, ?, ?, ?);`,
-    [
-      project.id,
-      project.companyId ?? null,
-      project.userId ?? null,
-      JSON.stringify(project),
-      Date.now(),
-    ]
+  await runDbTask(() =>
+    db.runAsync(
+      `INSERT OR REPLACE INTO offline_projects
+       (id, companyId, userId, data, downloadedAt)
+       VALUES (?, ?, ?, ?, ?);`,
+      [
+        project.id,
+        project.companyId ?? null,
+        project.userId ?? null,
+        JSON.stringify(project),
+        Date.now(),
+      ]
+    )
   );
 }
 
+
 export async function saveFoldersOffline(
-  folders: Array<{ id: string; projectId: string; parentId?: string | null; parent?: string | null; [key: string]: any }>
+  folders: Array<{
+    id: string;
+    projectId: string;
+    parentId?: string | null;
+    parent?: string | null;
+    [key: string]: any;
+  }>
 ) {
   await initStorage();
 
-  for (const folder of folders) {
-    const parentId = normalizeFolderParent(folder);
+  await runDbTask(async () => {
+    for (const folder of folders) {
+      const parentId = normalizeFolderParent(folder);
 
-    const normalizedFolder = {
-      ...folder,
-      parentId,
-    };
-
-    await db.runAsync(
-      `INSERT OR REPLACE INTO offline_folders (id, projectId, parentId, data)
-       VALUES (?, ?, ?, ?);`,
-      [
-        folder.id,
-        folder.projectId,
+      const normalizedFolder = {
+        ...folder,
         parentId,
-        JSON.stringify(normalizedFolder),
-      ]
-    );
-  }
+      };
+
+      await db.runAsync(
+        `INSERT OR REPLACE INTO offline_folders (id, projectId, parentId, data)
+         VALUES (?, ?, ?, ?);`,
+        [
+          folder.id,
+          folder.projectId,
+          parentId,
+          JSON.stringify(normalizedFolder),
+        ]
+      );
+    }
+  });
 }
 
 export async function saveAssetsOffline(
-  assets: Array<{ id: string; projectId: string; folderId?: string | null; parent?: string | null; [key: string]: any }>
+  assets: Array<{
+    id: string;
+    projectId: string;
+    folderId?: string | null;
+    parent?: string | null;
+    [key: string]: any;
+  }>
 ) {
   await initStorage();
 
-  for (const asset of assets) {
-    const folderId = normalizeAssetFolder(asset);
+  await runDbTask(async () => {
+    for (const asset of assets) {
+      const folderId = normalizeAssetFolder(asset);
 
-    const normalizedAsset = {
-      ...asset,
-      folderId,
-    };
-
-    await db.runAsync(
-      `INSERT OR REPLACE INTO offline_assets (id, projectId, folderId, data)
-       VALUES (?, ?, ?, ?);`,
-      [
-        asset.id,
-        asset.projectId,
+      const normalizedAsset = {
+        ...asset,
         folderId,
-        JSON.stringify(normalizedAsset),
-      ]
-    );
-  }
+      };
+
+      await db.runAsync(
+        `INSERT OR REPLACE INTO offline_assets (id, projectId, folderId, data)
+         VALUES (?, ?, ?, ?);`,
+        [
+          asset.id,
+          asset.projectId,
+          folderId,
+          JSON.stringify(normalizedAsset),
+        ]
+      );
+    }
+  });
 }
 
 export async function clearOfflineProject(projectId: string): Promise<void> {
   await initStorage();
-
+ await runDbTask(async ()=> {
   await db.runAsync(`DELETE FROM offline_projects WHERE id = ?;`, [projectId]);
   await db.runAsync(`DELETE FROM offline_folders WHERE projectId = ?;`, [projectId]);
   await db.runAsync(`DELETE FROM offline_assets WHERE projectId = ?;`, [projectId]);
+ });
 }
 
 export async function isProjectDownloaded(projectId: string): Promise<boolean> {
@@ -786,10 +820,12 @@ export async function upsertOfflineFolder(
     parentId,
   };
 
-  await db.runAsync(
-    `INSERT OR REPLACE INTO offline_folders (id, projectId, parentId, data)
-     VALUES (?, ?, ?, ?);`,
-    [folder.id, folder.projectId, parentId, JSON.stringify(normalizedFolder)]
+  await runDbTask(() =>
+    db.runAsync(
+      `INSERT OR REPLACE INTO offline_folders (id, projectId, parentId, data)
+       VALUES (?, ?, ?, ?);`,
+      [folder.id, folder.projectId, parentId, JSON.stringify(normalizedFolder)]
+    )
   );
 }
 
@@ -811,10 +847,12 @@ export async function upsertOfflineAsset(
       folderId,
     };
 
-    await db.runAsync(
-      `INSERT OR REPLACE INTO offline_assets (id, projectId, folderId, data)
-       VALUES (?, ?, ?, ?);`,
-      [asset.id, asset.projectId, folderId, JSON.stringify(normalizedAsset)]
+    await runDbTask(() =>
+      db.runAsync(
+        `INSERT OR REPLACE INTO offline_assets (id, projectId, folderId, data)
+         VALUES (?, ?, ?, ?);`,
+        [asset.id, asset.projectId, folderId, JSON.stringify(normalizedAsset)]
+      )
     );
   } catch (error) {
     console.error("Error upserting offline asset:", error);
