@@ -1,5 +1,8 @@
+
+//offline/authStorage.ts
 import * as SecureStore from "expo-secure-store";
 import * as SQLite from "expo-sqlite";
+import { runDbTask } from "./dbQueue";
 import {
   CachedCompany,
   CachedUser,
@@ -73,10 +76,12 @@ export async function clearTokens() {
 export async function saveCachedUser(user: CachedUser) {
   await initAuthStorage();
 
-  await db.runAsync(
-    `INSERT OR REPLACE INTO offline_user (id, data, updatedAt)
-     VALUES (?, ?, ?)`,
-    [user.id, JSON.stringify(user), Date.now()]
+  await runDbTask(() =>
+    db.runAsync(
+      `INSERT OR REPLACE INTO offline_user (id, data, updatedAt)
+       VALUES (?, ?, ?)`,
+      [user.id, JSON.stringify(user), Date.now()]
+    )
   );
 }
 
@@ -98,8 +103,11 @@ export async function getCachedUser(): Promise<CachedUser | null> {
 
 export async function clearCachedUser() {
   await initAuthStorage();
-  await db.runAsync(`DELETE FROM offline_user`);
+
+  await runDbTask(() => db.runAsync(`DELETE FROM offline_user`));
 }
+
+
 
 export async function saveCachedCompanies(
   userId: string,
@@ -107,15 +115,17 @@ export async function saveCachedCompanies(
 ) {
   await initAuthStorage();
 
-  await db.runAsync(`DELETE FROM offline_companies WHERE userId = ?`, [userId]);
+  await runDbTask(async () => {
+    await db.runAsync(`DELETE FROM offline_companies WHERE userId = ?`, [userId]);
 
-  for (const company of companies) {
-    await db.runAsync(
-      `INSERT OR REPLACE INTO offline_companies (id, userId, data, updatedAt)
-       VALUES (?, ?, ?, ?)`,
-      [company.id, userId, JSON.stringify(company), Date.now()]
-    );
-  }
+    for (const company of companies) {
+      await db.runAsync(
+        `INSERT OR REPLACE INTO offline_companies (id, userId, data, updatedAt)
+         VALUES (?, ?, ?, ?)`,
+        [company.id, userId, JSON.stringify(company), Date.now()]
+      );
+    }
+  });
 }
 
 export async function getCachedCompanies(
@@ -142,21 +152,25 @@ export async function getCachedCompanies(
 export async function clearCachedCompanies(userId?: string) {
   await initAuthStorage();
 
-  if (userId) {
-    await db.runAsync(`DELETE FROM offline_companies WHERE userId = ?`, [userId]);
-    return;
-  }
+  await runDbTask(() => {
+    if (userId) {
+      return db.runAsync(`DELETE FROM offline_companies WHERE userId = ?`, [userId]);
+    }
 
-  await db.runAsync(`DELETE FROM offline_companies`);
+    return db.runAsync(`DELETE FROM offline_companies`);
+  });
 }
+
 
 export async function saveSelectedCompany(userId: string, companyId: string) {
   await initAuthStorage();
 
-  await db.runAsync(
-    `INSERT OR REPLACE INTO offline_selected_company (userId, companyId, selectedAt)
-     VALUES (?, ?, ?)`,
-    [userId, companyId, Date.now()]
+  await runDbTask(() =>
+    db.runAsync(
+      `INSERT OR REPLACE INTO offline_selected_company (userId, companyId, selectedAt)
+       VALUES (?, ?, ?)`,
+      [userId, companyId, Date.now()]
+    )
   );
 
   const meta = await getSessionMeta();
@@ -183,14 +197,15 @@ export async function getSelectedCompanyId(userId: string): Promise<string | nul
 export async function clearSelectedCompany(userId?: string) {
   await initAuthStorage();
 
-  if (userId) {
-    await db.runAsync(`DELETE FROM offline_selected_company WHERE userId = ?`, [
-      userId,
-    ]);
-    return;
-  }
+  await runDbTask(() => {
+    if (userId) {
+      return db.runAsync(`DELETE FROM offline_selected_company WHERE userId = ?`, [
+        userId,
+      ]);
+    }
 
-  await db.runAsync(`DELETE FROM offline_selected_company`);
+    return db.runAsync(`DELETE FROM offline_selected_company`);
+  });
 }
 
 export async function saveSessionMeta(

@@ -1,3 +1,5 @@
+
+//offline/index.ts
 import { initStorage } from "./storage";
 import { initSync, syncQueue, triggerManualSync, startSyncListener, stopSyncListener } from "./sync";
 import { initAuthStorage } from "./authStorage";
