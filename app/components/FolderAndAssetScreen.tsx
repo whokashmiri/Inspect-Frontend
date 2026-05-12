@@ -950,19 +950,30 @@ useEffect(() => {
     };
   };
 
-  const createAssetAsync = async (draft: AssetDraft) => {
+ const createAssetAsync = async (draft: AssetDraft) => {
+  const clientMutationId =
+    (draft as any).clientMutationId ||
+    `asset_${projectId}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 
-    const clientMutationId =
-  (draft as any).clientMutationId ||
-  `asset_${projectId}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+  const optimisticAsset = buildLocalAsset(draft);
+  optimisticAsset.id = clientMutationId;
+
+  setUnsyncedAssetIds((prev) => [...prev, clientMutationId]);
+  setUploadingAssetIds((prev) => [...prev, clientMutationId]);
+  setAssets((prev) => [optimisticAsset, ...prev]);
+
+  try {
     const newImages = (draft.images || []).filter(
       (item: any) => item.uri && !item.uri.startsWith("http")
     );
+
     const newVoiceNotes = (draft.voiceNotes || []).filter(
       (item: any) => item.uri && !item.uri.startsWith("http")
     );
+
     const normalizedAssetType = normalizeAssetType(draft.assetType as any);
     const isVehicle = normalizedAssetType === "vehicle";
+
     const payload = {
       clientMutationId,
       projectId,
@@ -977,78 +988,80 @@ useEffect(() => {
       assetType: normalizedAssetType,
       brand: isVehicle ? draft.brand || null : null,
       model: isVehicle ? draft.model || null : null,
-      
-      hasNotes:draft.hasNotes ?? false,
+      hasNotes: draft.hasNotes ?? false,
       notes: draft.notes || null,
-
       manufactureYear: isVehicle ? draft.manufactureYear || null : null,
       kilometersDriven: isVehicle ? draft.kilometersDriven || null : null,
       isDone: draft.isDone ?? false,
       isPresent: draft.isPresent ?? true,
     };
 
+    const result = await safeApiCall(
+      () => projectContentApi.createAsset(payload),
+      payload,
+      { type: "createAsset", projectId }
+    );
 
-   const optimisticAsset = buildLocalAsset(draft);
-optimisticAsset.id = clientMutationId;
-setUnsyncedAssetIds((prev) => [...prev, clientMutationId]);
-setUploadingAssetIds((prev) => [...prev, clientMutationId]); 
-
-setAssets((prev) => [optimisticAsset, ...prev]);
-
-const result = await safeApiCall(
-  () => projectContentApi.createAsset(payload),
-  payload,
-  { type: "createAsset", projectId }
-);
-
-await refreshPendingCount();
-
-if ("offline" in result) {
-  if (downloadedOffline) {
-    optimisticAsset.id = result.localId;
-    await upsertOfflineAsset(optimisticAsset);
-  }
-
-  setAssets((prev) =>
-    prev.map((asset) =>
-      asset.id === clientMutationId
-        ? { ...optimisticAsset, id: result.localId }
-        : asset
-    )
-  );
-   setUploadingAssetIds((prev) => prev.filter((id) => id !== clientMutationId));
-
-  showSnackbar(result.message, "info");
-} else {
-  if (downloadedOffline) await upsertOfflineAsset(result.asset);
-
-  setAssets((prev) =>
-    prev.map((asset) =>
-      asset.id === clientMutationId ? result.asset : asset
-    )
-  );
-  setUploadingAssetIds((prev) => prev.filter((id) => id !== clientMutationId));
-  showSnackbar(t("folderAssetScreen.snackbar.assetCreated"), "success");
-}
-    
     await refreshPendingCount();
+
     if ("offline" in result) {
+      const localId = result.localId;
+
+      setAssets((prev) =>
+        prev.map((asset) =>
+          asset.id === clientMutationId
+            ? { ...optimisticAsset, id: localId }
+            : asset
+        )
+      );
+
+      setUnsyncedAssetIds((prev) => [
+        ...prev.filter((id) => id !== clientMutationId),
+        localId,
+      ]);
+
+      setUploadingAssetIds((prev) =>
+        prev.filter((id) => id !== clientMutationId)
+      );
+
       if (downloadedOffline) {
-        const localAsset = buildLocalAsset(draft);
-        localAsset.id = result.localId;
-        setUnsyncedAssetIds((prev) => [
-  ...prev.filter((id) => id !== clientMutationId),
-  result.localId,
-]);
-        await upsertOfflineAsset(localAsset);
+        await upsertOfflineAsset({ ...optimisticAsset, id: localId });
       }
+
       showSnackbar(result.message, "info");
-    } else {
-      if (downloadedOffline) await upsertOfflineAsset(result.asset);
-      showSnackbar(t("folderAssetScreen.snackbar.assetCreated"), "success");
+      return;
     }
-    await loadContents(currentFolderId, { showSkeleton: true });
-  };
+
+    setAssets((prev) =>
+      prev.map((asset) =>
+        asset.id === clientMutationId ? result.asset : asset
+      )
+    );
+
+    setUnsyncedAssetIds((prev) =>
+      prev.filter((id) => id !== clientMutationId)
+    );
+
+    setUploadingAssetIds((prev) =>
+      prev.filter((id) => id !== clientMutationId)
+    );
+
+    if (downloadedOffline) {
+      await upsertOfflineAsset(result.asset);
+    }
+
+    showSnackbar(t("folderAssetScreen.snackbar.assetCreated"), "success");
+  } catch (error: any) {
+    setUploadingAssetIds((prev) =>
+      prev.filter((id) => id !== clientMutationId)
+    );
+
+    showSnackbar(
+      error?.message || t("folderAssetScreen.snackbar.saveFailed"),
+      "error"
+    );
+  }
+};
 
   const updateAssetAsync = async (draft: AssetDraft) => {
     if (!editingAsset) return;
@@ -1983,98 +1996,6 @@ const isAssetSynced = (asset: AssetItem) => {
 </Modal>
 
 
-{/* <Modal
-  visible={mediaViewerVisible}
-  transparent={false}
-  animationType="fade"
-  onRequestClose={closeMediaViewer}
->
-  <View style={styles.viewerContainer}>
-    {viewerMedia.length > 0 && (
-      <>
-        {viewerMedia[activeMediaIndex]?.mediaType === "video" ? (
-          <MediaVideoPlayer
-            key={viewerMedia[activeMediaIndex].uri}
-            uri={viewerMedia[activeMediaIndex].uri}
-          />
-        ) : (
-         <ImageViewer
-  imageUrls={imageViewerItems}
-  index={Math.max(activeImageIndex, 0)}
-  enableSwipeDown
-  onSwipeDown={closeMediaViewer}
-  backgroundColor="#000"
-  saveToLocalByLongPress={false}
-  renderIndicator={() => <></>}
-  onChange={(imageIndex) => {
-    if (imageIndex === undefined) return;
-
-    const imageItems = viewerMedia.filter(
-      (item) => item.mediaType === "image"
-    );
-
-    const selectedImage = imageItems[imageIndex];
-    if (!selectedImage) return;
-
-    const realIndex = viewerMedia.findIndex(
-      (item) => item.uri === selectedImage.uri
-    );
-
-    if (realIndex >= 0) {
-      setActiveMediaIndex(realIndex);
-    }
-  }}
-/>
-        )}
-
-        <View style={styles.viewerIndicator}>
-          <Text style={styles.viewerIndicatorText}>
-            {activeMediaIndex + 1} / {viewerMedia.length}
-          </Text>
-        </View>
-
-        {viewerMedia.length > 1 && (
-          <View style={styles.viewerNavRow}>
-            <TouchableOpacity
-              style={[
-                styles.viewerNavBtn,
-                activeMediaIndex === 0 && styles.viewerNavBtnDisabled,
-              ]}
-              disabled={activeMediaIndex === 0}
-              onPress={() =>
-                setActiveMediaIndex((prev) => Math.max(0, prev - 1))
-              }
-            >
-              <Ionicons name="chevron-back" size={26} color="#fff" />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.viewerNavBtn,
-                activeMediaIndex === viewerMedia.length - 1 &&
-                  styles.viewerNavBtnDisabled,
-              ]}
-              disabled={activeMediaIndex === viewerMedia.length - 1}
-              onPress={() =>
-                setActiveMediaIndex((prev) =>
-                  Math.min(viewerMedia.length - 1, prev + 1)
-                )
-              }
-            >
-              <Ionicons name="chevron-forward" size={26} color="#fff" />
-            </TouchableOpacity>
-          </View>
-        )}
-      </>
-    )}
-
-    <TouchableOpacity style={styles.viewerCloseBtn} onPress={closeMediaViewer}>
-      <Ionicons name="close" size={26} color="#fff" />
-    </TouchableOpacity>
-  </View>
-</Modal> */}
-
-
 <Modal
   visible={mediaViewerVisible}
   transparent={false}
@@ -2447,7 +2368,7 @@ uploadingOverlay: {
   left: 0,
   right: 0,
   bottom: 0,
-  backgroundColor: "rgba(42,50,75,0.55)",
+  // backgroundColor: "rgba(42,50,75,0.55)",
   borderRadius: 15,
   alignItems: "center",
   justifyContent: "center",
