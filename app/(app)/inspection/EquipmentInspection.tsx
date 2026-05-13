@@ -6,6 +6,7 @@ import { useFonts } from "expo-font";
 import fonts from "../../fonts/fonts"
 
 export default function EquipmentInspectionScreen() {
+   const { t } = useTranslation(); 
   const router = useRouter();
   const [loaded] = useFonts({
     ...fonts.poppins,
