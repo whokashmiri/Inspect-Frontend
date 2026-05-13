@@ -315,6 +315,10 @@
     "Inspector": "مفتش",
     "Valuator": "مقيّم",
     "company_admin": "مدير الشركة"
+  },
+  "inspectionType":{
+    "realEstate" :"Real Estate",
+     "equipment" :"Equipment"
   }
 }
 

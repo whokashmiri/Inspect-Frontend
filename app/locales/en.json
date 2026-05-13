@@ -312,6 +312,9 @@
     "Inspector": "Inspector",
     "Valuator": "Valuator",
     "company_admin": "Company Admin"
+  }, "inspectionType":{
+    "realEstate" :"Real Estate",
+     "equipment" :"Equipment"
   }
 }
 
