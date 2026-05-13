@@ -45,7 +45,7 @@ export default function HomeScreen() {
   const handleCompanyPress = () => {
     downloadCompanyProjects(); // fire immediately in background
 
-    router.push("/project"); // navigate immediately
+    router.push("/inspection/InspectionType"); // navigate immediately
   };
 
   return (
