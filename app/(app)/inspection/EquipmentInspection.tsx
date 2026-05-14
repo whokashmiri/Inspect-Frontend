@@ -3,10 +3,10 @@ import { View, Text, StyleSheet, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { useFonts } from "expo-font";
-import fonts from "../../fonts/fonts"
+import fonts from "../../fonts/fonts";
 
 export default function EquipmentInspectionScreen() {
-   const { t } = useTranslation(); 
+  const { t } = useTranslation(); 
   const router = useRouter();
   const [loaded] = useFonts({
     ...fonts.poppins,

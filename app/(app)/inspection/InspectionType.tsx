@@ -22,7 +22,7 @@ export default function InspectionTypeScreen() {
 
       <Pressable
         style={styles.button}
-       onPress={() => router.push("/inspection/EquipmentInspection")}
+       onPress={() => router.push("inspection/AssetInspection")}
         android_ripple={{ color: "rgba(255,255,255,0.2)" }}
       >
         <Text style={styles.buttonText}>{t("inspectionType.realEstate")}</Text>
