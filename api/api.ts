@@ -5,10 +5,10 @@
 import * as SecureStore from "expo-secure-store";
 
 // ─── Config ────────────────────────────────────────────────────────────────
-export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://api.167.71.231.64.nip.io/api/v1";
+// export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://api.167.71.231.64.nip.io/api/v1";
 
 
-// export const BASE_URL = process.env.EXPO_PUBLIC_API_URL 
+export const BASE_URL = process.env.EXPO_PUBLIC_API_URL 
 
 const TOKEN_KEY = "auth.accessToken";
 const REFRESH_KEY = "auth.refreshToken";
@@ -954,4 +954,196 @@ advancedSearchContents: (
   );
 },
 
+};
+
+
+// ─── Transactions ───────────────────────────────────────────────────────────
+
+export type TransactionMediaType = "image" | "video";
+
+export interface TransactionBuildingCondition {
+  status?: "Completion %" | "Other" | "Under Construction" | "Used" | "New" | string;
+  completionPct?: number | null;
+  otherText?: string | null;
+}
+
+export interface TransactionAvailableServices {
+  electricity?: boolean;
+  electricityUnits?:number | null;
+  sanitaryDrainage?: boolean;
+  telephoneLine?: boolean;
+  waterMetersCount?: number | null;
+  electricityMetersCount?: number | null;
+}
+
+export interface UpdateTransactionInspectionPayload {
+  buildingCondition?: TransactionBuildingCondition;
+  surroundingEnvironment?: string[];
+  availableServices?: TransactionAvailableServices;
+  propertyType?: string;
+}
+
+export interface TransactionMediaItem {
+  id: string;
+  transactionId: string;
+  mediaType: TransactionMediaType;
+  name?: string;
+  originalName?: string;
+  url: string;
+  publicId: string;
+  mimeType?: string | null;
+  size?: number | null;
+  duration?: number | null;
+  width?: number | null;
+  height?: number | null;
+  thumbnailUrl?: string | null;
+  sortIndex?: number;
+  uploadedAt?: string;
+  updatedAt?: string;
+}
+
+export interface AddTransactionMediaResponse {
+  success: boolean;
+  message: string;
+  data: TransactionMediaItem[];
+}
+
+export interface ListTransactionMediaResponse {
+  success: boolean;
+  data: TransactionMediaItem[];
+}
+
+export interface DeleteTransactionMediaResponse {
+  success: boolean;
+  message: string;
+  data: TransactionMediaItem;
+}
+
+export interface UpdateTransactionInspectionResponse {
+  success: boolean;
+  message: string;
+  data: any;
+}
+
+function getTransactionLocalMedia(files?: AssetMediaInput[]): UploadFileInput[] {
+  return getLocalUploadFiles(files);
+}
+
+function getTransactionExistingMedia(files?: AssetMediaInput[]) {
+  return (files || [])
+    .filter((file) => typeof file.url === "string" && file.url.startsWith("http"))
+    .map((file, index) => ({
+      mediaType:
+        file.mediaType ??
+        (file.type?.startsWith("video/") ? "video" : "image"),
+      name: file.name || `Media ${index + 1}`,
+      originalName: file.name || "",
+      url: file.url!,
+      publicId: file.publicId || "",
+      mimeType: file.mimeType ?? file.type ?? null,
+      duration: file.duration ?? null,
+      thumbnailUrl: file.thumbnailUrl ?? null,
+      sortIndex: index,
+    }));
+}
+
+export const transactionApi = {
+  updateInspectionData: (
+    transactionId: string,
+    payload: UpdateTransactionInspectionPayload
+  ) =>
+    request<UpdateTransactionInspectionResponse>(
+      `/transactions/${transactionId}/inspection-data`,
+      {
+        method: "PATCH",
+        body: payload as Record<string, unknown>,
+      }
+    ),
+
+  addMedia: async (payload: {
+    transactionId: string;
+    projectId: string;
+    media: AssetMediaInput[];
+  }) => {
+    const localMedia = getTransactionLocalMedia(payload.media);
+    const localImages = localMedia.filter((file) => !isVideoFile(file));
+    const localVideos = localMedia.filter(isVideoFile);
+
+    const existingMedia = getTransactionExistingMedia(payload.media);
+
+    const uploadedImages = await uploadFilesInBatches(
+      localImages,
+      async (image) => {
+        const uploaded = await uploadSingleFileToCloudinary({
+          file: image,
+          projectId: payload.projectId,
+          mediaType: "image",
+        });
+
+        return {
+          ...uploaded,
+          mediaType: "image" as const,
+          name: image.name,
+          originalName: image.name,
+          sortIndex: 0,
+        };
+      },
+      3
+    );
+
+    const uploadedVideos = await uploadFilesInBatches(
+      localVideos,
+      async (video) => {
+        const uploaded = await uploadSingleFileToCloudinary({
+          file: video,
+          projectId: payload.projectId,
+          mediaType: "video",
+        });
+
+        return {
+          ...uploaded,
+          mediaType: "video" as const,
+          name: video.name,
+          originalName: video.name,
+          sortIndex: 0,
+        };
+      },
+      1
+    );
+
+    const media = [...existingMedia, ...uploadedImages, ...uploadedVideos].map(
+      (item, index) => ({
+        ...item,
+        sortIndex: index,
+      })
+    );
+
+    return request<AddTransactionMediaResponse>(
+      `/transactions/${payload.transactionId}/media`,
+      {
+        method: "POST",
+        body: { media },
+      }
+    );
+  },
+
+  listMedia: (transactionId: string) =>
+    request<ListTransactionMediaResponse>(
+      `/transactions/${transactionId}/media`,
+      {
+        method: "GET",
+      }
+    ),
+
+  deleteMedia: (mediaId: string) =>
+    request<DeleteTransactionMediaResponse>(`/transactions/media/${mediaId}`, {
+      method: "DELETE",
+    }),
+    list: () =>
+  request<{
+    success: boolean;
+    data: any[];
+  }>("/transactions", {
+    method: "GET",
+  }),
 };
