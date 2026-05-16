@@ -7,7 +7,12 @@ import {
   FlatList,
   ActivityIndicator,
   RefreshControl,
+  Modal,
+  Image,
+  Dimensions,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { VideoView, useVideoPlayer } from "expo-video";
 import { useFocusEffect, useRouter } from "expo-router";
 import { transactionApi } from "../../../api/api";
 
@@ -18,12 +23,45 @@ const TEXT = "#2A324B";
 const MUTED = "#767B91";
 const BG = "#F8F9FC";
 
+function MediaViewerItem({ item }: { item: any }) {
+  const screen = Dimensions.get("window");
+  const isVideo = item.mediaType === "video";
+
+  const player = useVideoPlayer(isVideo ? item.url : null, (player) => {
+    player.loop = false;
+  });
+
+  return (
+    <View style={[styles.viewerPage, { height: screen.height }]}>
+      {isVideo ? (
+        <VideoView
+          player={player}
+          style={styles.viewerMedia}
+          nativeControls
+          contentFit="contain"
+        />
+      ) : (
+        <Image
+          source={{ uri: item.url || item.uri }}
+          style={styles.viewerMedia}
+          resizeMode="contain"
+        />
+      )}
+    </View>
+  );
+}
+
 export default function TransactionsScreen() {
   const router = useRouter();
 
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  const [viewerVisible, setViewerVisible] = useState(false);
+const [viewerLoading, setViewerLoading] = useState(false);
+const [viewerMedia, setViewerMedia] = useState<any[]>([]);
+const [activeMediaIndex, setActiveMediaIndex] = useState(0);
 
   const loadTransactions = async () => {
     try {
@@ -75,6 +113,28 @@ export default function TransactionsScreen() {
       </View>
     );
   }
+
+  const openMediaViewer = async (item: any) => {
+  const transactionId = item.id || item._id;
+
+  if (!transactionId) return;
+
+  try {
+    setViewerLoading(true);
+    setViewerVisible(true);
+    setActiveMediaIndex(0);
+
+    const res = await transactionApi.getById(String(transactionId));
+    const media = res.data?.media || [];
+
+    setViewerMedia(Array.isArray(media) ? media : []);
+  } catch (error) {
+    console.log("Failed to load media", error);
+    setViewerMedia([]);
+  } finally {
+    setViewerLoading(false);
+  }
+};
 
   return (
     <View style={styles.flex}>
@@ -140,16 +200,77 @@ export default function TransactionsScreen() {
               </View>
 
               <View style={styles.footer}>
-                <Text style={styles.footerText}>
-                  Images: {item.imagesCount || 0}
-                </Text>
+  <Text style={styles.footerText}>
+    Images: {item.imagesCount || 0}
+  </Text>
 
-                <Text style={styles.editText}>Edit Inspection →</Text>
-              </View>
+  <View style={styles.footerActions}>
+    <Pressable
+      onPress={() => openMediaViewer(item)}
+      style={styles.eyeBtn}
+    >
+      <Ionicons name="eye-outline" size={18} color={ACC} />
+      <Text style={styles.eyeText}>View</Text>
+    </Pressable>
+
+    <Text style={styles.editText}>Edit Inspection →</Text>
+  </View>
+</View>
             </Pressable>
           );
         }}
       />
+
+      <Modal
+  visible={viewerVisible}
+  transparent={false}
+  animationType="slide"
+  onRequestClose={() => setViewerVisible(false)}
+>
+  <View style={styles.viewerWrap}>
+    <View style={styles.viewerHeader}>
+      <Pressable
+        onPress={() => setViewerVisible(false)}
+        style={styles.viewerClose}
+      >
+        <Ionicons name="close" size={26} color="#fff" />
+      </Pressable>
+
+      <Text style={styles.viewerCount}>
+        {viewerMedia.length > 0
+          ? `${activeMediaIndex + 1} / ${viewerMedia.length}`
+          : "No media"}
+      </Text>
+    </View>
+
+    {viewerLoading ? (
+      <View style={styles.viewerCenter}>
+        <ActivityIndicator color="#fff" />
+        <Text style={styles.viewerEmptyText}>Loading media...</Text>
+      </View>
+    ) : viewerMedia.length === 0 ? (
+      <View style={styles.viewerCenter}>
+        <Ionicons name="images-outline" size={46} color="#fff" />
+        <Text style={styles.viewerEmptyText}>No images or videos found</Text>
+      </View>
+    ) : (
+      <FlatList
+        data={viewerMedia}
+        keyExtractor={(item, index) => `${item.id || item.url}-${index}`}
+        pagingEnabled
+        showsVerticalScrollIndicator={false}
+        onMomentumScrollEnd={(e) => {
+          const height = Dimensions.get("window").height;
+          const index = Math.round(e.nativeEvent.contentOffset.y / height);
+          setActiveMediaIndex(index);
+        }}
+        renderItem={({ item }) => (
+          <MediaViewerItem item={item} />
+        )}
+      />
+    )}
+  </View>
+</Modal>
     </View>
   );
 }
@@ -281,4 +402,86 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 6,
   },
+
+  footerActions: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 14,
+},
+
+eyeBtn: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 5,
+  backgroundColor: SURFACE,
+  paddingHorizontal: 10,
+  paddingVertical: 7,
+  borderRadius: 999,
+},
+
+eyeText: {
+  color: ACC,
+  fontSize: 12,
+  fontWeight: "900",
+},
+
+viewerWrap: {
+  flex: 1,
+  backgroundColor: "#000",
+},
+
+viewerHeader: {
+  position: "absolute",
+  top: 0,
+  left: 0,
+  right: 0,
+  zIndex: 10,
+  paddingTop: 46,
+  paddingHorizontal: 18,
+  paddingBottom: 12,
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  backgroundColor: "rgba(0,0,0,0.35)",
+},
+
+viewerClose: {
+  width: 42,
+  height: 42,
+  borderRadius: 21,
+  backgroundColor: "rgba(255,255,255,0.18)",
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+viewerCount: {
+  color: "#fff",
+  fontSize: 14,
+  fontWeight: "900",
+},
+
+viewerCenter: {
+  flex: 1,
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+viewerEmptyText: {
+  color: "#fff",
+  marginTop: 12,
+  fontSize: 14,
+  fontWeight: "700",
+},
+
+viewerPage: {
+  width: "100%",
+  backgroundColor: "#000",
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+viewerMedia: {
+  width: "100%",
+  height: "100%",
+},
 });
