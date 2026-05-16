@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, {useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -39,6 +39,8 @@ const ENVIRONMENT_OPTIONS = [
 
 export default function AssetInspection() {
   const router = useRouter();
+   const [loading, setLoading] = useState(false);
+  const [transactionDetails, setTransactionDetails] = useState<any>(null);
 
   const params = useLocalSearchParams<{
     transactionId?: string;
@@ -46,9 +48,17 @@ export default function AssetInspection() {
     propertyType?: string;
   }>();
 
+  useEffect(() => {
+    console.log("AssetInspection - incoming params:", params);
+  }, [params]);
+
   const transactionId = params.transactionId || "";
   const projectId = params.projectId || "";
-  const propertyType = params.propertyType || "Not available";
+
+  const propertyType =
+  transactionDetails?.evalData?.propertyType ||
+  params.propertyType ||
+  "Not available";
 
   const [saving, setSaving] = useState(false);
 
@@ -61,6 +71,8 @@ export default function AssetInspection() {
 
   const [buildingCompletion, setBuildingCompletion] = useState("");
   const [otherBuildingCondition, setOtherBuildingCondition] = useState("");
+
+ 
 
   const [checked, setChecked] = useState<CheckedState>({
     
@@ -87,6 +99,102 @@ export default function AssetInspection() {
   const [electricityMetersCount, setElectricityMetersCount] = useState("");
 
   const [media, setMedia] = useState<any[]>([]);
+
+
+  useEffect(() => {
+  if (!transactionId) return;
+
+  const loadTransaction = async () => {
+    try {
+      setLoading(true);
+
+      const transactionRes = await transactionApi.getById(transactionId);
+     
+      const transaction = transactionRes.data;
+      // console.log("LOADED MEDIA:", transaction?.media);
+      const evalData = transaction?.evalData || {};
+      // console.log("LOADED EVAL DATA:", evalData);
+
+      setTransactionDetails(transaction);
+
+      const building = evalData.buildingCondition || {};
+      // console.log("LOADED BUILDING:", building);
+
+      const status = String(building.status || "").toLowerCase();
+
+if (status === "under construction" || status === "underconstruction") {
+  setBuildingCondition("underConstruction");
+} else if (status === "used") {
+  setBuildingCondition("used");
+} else if (status === "new") {
+  setBuildingCondition("new");
+} else if (status === "other") {
+  setBuildingCondition("other");
+} else {
+  setBuildingCondition("");
+}
+
+      setBuildingCompletion(
+        building.completionPct !== null && building.completionPct !== undefined
+          ? String(building.completionPct)
+          : ""
+      );
+
+     setOtherBuildingCondition(building.otherText || "");
+
+    setMedia(transaction?.media || []);
+
+      const environment = evalData.surroundingEnvironment || [];
+      const services = evalData.availableServices || {};
+
+      setChecked((prev) => {
+        const next = { ...prev };
+
+        ENVIRONMENT_OPTIONS.forEach(([key, label]) => {
+          next[key] = environment.includes(label);
+        });
+
+        next.electricity = !!services.electricity;
+        next.sanitaryDrainage = !!services.sanitaryDrainage;
+        next.telephoneLine = !!services.telephoneLine;
+        next.waterMeters = services.waterMetersCount !== null && services.waterMetersCount !== undefined;
+        next.electricityMeters =
+          services.electricityMetersCount !== null &&
+          services.electricityMetersCount !== undefined;
+
+        return next;
+      });
+
+      setElectricityUnits(
+        services.electricityUnits !== null && services.electricityUnits !== undefined
+          ? String(services.electricityUnits)
+          : ""
+      );
+
+      setWaterMetersCount(
+        services.waterMetersCount !== null && services.waterMetersCount !== undefined
+          ? String(services.waterMetersCount)
+          : ""
+      );
+
+      setElectricityMetersCount(
+        services.electricityMetersCount !== null &&
+          services.electricityMetersCount !== undefined
+          ? String(services.electricityMetersCount)
+          : ""
+      );
+
+      setMedia(transactionRes.data || []);
+    } catch (error: any) {
+       console.log("LOAD TRANSACTION ERROR:", error);
+      Alert.alert("Error", error?.message || "Failed to load transaction.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  loadTransaction();
+}, [transactionId]);
 
   const toggle = (key: string) => {
     setChecked((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -161,89 +269,115 @@ const getBuildingStatus = () => {
     setMedia((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleCameraDone = (capturedMedia: any[]) => {
-    if (cameraMode !== "photos") return;
+ const handleCameraDone = (capturedMedia: any) => {
+  if (cameraMode !== "photos") return;
 
-    const mapped = capturedMedia.map((item: any, index: number) => {
-      const isVideo = item.mediaType === "video";
+  const list = Array.isArray(capturedMedia)
+    ? capturedMedia
+    : capturedMedia
+    ? [capturedMedia]
+    : [];
 
-      return {
-        uri: item.path?.startsWith("file://") ? item.path : `file://${item.path}`,
-        name: isVideo
-          ? `video_${Date.now()}_${index}.mp4`
-          : `photo_${Date.now()}_${index}.jpg`,
-        type: isVideo ? "video/mp4" : "image/jpeg",
-        mimeType: isVideo ? "video/mp4" : "image/jpeg",
-        mediaType: isVideo ? "video" : "image",
-        duration: item.duration || null,
-        width: item.width || null,
-        height: item.height || null,
-        size: item.size || 0,
-      };
+  const mapped = list.map((item: any, index: number) => {
+    const isVideo =
+      item.mediaType === "video" ||
+      item.type?.startsWith?.("video") ||
+      item.mimeType?.startsWith?.("video");
+
+    const rawUri = item.uri || item.path || item.localUri;
+
+    return {
+      uri: rawUri?.startsWith?.("file://") ? rawUri : `file://${rawUri}`,
+      name: isVideo
+        ? `video_${Date.now()}_${index}.mp4`
+        : `photo_${Date.now()}_${index}.jpg`,
+      type: isVideo ? "video/mp4" : "image/jpeg",
+      mimeType: isVideo ? "video/mp4" : "image/jpeg",
+      mediaType: isVideo ? "video" : "image",
+      duration: item.duration || null,
+      width: item.width || null,
+      height: item.height || null,
+      size: item.size || 0,
+    };
+  });
+
+  setMedia((prev) => [...(Array.isArray(prev) ? prev : []), ...mapped]);
+  setCameraOpen(false);
+};
+
+ const handleSubmit = async () => {
+  if (!transactionId) {
+    Alert.alert("Missing transaction", "transactionId is required.");
+    return;
+  }
+
+  try {
+    setSaving(true);
+
+    await transactionApi.updateInspectionData(transactionId, {
+      buildingCondition: {
+        status: getBuildingStatus(),
+        completionPct: buildingCompletion ? Number(buildingCompletion) : null,
+        otherText: buildingCondition === "other" ? otherBuildingCondition : "",
+      },
+
+      surroundingEnvironment: selectedEnvironment,
+
+      availableServices: {
+        electricity: checked.electricity,
+        electricityUnits: electricityUnits ? Number(electricityUnits) : null,
+
+        sanitaryDrainage: checked.sanitaryDrainage,
+        telephoneLine: checked.telephoneLine,
+
+        waterMetersCount:
+          checked.waterMeters && waterMetersCount
+            ? Number(waterMetersCount)
+            : null,
+
+        electricityMetersCount:
+          checked.electricityMeters && electricityMetersCount
+            ? Number(electricityMetersCount)
+            : null,
+      },
     });
 
-    setMedia((prev) => [...prev, ...mapped]);
-    setCameraOpen(false);
-  };
+    const newMedia = media.filter((item: any) => {
+      return !item.id && (item.uri || item.localUri);
+    });
 
-  const handleSubmit = async () => {
-    if (!transactionId) {
-      Alert.alert("Missing transaction", "transactionId is required.");
-      return;
-    }
-
-    try {
-      setSaving(true);
-
-      await transactionApi.updateInspectionData(transactionId, {
-        buildingCondition: {
-          status: getBuildingStatus(),
-          completionPct: buildingCompletion ? Number(buildingCompletion) : null,
-          otherText: checked.other ? otherBuildingCondition : "",
-        },
-
-        surroundingEnvironment: selectedEnvironment,
-
-        availableServices: {
-          electricity: checked.electricity,
-          electricityUnits: electricityUnits ? Number(electricityUnits) : null,
-
-          sanitaryDrainage: checked.sanitaryDrainage,
-          telephoneLine: checked.telephoneLine,
-
-          waterMetersCount:
-            checked.waterMeters && waterMetersCount
-              ? Number(waterMetersCount)
-              : null,
-
-          electricityMetersCount:
-            checked.electricityMeters && electricityMetersCount
-              ? Number(electricityMetersCount)
-              : null,
-        },
-      });
-
-      if (media.length > 0) {
-        if (!projectId) {
-          Alert.alert("Missing project", "projectId is required for upload.");
-          return;
-        }
-
-        await transactionApi.addMedia({
-          transactionId,
-          projectId,
-          media,
-        });
+    if (newMedia.length > 0) {
+      if (!projectId) {
+        Alert.alert("Missing project", "projectId is required for upload.");
+        return;
       }
 
-      Alert.alert("Success", "Transaction inspection saved successfully.");
-      router.back();
-    } catch (error: any) {
-      Alert.alert("Error", error?.message || "Something went wrong.");
-    } finally {
-      setSaving(false);
+      await transactionApi.addMedia({
+        transactionId,
+        projectId,
+        media: newMedia,
+      });
     }
-  };
+
+    Alert.alert("Success", "Transaction inspection saved successfully.");
+    router.back();
+  } catch (error: any) {
+     console.log("LOAD TRANSACTION ERROR:", error);
+    Alert.alert("Error", error?.message || "Something went wrong.");
+  } finally {
+    setSaving(false);
+  }
+};
+
+
+if (loading) {
+  return (
+    <View style={[styles.flex, styles.center]}>
+      <ActivityIndicator color={ACC} />
+      <Text style={styles.loadingText}>Loading transaction...</Text>
+    </View>
+  );
+}
 
   return (
     <View style={styles.flex}>
@@ -287,13 +421,13 @@ const getBuildingStatus = () => {
                   item.mediaType === "video" || item.type?.startsWith("video");
 
                 return (
-                  <View key={`${item.uri}-${index}`} style={styles.mediaCard}>
+                  <View key={`${item.id || item.uri || item.url}-${index}`} style={styles.mediaCard}>
                     {isVideo ? (
                       <View style={styles.videoBox}>
                         <Text style={styles.videoText}>VIDEO</Text>
                       </View>
                     ) : (
-                      <Image source={{ uri: item.uri }} style={styles.mediaImg} />
+                      <Image source={{ uri: item.uri || item.url }} style={styles.mediaImg} />
                     )}
 
                     <Pressable
@@ -604,6 +738,15 @@ const styles = StyleSheet.create({
   headerTextWrap: {
     flex: 1,
   },
+  center: {
+  alignItems: "center",
+  justifyContent: "center",
+},
+loadingText: {
+  marginTop: 10,
+  color: MUTED,
+  fontSize: 14,
+},
   backBtn: {
     width: 36,
     height: 36,

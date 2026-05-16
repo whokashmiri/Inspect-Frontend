@@ -49,15 +49,23 @@ export default function TransactionsScreen() {
   };
 
   const openInspection = (item: any) => {
-    router.push({
-      pathname: "/inspection/AssetInspection",
-      params: {
-        transactionId: item.id || item._id,
-        projectId: item.projectId || item.templateId || "",
-        propertyType: item.evalData?.propertyType || "",
-      },
-    });
-  };
+  const transactionId = item.id || item._id;
+
+  if (!transactionId) {
+    console.log("Missing transaction id:", item);
+    return;
+  }
+
+  const qs = `?transactionId=${encodeURIComponent(String(transactionId))}&projectId=${encodeURIComponent(
+    String(item.projectId || transactionId)
+  )}&propertyType=${encodeURIComponent(
+    String(item.evalData?.propertyType || "Not available")
+  )}`;
+
+  // console.log("Navigating to AssetInspection with:", { item, qs });
+
+  router.push(`/inspection/AssetInspection${qs}`);
+};
 
   if (loading) {
     return (

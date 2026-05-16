@@ -1029,24 +1029,6 @@ function getTransactionLocalMedia(files?: AssetMediaInput[]): UploadFileInput[] 
   return getLocalUploadFiles(files);
 }
 
-function getTransactionExistingMedia(files?: AssetMediaInput[]) {
-  return (files || [])
-    .filter((file) => typeof file.url === "string" && file.url.startsWith("http"))
-    .map((file, index) => ({
-      mediaType:
-        file.mediaType ??
-        (file.type?.startsWith("video/") ? "video" : "image"),
-      name: file.name || `Media ${index + 1}`,
-      originalName: file.name || "",
-      url: file.url!,
-      publicId: file.publicId || "",
-      mimeType: file.mimeType ?? file.type ?? null,
-      duration: file.duration ?? null,
-      thumbnailUrl: file.thumbnailUrl ?? null,
-      sortIndex: index,
-    }));
-}
-
 export const transactionApi = {
   updateInspectionData: (
     transactionId: string,
@@ -1061,71 +1043,74 @@ export const transactionApi = {
     ),
 
   addMedia: async (payload: {
-    transactionId: string;
-    projectId: string;
-    media: AssetMediaInput[];
-  }) => {
-    const localMedia = getTransactionLocalMedia(payload.media);
-    const localImages = localMedia.filter((file) => !isVideoFile(file));
-    const localVideos = localMedia.filter(isVideoFile);
+  transactionId: string;
+  projectId: string;
+  media: AssetMediaInput[];
+}) => {
+  const localMedia = getTransactionLocalMedia(payload.media);
 
-    const existingMedia = getTransactionExistingMedia(payload.media);
+  if (localMedia.length === 0) {
+    return {
+      success: true,
+      message: "No new media to upload",
+      data: [],
+    } satisfies AddTransactionMediaResponse;
+  }
 
-    const uploadedImages = await uploadFilesInBatches(
-      localImages,
-      async (image) => {
-        const uploaded = await uploadSingleFileToCloudinary({
-          file: image,
-          projectId: payload.projectId,
-          mediaType: "image",
-        });
+  const localImages = localMedia.filter((file) => !isVideoFile(file));
+  const localVideos = localMedia.filter(isVideoFile);
 
-        return {
-          ...uploaded,
-          mediaType: "image" as const,
-          name: image.name,
-          originalName: image.name,
-          sortIndex: 0,
-        };
-      },
-      3
-    );
+  const uploadedImages = await uploadFilesInBatches(
+    localImages,
+    async (image) => {
+      const uploaded = await uploadSingleFileToCloudinary({
+        file: image,
+        projectId: payload.projectId,
+        mediaType: "image",
+      });
 
-    const uploadedVideos = await uploadFilesInBatches(
-      localVideos,
-      async (video) => {
-        const uploaded = await uploadSingleFileToCloudinary({
-          file: video,
-          projectId: payload.projectId,
-          mediaType: "video",
-        });
+      return {
+        ...uploaded,
+        mediaType: "image" as const,
+        name: image.name,
+        originalName: image.name,
+      };
+    },
+    3
+  );
 
-        return {
-          ...uploaded,
-          mediaType: "video" as const,
-          name: video.name,
-          originalName: video.name,
-          sortIndex: 0,
-        };
-      },
-      1
-    );
+  const uploadedVideos = await uploadFilesInBatches(
+    localVideos,
+    async (video) => {
+      const uploaded = await uploadSingleFileToCloudinary({
+        file: video,
+        projectId: payload.projectId,
+        mediaType: "video",
+      });
 
-    const media = [...existingMedia, ...uploadedImages, ...uploadedVideos].map(
-      (item, index) => ({
-        ...item,
-        sortIndex: index,
-      })
-    );
+      return {
+        ...uploaded,
+        mediaType: "video" as const,
+        name: video.name,
+        originalName: video.name,
+      };
+    },
+    1
+  );
 
-    return request<AddTransactionMediaResponse>(
-      `/transactions/${payload.transactionId}/media`,
-      {
-        method: "POST",
-        body: { media },
-      }
-    );
-  },
+  const media = [...uploadedImages, ...uploadedVideos].map((item, index) => ({
+    ...item,
+    sortIndex: index,
+  }));
+
+  return request<AddTransactionMediaResponse>(
+    `/transactions/${payload.transactionId}/media`,
+    {
+      method: "POST",
+      body: { media },
+    }
+  );
+},
 
   listMedia: (transactionId: string) =>
     request<ListTransactionMediaResponse>(
@@ -1134,6 +1119,14 @@ export const transactionApi = {
         method: "GET",
       }
     ),
+getById: (transactionId: string) =>
+  request<{
+    success: boolean;
+    data: any;
+  }>(`/transactions/${transactionId}`, {
+    method: "GET",
+  }),
+
 
   deleteMedia: (mediaId: string) =>
     request<DeleteTransactionMediaResponse>(`/transactions/media/${mediaId}`, {
