@@ -20,6 +20,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { transactionApi } from "../../../api/api";
 import AssetCameraModal from "../../components/AssetCameraModal";
+import { useTranslation } from "react-i18next";
 
 const ACC = "#2A324B";
 const SURFACE = "#E1E5EE";
@@ -32,15 +33,15 @@ type CheckedState = Record<string, boolean>;
 type CameraMode = "photos" | "scan";
 
 const ENVIRONMENT_OPTIONS = [
-  ["mosque", "Mosque"],
-  ["commercialMarket", "Commercial Market"],
-  ["park", "Park"],
-  ["governmentFacility", "Government Facility"],
-  ["highSpeedRoad", "High-Speed Road"],
-  ["otherServices", "Other Services"],
-  ["educationalFacility", "Educational Facility"],
-  ["securityFacility", "Security Facility"],
-  ["medicalFacility", "Medical Facility"],
+  ["mosque", "assetInspection.environment.mosque"],
+  ["commercialMarket", "assetInspection.environment.commercialMarket"],
+  ["park", "assetInspection.environment.park"],
+  ["governmentFacility", "assetInspection.environment.governmentFacility"],
+  ["highSpeedRoad", "assetInspection.environment.highSpeedRoad"],
+  ["otherServices", "assetInspection.environment.otherServices"],
+  ["educationalFacility", "assetInspection.environment.educationalFacility"],
+  ["securityFacility", "assetInspection.environment.securityFacility"],
+  ["medicalFacility", "assetInspection.environment.medicalFacility"],
 ] as const;
 
 
@@ -90,6 +91,8 @@ const mediaHeight = height * 0.78;
 }
 
 export default function AssetInspection() {
+
+  const { t } = useTranslation();
   const router = useRouter();
    const [loading, setLoading] = useState(false);
   const [transactionDetails, setTransactionDetails] = useState<any>(null);
@@ -205,9 +208,11 @@ if (status === "under construction" || status === "underconstruction") {
       setChecked((prev) => {
         const next = { ...prev };
 
-        ENVIRONMENT_OPTIONS.forEach(([key, label]) => {
-          next[key] = environment.includes(label);
-        });
+        ENVIRONMENT_OPTIONS.forEach(([key]) => {
+  next[key] =
+    environment.includes(key) ||
+    environment.includes(t(`assetInspection.environment.${key}`));
+});
 
         next.electricity = !!services.electricity;
         next.sanitaryDrainage = !!services.sanitaryDrainage;
@@ -256,10 +261,10 @@ if (status === "under construction" || status === "underconstruction") {
   };
 
   const selectedEnvironment = useMemo(() => {
-    return ENVIRONMENT_OPTIONS.filter(([key]) => checked[key]).map(
-      ([, label]) => label
-    );
-  }, [checked]);
+  return ENVIRONMENT_OPTIONS.filter(([key]) => checked[key]).map(
+    ([key]) => key
+  );
+}, [checked]);
 const getBuildingStatus = () => {
   switch (buildingCondition) {
     case "underConstruction":
@@ -451,26 +456,25 @@ if (loading) {
           </Pressable>
 
           <View style={styles.headerTextWrap}>
-            <Text style={styles.title}>Asset Inspection</Text>
-            <Text style={styles.subtitle}>
-              Capture images/videos and update inspection details.
-            </Text>
+            <Text style={styles.title}>{t("assetInspection.title")}</Text>
+            <Text style={styles.subtitle}>{t("assetInspection.subtitle")}</Text>
           </View>
         </View>
 
         <Section title="Images & Videos">
           <View style={styles.mediaActions}>
             <Pressable onPress={openCamera} style={styles.mediaActionBtn}>
-              <Text style={styles.mediaActionText}>Camera</Text>
+              <Text style={styles.mediaActionText}>{t("assetInspection.camera")}</Text>
+
             </Pressable>
 
             <Pressable
               onPress={pickMedia}
               style={[styles.mediaActionBtn, styles.secondaryActionBtn]}
             >
-              <Text style={[styles.mediaActionText, styles.secondaryActionText]}>
-                Gallery
-              </Text>
+             <Text style={[styles.mediaActionText, styles.secondaryActionText]}>
+  {t("assetInspection.gallery")}
+</Text>
             </Pressable>
           </View>
 
@@ -517,8 +521,8 @@ if (loading) {
             </View>
           ) : (
             <Text style={styles.emptyMediaText}>
-              No images or videos selected yet.
-            </Text>
+  {t("assetInspection.noMedia")}
+</Text>
           )}
         </Section>
 
@@ -533,19 +537,19 @@ if (loading) {
   <View style={styles.radioGroup}>
    <View style={styles.conditionRow}>
   <RadioRow
-    label="Under Construction"
+     label={t("assetInspection.underConstruction")}
     selected={buildingCondition === "underConstruction"}
     onPress={() => setBuildingCondition("underConstruction")}
   />
 
   <RadioRow
-    label="Used"
+     label={t("assetInspection.used")}
     selected={buildingCondition === "used"}
     onPress={() => setBuildingCondition("used")}
   />
 
   <RadioRow
-    label="New"
+    label={t("assetInspection.new")}
     selected={buildingCondition === "new"}
     onPress={() => setBuildingCondition("new")}
   />
@@ -555,7 +559,7 @@ if (loading) {
 <View style={styles.otherRow}>
   <View style={{ width: 90 }}>
     <RadioRow
-      label="Other"
+       label={t("assetInspection.other")}
       selected={buildingCondition === "other"}
       onPress={() => setBuildingCondition("other")}
     />
@@ -565,7 +569,7 @@ if (loading) {
     <TextInput
       value={otherBuildingCondition}
       onChangeText={setOtherBuildingCondition}
-      placeholder="Describe other condition"
+      placeholder={t("assetInspection.describeOtherCondition")}
       placeholderTextColor={MUTED}
       style={styles.otherInput}
     />
@@ -577,13 +581,13 @@ if (loading) {
 
  <View style={styles.completionRow}>
   <Text style={styles.completionLabel}>
-    Building Completion %
-  </Text>
+  {t("assetInspection.buildingCompletion")}
+</Text>
 
   <TextInput
     value={buildingCompletion}
     onChangeText={setBuildingCompletion}
-    placeholder="%"
+   placeholder={t("assetInspection.percent")}
     placeholderTextColor={MUTED}
     keyboardType="numeric"
     editable={buildingCondition === "underConstruction"}
@@ -608,20 +612,20 @@ if (loading) {
          
 
           <CheckboxRow
-            label="Sanitary Drainage / Sewage System"
+             label={t("assetInspection.sanitaryDrainage")}
             checked={checked.sanitaryDrainage}
             onPress={() => toggle("sanitaryDrainage")}
           />
 
           <CheckboxRow
-            label="Telephone Line"
+            label={t("assetInspection.telephoneLine")}
             checked={checked.telephoneLine}
             onPress={() => toggle("telephoneLine")}
           />
 <View style={styles.electricityRow}>
   <View style={{ flex: 1 }}>
     <CheckboxRow
-      label="Electricity"
+       label={t("assetInspection.electricity")}
       checked={checked.electricity}
       onPress={() => toggle("electricity")}
     />
@@ -631,7 +635,7 @@ if (loading) {
     <TextInput
       value={electricityUnits}
       onChangeText={setElectricityUnits}
-      placeholder="Units"
+      placeholder={t("assetInspection.units")}
       placeholderTextColor={MUTED}
       keyboardType="numeric"
       style={styles.rowInput}
@@ -642,7 +646,7 @@ if (loading) {
           <View style={styles.electricityRow}>
   <View style={{ flex: 1 }}>
     <CheckboxRow
-      label="Number of Water Meters"
+      label={t("assetInspection.waterMeters")}
       checked={checked.waterMeters}
       onPress={() => toggle("waterMeters")}
     />
@@ -652,7 +656,7 @@ if (loading) {
     <TextInput
       value={waterMetersCount}
       onChangeText={setWaterMetersCount}
-      placeholder="Count"
+      placeholder={t("assetInspection.count")}
       placeholderTextColor={MUTED}
       keyboardType="numeric"
       style={styles.rowInput}
@@ -663,7 +667,7 @@ if (loading) {
           <View style={styles.electricityRow}>
   <View style={{ flex: 1 }}>
     <CheckboxRow
-      label="Number of Electricity Meters"
+       label={t("assetInspection.electricityMeters")}
       checked={checked.electricityMeters}
       onPress={() => toggle("electricityMeters")}
     />
@@ -816,13 +820,15 @@ function CheckboxGrid({
   checked,
   toggle,
 }: {
-  items: [string, string][];
+  items: readonly (readonly [string, string])[];
   checked: CheckedState;
   toggle: (key: string) => void;
 }) {
+  const { t } = useTranslation();
+
   return (
     <View style={styles.grid}>
-      {items.map(([key, label]) => (
+      {items.map(([key, labelKey]) => (
         <Pressable
           key={key}
           onPress={() => toggle(key)}
@@ -833,7 +839,7 @@ function CheckboxGrid({
           </View>
 
           <Text style={[styles.gridText, checked[key] && styles.gridTextActive]}>
-            {label}
+            {t(labelKey)}
           </Text>
         </Pressable>
       ))}
