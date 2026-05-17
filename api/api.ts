@@ -5,10 +5,10 @@
 import * as SecureStore from "expo-secure-store";
 
 // ─── Config ────────────────────────────────────────────────────────────────
-export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://api.167.71.231.64.nip.io/api/v1";
+// export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://api.167.71.231.64.nip.io/api/v1";
 
 
-// export const BASE_URL = process.env.EXPO_PUBLIC_API_URL 
+export const BASE_URL = process.env.EXPO_PUBLIC_API_URL 
 
 const TOKEN_KEY = "auth.accessToken";
 const REFRESH_KEY = "auth.refreshToken";
@@ -192,8 +192,6 @@ export interface AuthResponse {
 }
 
 export const authApi = {
-  
-
   login: (payload: { username: string; password: string }) =>
     request<AuthResponse>("/auth/login", {
       method: "POST",
@@ -209,6 +207,11 @@ export const authApi = {
     }),
 
   me: () => request<User>("/auth/me"),
+
+  getCompanies: () =>
+    request<{ companies: { id: string; name: string | null }[] }>("/auth/companies", {
+      method: "GET",
+    }),
 
   logout: () =>
     request<void>("/auth/logout", { method: "POST" }).finally(() =>
@@ -995,6 +998,76 @@ export interface TransactionMediaItem {
   updatedAt?: string;
 }
 
+export interface TransactionItem {
+  id: string;
+  _id?: string;
+
+  assignmentNumber?: string;
+  authorizationNumber?: string;
+  assignmentDate?: string;
+
+  valuationPurpose?: string;
+  intendedUse?: string;
+  valuationBasis?: string;
+  ownershipType?: string;
+  valuationHypothesis?: string;
+
+  clientId?: string;
+  branch?: string;
+  templateId?: string;
+
+  companyId?: string;
+  createdByUserId?: string;
+
+  isCompleted?: boolean;
+  isOpened?: boolean;
+  lastSyncedAt?: string | null;
+
+  templateFieldValues?: Record<string, any>;
+  evalData?: Record<string, any>;
+
+  priority?: string;
+  attachmentsCount?: number;
+  imagesCount?: number;
+
+  media?: TransactionMediaItem[];
+
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface PaginatedCompanyTransactionsResponse {
+  success: boolean;
+  companyId: string;
+  page: number;
+  limit: number;
+  total: number;
+  hasMore: boolean;
+  transactions: TransactionItem[];
+}
+
+export interface OfflineTransactionDownloadResponse {
+  success: boolean;
+  companyId: string;
+  page: number;
+  limit: number;
+  total: number;
+  hasMore: boolean;
+  transactions: TransactionItem[];
+}
+
+export interface OfflineMediaResponse {
+  success: boolean;
+  total: number;
+  data: TransactionMediaItem[];
+}
+
+export interface MarkTransactionOpenedResponse {
+  success: boolean;
+  message: string;
+  data: TransactionItem;
+}
+
 export interface AddTransactionMediaResponse {
   success: boolean;
   message: string;
@@ -1023,6 +1096,47 @@ function getTransactionLocalMedia(files?: AssetMediaInput[]): UploadFileInput[] 
 }
 
 export const transactionApi = {
+
+
+ listCompany: (params?: { page?: number; limit?: number }) => {
+    const page = params?.page ?? 1;
+    const limit = params?.limit ?? 10;
+
+    return request<PaginatedCompanyTransactionsResponse>(
+      `/transactions/company?page=${page}&limit=${limit}`,
+      {
+        method: "GET",
+      }
+    );
+  },
+
+
+    downloadCompany: (params?: { page?: number; limit?: number }) => {
+    const page = params?.page ?? 1;
+    const limit = params?.limit ?? 10;
+
+    return request<OfflineTransactionDownloadResponse>(
+      `/transactions/company/download?page=${page}&limit=${limit}`,
+      {
+        method: "GET",
+      }
+    );
+  },
+
+   getOfflineMedia: (transactionIds: string[]) =>
+    request<OfflineMediaResponse>("/transactions/media/offline", {
+      method: "POST",
+      body: { transactionIds },
+    }),
+
+  markOpened: (transactionId: string) =>
+    request<MarkTransactionOpenedResponse>(
+      `/transactions/${transactionId}/open`,
+      {
+        method: "PATCH",
+      }
+    ),
+
   updateInspectionData: (
     transactionId: string,
     payload: UpdateTransactionInspectionPayload
@@ -1035,75 +1149,75 @@ export const transactionApi = {
       }
     ),
 
-  addMedia: async (payload: {
-  transactionId: string;
-  projectId: string;
-  media: AssetMediaInput[];
-}) => {
-  const localMedia = getTransactionLocalMedia(payload.media);
+ addMedia: async (payload: {
+    transactionId: string;
+    projectId: string;
+    media: AssetMediaInput[];
+  }) => {
+    const localMedia = getTransactionLocalMedia(payload.media);
 
-  if (localMedia.length === 0) {
-    return {
-      success: true,
-      message: "No new media to upload",
-      data: [],
-    } satisfies AddTransactionMediaResponse;
-  }
-
-  const localImages = localMedia.filter((file) => !isVideoFile(file));
-  const localVideos = localMedia.filter(isVideoFile);
-
-  const uploadedImages = await uploadFilesInBatches(
-    localImages,
-    async (image) => {
-      const uploaded = await uploadSingleFileToCloudinary({
-        file: image,
-        projectId: payload.projectId,
-        mediaType: "image",
-      });
-
+    if (localMedia.length === 0) {
       return {
-        ...uploaded,
-        mediaType: "image" as const,
-        name: image.name,
-        originalName: image.name,
-      };
-    },
-    3
-  );
-
-  const uploadedVideos = await uploadFilesInBatches(
-    localVideos,
-    async (video) => {
-      const uploaded = await uploadSingleFileToCloudinary({
-        file: video,
-        projectId: payload.projectId,
-        mediaType: "video",
-      });
-
-      return {
-        ...uploaded,
-        mediaType: "video" as const,
-        name: video.name,
-        originalName: video.name,
-      };
-    },
-    1
-  );
-
-  const media = [...uploadedImages, ...uploadedVideos].map((item, index) => ({
-    ...item,
-    sortIndex: index,
-  }));
-
-  return request<AddTransactionMediaResponse>(
-    `/transactions/${payload.transactionId}/media`,
-    {
-      method: "POST",
-      body: { media },
+        success: true,
+        message: "No new media to upload",
+        data: [],
+      } satisfies AddTransactionMediaResponse;
     }
-  );
-},
+
+    const localImages = localMedia.filter((file) => !isVideoFile(file));
+    const localVideos = localMedia.filter(isVideoFile);
+
+    const uploadedImages = await uploadFilesInBatches(
+      localImages,
+      async (image) => {
+        const uploaded = await uploadSingleFileToCloudinary({
+          file: image,
+          projectId: payload.projectId,
+          mediaType: "image",
+        });
+
+        return {
+          ...uploaded,
+          mediaType: "image" as const,
+          name: image.name,
+          originalName: image.name,
+        };
+      },
+      3
+    );
+
+    const uploadedVideos = await uploadFilesInBatches(
+      localVideos,
+      async (video) => {
+        const uploaded = await uploadSingleFileToCloudinary({
+          file: video,
+          projectId: payload.projectId,
+          mediaType: "video",
+        });
+
+        return {
+          ...uploaded,
+          mediaType: "video" as const,
+          name: video.name,
+          originalName: video.name,
+        };
+      },
+      1
+    );
+
+    const media = [...uploadedImages, ...uploadedVideos].map((item, index) => ({
+      ...item,
+      sortIndex: index,
+    }));
+
+    return request<AddTransactionMediaResponse>(
+      `/transactions/${payload.transactionId}/media`,
+      {
+        method: "POST",
+        body: { media },
+      }
+    );
+  },
 
   listMedia: (transactionId: string) =>
     request<ListTransactionMediaResponse>(
@@ -1112,24 +1226,28 @@ export const transactionApi = {
         method: "GET",
       }
     ),
-getById: (transactionId: string) =>
-  request<{
-    success: boolean;
-    data: any;
-  }>(`/transactions/${transactionId}`, {
-    method: "GET",
-  }),
 
+  getById: (transactionId: string) =>
+    request<{
+      success: boolean;
+      data: TransactionItem & {
+        media?: TransactionMediaItem[];
+      };
+    }>(`/transactions/${transactionId}`, {
+      method: "GET",
+    }),
 
   deleteMedia: (mediaId: string) =>
     request<DeleteTransactionMediaResponse>(`/transactions/media/${mediaId}`, {
       method: "DELETE",
     }),
-    list: () =>
-  request<{
-    success: boolean;
-    data: any[];
-  }>("/transactions", {
-    method: "GET",
-  }),
+
+  // old global list, keep only for admin/debug
+  list: () =>
+    request<{
+      success: boolean;
+      data: TransactionItem[];
+    }>("/transactions", {
+      method: "GET",
+    }),
 };

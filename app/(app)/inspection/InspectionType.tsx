@@ -1,13 +1,19 @@
-import React from "react";
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import React, { useState } from "react";
+import { View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { useFonts } from "expo-font";
 import fonts from "../../fonts/fonts";
+import { transactionApi } from "../../../api/api";
+import { useAuth } from "../../../api/AuthContext";
 
 export default function InspectionTypeScreen() {
-     const { t } = useTranslation(); 
+  const { user, isOnline, selectedCompanyId } = useAuth();
+  const { t } = useTranslation();
   const router = useRouter();
+
+  const [downloading, setDownloading] = useState(false);
+
   const [loaded] = useFonts({
     ...fonts.poppins,
     ...fonts.inter,
@@ -15,18 +21,60 @@ export default function InspectionTypeScreen() {
 
   if (!loaded) return null;
 
+const handleRealEstatePress = async () => {
+  console.log("AUTH USER:", user);
+  console.log("SELECTED COMPANY:", selectedCompanyId);
+
+  if (downloading) return;
+
+  try {
+    setDownloading(true);
+
+    if (isOnline) {
+      const res = await transactionApi.downloadCompany({
+        page: 1,
+        limit: 10,
+      });
+
+      console.log("DOWNLOAD COMPANY RESPONSE:", {
+        success: res.success,
+        companyId: res.companyId,
+        total: res.total,
+        count: res.transactions?.length ?? 0,
+        hasMore: res.hasMore,
+      });
+    }
+
+    router.push("/inspection/TransactionsScreen");
+  } catch (error) {
+    console.log("Download transactions failed:", error);
+    router.push("/inspection/TransactionsScreen");
+  } finally {
+    setDownloading(false);
+  }
+};
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Inspection Type</Text>
-      <Text style={styles.subtitle}>Choose the kind of inspection you want to start.</Text>
+      <Text style={styles.subtitle}>
+        Choose the kind of inspection you want to start.
+      </Text>
 
-     <Pressable
-  style={styles.button}
-  onPress={() => router.push("/inspection/TransactionsScreen")}
-  android_ripple={{ color: "rgba(255,255,255,0.2)" }}
->
-  <Text style={styles.buttonText}>{t("inspectionType.realEstate")}</Text>
-</Pressable>
+      <Pressable
+        style={[styles.button, downloading && styles.disabledButton]}
+        onPress={handleRealEstatePress}
+        disabled={downloading}
+        android_ripple={{ color: "rgba(255,255,255,0.2)" }}
+      >
+        {downloading ? (
+          <ActivityIndicator color="#ffffff" />
+        ) : (
+          <Text style={styles.buttonText}>
+            {t("inspectionType.realEstate")}
+          </Text>
+        )}
+      </Pressable>
 
       <Pressable
         style={[styles.button, styles.secondaryButton]}
@@ -82,6 +130,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#2A324B",
   },
+
+  disabledButton: {
+  opacity: 0.7,
+},
   secondaryButtonText: {
     color: "#2A324B",
   },

@@ -43,6 +43,38 @@ interface AuthContextValue extends AuthState {
   selectCompany: (companyId: string) => Promise<void>;
 }
 
+
+function normalizeCompanies(user: any, companies: Company[] = []): Company[] {
+  if (companies.length > 0) return companies;
+
+  if (user?.company?.id) {
+    return [
+      {
+        id: user.company.id,
+        name: user.company.name ?? user.companyName ?? "Company",
+      },
+    ];
+  }
+
+  if (user?.companyId) {
+    return [
+      {
+        id: user.companyId,
+        name: user.companyName ?? "Company",
+      },
+    ];
+  }
+
+  return [];
+}
+
+function getDefaultCompanyId(user: any, companies: Company[]): string | null {
+  if (companies.length === 1) return companies[0].id;
+  if (user?.company?.id) return user.company.id;
+  if (user?.companyId) return user.companyId;
+  return null;
+}
+
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 async function fetchCompaniesOnline(): Promise<Company[]> {
@@ -80,8 +112,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (isOnline && token) {
       try {
         const user = await authApi.me();
-        const companies = await fetchCompaniesOnline();
-        const selectedCompanyId = await getSelectedCompanyId(user.id);
+const fetchedCompanies = await fetchCompaniesOnline();
+const companies = normalizeCompanies(user, fetchedCompanies);
+
+let selectedCompanyId = await getSelectedCompanyId(user.id);
+
+        if (!selectedCompanyId) {
+  selectedCompanyId = getDefaultCompanyId(user, companies);
+
+  if (selectedCompanyId) {
+    await saveSelectedCompany(user.id, selectedCompanyId);
+  }
+}
 
         await cacheAuthenticatedSession({
           user,
@@ -182,30 +224,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return unsubscribe;
   }, [bootstrap]);
 
-  const login = useCallback(async (username: string, password: string) => {
-    const res = await loginAndSave(username, password);
+ const login = useCallback(async (username: string, password: string) => {
+  const res = await loginAndSave(username, password);
 
-    const companies = await fetchCompaniesOnline().catch(() => []);
-    const selectedCompanyId = companies.length === 1 ? companies[0].id : null;
+  const fetchedCompanies = await fetchCompaniesOnline().catch(() => []);
+  const companies = normalizeCompanies(res.user, fetchedCompanies);
+  const selectedCompanyId = getDefaultCompanyId(res.user, companies);
 
-    await cacheAuthenticatedSession({
-      user: res.user,
-      accessToken: res.tokens.accessToken,
-      refreshToken: res.tokens.refreshToken ?? null,
-      companies,
-      selectedCompanyId,
-    });
+  await cacheAuthenticatedSession({
+    user: res.user,
+    accessToken: res.tokens.accessToken,
+    refreshToken: res.tokens.refreshToken ?? null,
+    companies,
+    selectedCompanyId,
+  });
 
-    setState({
-      user: res.user,
-      isLoading: false,
-      isAuthenticated: true,
-      isOnline: true,
-      authMode: "online",
-      companies,
-      selectedCompanyId,
-    });
-  }, []);
+  setState({
+    user: res.user,
+    isLoading: false,
+    isAuthenticated: true,
+    isOnline: true,
+    authMode: "online",
+    companies,
+    selectedCompanyId,
+  });
+}, []);
 
   const refreshSession = useCallback(async () => {
     await bootstrap();

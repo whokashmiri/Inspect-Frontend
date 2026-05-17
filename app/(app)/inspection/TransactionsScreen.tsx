@@ -1,3 +1,6 @@
+
+
+//TransactionScreen.jsx
 import React, { useCallback, useState } from "react";
 import {
   View,
@@ -13,6 +16,14 @@ import {
   useWindowDimensions,
   Platform,
 } from "react-native";
+
+import NetInfo from "@react-native-community/netinfo";
+import {
+  getOfflineTransactions,
+  saveOfflineTransactions,
+  downloadTransactionMedia,
+} from "../../offline/transactionsOffline";
+
 import { Ionicons } from "@expo/vector-icons";
 import { VideoView, useVideoPlayer } from "expo-video";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -32,7 +43,7 @@ function MediaViewerItem({ item }: { item: any }) {
     item.mediaType === "video" ||
     item.mimeType?.startsWith?.("video");
 
-  const uri = item.url || item.uri;
+  const uri = item.localUri || item.url || item.uri;
 
   const mediaWidth = width;
   const mediaHeight = height * 0.76;
@@ -81,17 +92,106 @@ const [viewerLoading, setViewerLoading] = useState(false);
 const [viewerMedia, setViewerMedia] = useState<any[]>([]);
 const [activeMediaIndex, setActiveMediaIndex] = useState(0);
 
-  const loadTransactions = async () => {
-    try {
-      const res = await transactionApi.list();
-      setTransactions(res.data || []);
-    } catch (error) {
-      console.log("Failed to load transactions", error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+
+const [page, setPage] = useState(1);
+const [hasMore, setHasMore] = useState(true);
+const [loadingMore, setLoadingMore] = useState(false);
+const [downloading, setDownloading] = useState(false);
+
+const loadTransactions = async ({ reset = true } = {}) => {
+  try {
+    if (reset) {
+      setLoading(true);
+      setPage(1);
     }
-  };
+
+   
+    const net = await NetInfo.fetch();
+    const isOnline = !!net.isConnected && !!net.isInternetReachable;
+
+    if (isOnline) {
+
+;
+      const res = await transactionApi.downloadCompany({
+        page: reset ? 1 : page,
+        limit: 10,
+      });
+
+            console.log("TRANSACTION DOWNLOAD:", {
+  success: res.success,
+  companyId: res.companyId,
+  total: res.total,
+  count: res.transactions?.length ?? 0,
+  hasMore: res.hasMore,
+})
+
+      const downloaded = await downloadTransactionMedia(res.transactions || []);
+
+if (reset) {
+  await saveOfflineTransactions(downloaded);
+} else {
+  const merged = [...transactions, ...downloaded];
+  await saveOfflineTransactions(merged);
+}
+
+setTransactions((prev) =>
+  reset ? downloaded : [...prev, ...downloaded]
+);
+      setHasMore(Boolean(res.hasMore));
+      setPage((prev) => (reset ? 2 : prev + 1));
+
+      return;
+    }
+
+    const offlineData = await getOfflineTransactions();
+
+    setTransactions(offlineData);
+    setHasMore(false);
+  } catch (error) {
+    console.log("Failed to load transactions", error);
+
+    const offlineData = await getOfflineTransactions();
+    setTransactions(offlineData);
+    setHasMore(false);
+  } finally {
+    setLoading(false);
+    setRefreshing(false);
+    setLoadingMore(false);
+  }
+};
+
+const loadMoreTransactions = () => {
+  if (loadingMore || loading || refreshing || !hasMore) return;
+
+  setLoadingMore(true);
+  loadTransactions({ reset: false });
+};
+
+const refreshAndDownload = async () => {
+  try {
+    setDownloading(true);
+
+    const res = await transactionApi.downloadCompany({
+      
+      page: 1,
+      limit: 10,
+    });
+
+    const downloaded = await downloadTransactionMedia(res.transactions || []);
+    await saveOfflineTransactions(downloaded);
+
+    setTransactions(downloaded);
+    setPage(2);
+    setHasMore(Boolean(res.hasMore));
+  } catch (error) {
+    console.log("Refresh download failed:", error);
+
+    const offlineData = await getOfflineTransactions();
+    setTransactions(offlineData);
+  } finally {
+    setDownloading(false);
+  }
+};
 
   useFocusEffect(
     useCallback(() => {
@@ -156,32 +256,53 @@ const [activeMediaIndex, setActiveMediaIndex] = useState(0);
 
   return (
     <View style={styles.flex}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Transactions</Text>
-        <Text style={styles.subtitle}>Select a transaction to edit inspection</Text>
-      </View>
+     <View style={styles.header}>
+  <View style={styles.headerTop}>
+    <View>
+      <Text style={styles.title}>Transactions</Text>
+      <Text style={styles.subtitle}>
+        Select a transaction to edit inspection
+      </Text>
+    </View>
 
-      <FlatList
-        data={transactions}
-        keyExtractor={(item) => item.id || item._id}
-        contentContainerStyle={styles.listContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyBox}>
-            <Text style={styles.emptyTitle}>No transactions found</Text>
-            <Text style={styles.emptyText}>
-              Transactions will appear here once available.
-            </Text>
-          </View>
-        }
+    <Pressable
+      onPress={refreshAndDownload}
+      style={styles.refreshBtn}
+      disabled={downloading}
+    >
+      {downloading ? (
+        <ActivityIndicator color="#fff" size="small" />
+      ) : (
+        <Ionicons name="download-outline" size={20} color="#fff" />
+      )}
+    </Pressable>
+  </View>
+</View>
+
+     <FlatList
+  data={transactions}
+  keyExtractor={(item) => String(item.id || item._id)}
+  contentContainerStyle={styles.listContent}
+  refreshControl={
+    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+  }
+  onEndReached={loadMoreTransactions}
+  onEndReachedThreshold={0.4}
+         ListFooterComponent={
+    loadingMore ? (
+      <View style={{ paddingVertical: 16 }}>
+        <ActivityIndicator color={ACC} />
+      </View>
+    ) : null
+  }
         renderItem={({ item }) => {
           const evalData = item.evalData || {};
 
           return (
             <Pressable onPress={() => openInspection(item)} style={styles.card}>
               <View style={styles.cardTop}>
+
+                
                 <View>
                   <Text style={styles.assignment}>
                     Assignment #{item.assignmentNumber || "-"}
@@ -191,11 +312,19 @@ const [activeMediaIndex, setActiveMediaIndex] = useState(0);
                   </Text>
                 </View>
 
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>
-                    {item.priority || "normal"}
-                  </Text>
-                </View>
+                <View style={styles.badgesWrap}>
+  {item.isCompleted ? (
+    <View style={styles.completedBadge}>
+      <Text style={styles.completedText}>Completed</Text>
+    </View>
+  ) : null}
+
+  <View style={styles.badge}>
+    <Text style={styles.badgeText}>
+      {item.priority || "normal"}
+    </Text>
+  </View>
+</View>
               </View>
 
               <View style={styles.infoRow}>
@@ -350,6 +479,46 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 14,
   },
+
+
+
+headerTop: {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+},
+
+refreshBtn: {
+  width: 42,
+  height: 42,
+  borderRadius: 21,
+  backgroundColor: ACC,
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+badgesWrap: {
+  alignItems: "flex-end",
+  gap: 8,
+},
+
+completedBadge: {
+  backgroundColor: "#DDF8E7",
+  borderColor: "#8CE0AA",
+  borderWidth: 1,
+  paddingHorizontal: 10,
+  paddingVertical: 5,
+  borderRadius: 999,
+},
+
+completedText: {
+  color: "#168044",
+  fontSize: 12,
+  fontWeight: "700",
+},
+
+
+
   assignment: {
     fontSize: 14,
     fontWeight: "900",
