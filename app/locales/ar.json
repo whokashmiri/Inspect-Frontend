@@ -319,7 +319,64 @@
   "inspectionType":{
     "realEstate" :"Real Estate",
      "equipment" :"Equipment"
+  },
+  "assetInspection": {
+    "title": "معاينة الأصل",
+    "subtitle": "التقط الصور/الفيديوهات وقم بتحديث تفاصيل المعاينة.",
+    "imagesVideos": "الصور والفيديوهات",
+    "camera": "الكاميرا",
+    "gallery": "المعرض",
+    "noMedia": "لم يتم اختيار صور أو فيديوهات بعد.",
+    "propertyType": "نوع العقار",
+    "typeOfRealEstate": "نوع العقار",
+    "buildingCondition": "حالة المبنى",
+    "underConstruction": "تحت الإنشاء",
+    "used": "مستخدم",
+    "new": "جديد",
+    "other": "أخرى",
+    "describeOtherCondition": "اكتب وصف الحالة الأخرى",
+    "buildingCompletion": "نسبة إنجاز المبنى %",
+    "percent": "%",
+    "surroundingEnvironment": "البيئة المحيطة المؤثرة على العقار",
+    "availableServices": "الخدمات والمرافق المتوفرة في العقار",
+    "sanitaryDrainage": "الصرف الصحي / شبكة الصرف",
+    "telephoneLine": "خط هاتف",
+    "electricity": "الكهرباء",
+    "units": "الوحدات",
+    "waterMeters": "عدد عدادات المياه",
+    "electricityMeters": "عدد عدادات الكهرباء",
+    "count": "العدد",
+    "saveInspection": "حفظ المعاينة",
+    "loadingTransaction": "جاري تحميل المعاملة...",
+    "video": "فيديو",
+    "successTitle": "تم بنجاح",
+    "successMessage": "تم حفظ معاينة المعاملة بنجاح.",
+    "errorTitle": "خطأ",
+    "failedLoad": "فشل تحميل المعاملة.",
+    "somethingWrong": "حدث خطأ ما.",
+    "missingTransactionTitle": "المعاملة مفقودة",
+    "missingTransactionMessage": "معرف المعاملة مطلوب.",
+    "missingProjectTitle": "المشروع مفقود",
+    "missingProjectMessage": "معرف المشروع مطلوب لرفع الملفات.",
+    "permissionRequired": "الصلاحية مطلوبة",
+    "mediaPermissionMessage": "يرجى السماح بالوصول إلى الوسائط.",
+    "notAvailable": "غير متوفر",
+    "environment": {
+      "mosque": "مسجد",
+      "commercialMarket": "سوق تجاري",
+      "park": "حديقة",
+      "governmentFacility": "مرفق حكومي",
+      "highSpeedRoad": "طريق سريع",
+      "otherServices": "خدمات أخرى",
+      "educationalFacility": "مرفق تعليمي",
+      "securityFacility": "مرفق أمني",
+      "medicalFacility": "مرفق طبي"
+    }
   }
+
+
+
+
 }
 
 

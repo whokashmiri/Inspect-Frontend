@@ -315,7 +315,65 @@
   }, "inspectionType":{
     "realEstate" :"Real Estate",
      "equipment" :"Equipment"
+  },
+  "assetInspection": {
+    "title": "Asset Inspection",
+    "subtitle": "Capture images/videos and update inspection details.",
+    "imagesVideos": "Images & Videos",
+    "camera": "Camera",
+    "gallery": "Gallery",
+    "noMedia": "No images or videos selected yet.",
+    "propertyType": "Property Type",
+    "typeOfRealEstate": "Type of Real Estate",
+    "buildingCondition": "Building Condition",
+    "underConstruction": "Under Construction",
+    "used": "Used",
+    "new": "New",
+    "other": "Other",
+    "describeOtherCondition": "Describe other condition",
+    "buildingCompletion": "Building Completion %",
+    "percent": "%",
+    "surroundingEnvironment": "Surrounding Environment",
+    "availableServices": "Available Services",
+    "sanitaryDrainage": "Sanitary Drainage / Sewage System",
+    "telephoneLine": "Telephone Line",
+    "electricity": "Electricity",
+    "units": "Units",
+    "waterMeters": "Number of Water Meters",
+    "electricityMeters": "Number of Electricity Meters",
+    "count": "Count",
+    "saveInspection": "Save Inspection",
+    "loadingTransaction": "Loading transaction...",
+    "video": "VIDEO",
+    "successTitle": "Success",
+    "successMessage": "Transaction inspection saved successfully.",
+    "errorTitle": "Error",
+    "failedLoad": "Failed to load transaction.",
+    "somethingWrong": "Something went wrong.",
+    "missingTransactionTitle": "Missing transaction",
+    "missingTransactionMessage": "transactionId is required.",
+    "missingProjectTitle": "Missing project",
+    "missingProjectMessage": "projectId is required for upload.",
+    "permissionRequired": "Permission required",
+    "mediaPermissionMessage": "Please allow media access.",
+    "notAvailable": "Not available",
+    "environment": {
+      "mosque": "Mosque",
+      "commercialMarket": "Commercial Market",
+      "park": "Park",
+      "governmentFacility": "Government Facility",
+      "highSpeedRoad": "High-Speed Road",
+      "otherServices": "Other Services",
+      "educationalFacility": "Educational Facility",
+      "securityFacility": "Security Facility",
+      "medicalFacility": "Medical Facility"
+    }
   }
+
+
+
+
+
 }
 
 
