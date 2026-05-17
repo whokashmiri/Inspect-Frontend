@@ -25,7 +25,6 @@ import { projectApi,
   Project,
   ApiError, 
   InspectorFile, 
-  ProjectContact,
   ProjectLocation, } from "../../api/api";
 import { PendingItem } from "../offline/types";
 import {
@@ -86,15 +85,14 @@ const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
 
   
 
-  type ProjectInfoTab = "assets" | "contacts" | "locations";
+  type ProjectInfoTab = "assets"  | "locations";
 
 const [projectInfoModalVisible, setProjectInfoModalVisible] = useState(false);
 const [activeInfoTab, setActiveInfoTab] = useState<ProjectInfoTab | null>(null);
 
-const [projectContacts, setProjectContacts] = useState<ProjectContact[]>([]);
 const [projectLocations, setProjectLocations] = useState<ProjectLocation[]>([]);
 
-const [contactsLoading, setContactsLoading] = useState(false);
+
 const [locationsLoading, setLocationsLoading] = useState(false);
   const [selectedProjectForFiles, setSelectedProjectForFiles] =
   useState<Project | null>(null);
@@ -385,7 +383,6 @@ async function openProjectInfoModal(project: Project) {
     setActiveInfoTab(null);
 
     setInspectorFiles([]);
-    setProjectContacts([]);
     setProjectLocations([]);
   } catch (error: any) {
     Alert.alert("Error", error?.message || "Could not open project info");
@@ -532,26 +529,7 @@ async function toggleAssetsSection() {
   }
 }
 
-async function toggleContactsSection() {
-  if (!selectedProjectForFiles) return;
 
-  if (activeInfoTab === "contacts") {
-    setActiveInfoTab(null);
-    return;
-  }
-
-  setActiveInfoTab("contacts");
-
-  try {
-    setContactsLoading(true);
-    const result = await projectApi.listContacts(selectedProjectForFiles.id);
-    setProjectContacts(result.contacts || []);
-  } catch (error: any) {
-    Alert.alert("Contacts error", error?.message || "Could not load contacts");
-  } finally {
-    setContactsLoading(false);
-  }
-}
 
 async function toggleLocationsSection() {
   if (!selectedProjectForFiles) return;
@@ -896,26 +874,13 @@ async function openLocation(location: ProjectLocation) {
         <Pressable
           style={[
             styles.infoTabBtn,
-            activeInfoTab === "contacts" && styles.infoTabBtnActive,
-          ]}
-          onPress={toggleContactsSection}
-        >
-          <Ionicons name="call-outline" size={17} color={activeInfoTab === "contacts" ? "#fff" : TEXT} />
-          <Text style={[styles.infoTabText, activeInfoTab === "contacts" && styles.infoTabTextActive]}>
-            Contact
-          </Text>
-        </Pressable>
-
-        <Pressable
-          style={[
-            styles.infoTabBtn,
             activeInfoTab === "locations" && styles.infoTabBtnActive,
           ]}
           onPress={toggleLocationsSection}
         >
           <Ionicons name="location-outline" size={17} color={activeInfoTab === "locations" ? "#fff" : TEXT} />
           <Text style={[styles.infoTabText, activeInfoTab === "locations" && styles.infoTabTextActive]}>
-            Location
+            Inspection Locations
           </Text>
         </Pressable>
       </View>
@@ -981,70 +946,77 @@ async function openLocation(location: ProjectLocation) {
           </>
         )}
 
-        {activeInfoTab === "contacts" && (
-          <>
-            {contactsLoading ? (
-              <ActivityIndicator color={ACC} style={{ marginTop: 24 }} />
-            ) : projectContacts.length === 0 ? (
-              <View style={styles.emptyWrap}>
-                <Text style={styles.emptyText}>No contacts found</Text>
-              </View>
-            ) : (
-              projectContacts.map((contact, index) => (
-                <Pressable
-                  key={`${contact.phone}-${index}`}
-                  style={styles.infoRow}
-                  onPress={() => openPhone(contact.phone)}
-                >
-                  <Ionicons name="call-outline" size={22} color={ACC} />
+{activeInfoTab === "locations" && (
+  <>
+    {locationsLoading ? (
+      <ActivityIndicator color={ACC} style={{ marginTop: 24 }} />
+    ) : projectLocations.length === 0 ? (
+      <View style={styles.emptyWrap}>
+        <Text style={styles.emptyText}>No locations found</Text>
+      </View>
+    ) : (
+      projectLocations.map((location, index) => (
+        <View
+          key={`${location.id || location.mapUrl || location.name || index}`}
+          style={styles.locationCard}
+        >
+          <Pressable
+            style={styles.locationMainRow}
+            onPress={() => openLocation(location)}
+          >
+            <View style={styles.locationIconBox}>
+              <Ionicons name="location-outline" size={22} color={ACC} />
+            </View>
 
-                  <View style={styles.infoTextWrap}>
-                    <Text style={styles.fileName}>{contact.phone}</Text>
-                    <Text style={styles.fileMeta}>{contact.type}</Text>
-                  </View>
+            <View style={styles.infoTextWrap}>
+              <Text style={styles.fileName}>
+                {location.name || location.city || "Location"}
+              </Text>
 
-                  <Ionicons name="open-outline" size={18} color={MUTED} />
-                </Pressable>
-              ))
-            )}
-          </>
-        )}
+              <Text style={styles.fileMeta}>
+                {[location.region, location.city].filter(Boolean).join(" • ") || "No address"}
+              </Text>
 
-        {activeInfoTab === "locations" && (
-          <>
-            {locationsLoading ? (
-              <ActivityIndicator color={ACC} style={{ marginTop: 24 }} />
-            ) : projectLocations.length === 0 ? (
-              <View style={styles.emptyWrap}>
-                <Text style={styles.emptyText}>No locations found</Text>
-              </View>
-            ) : (
-              projectLocations.map((location, index) => (
-                <Pressable
-                  key={`${location.latitude}-${location.longitude}-${index}`}
-                  style={styles.infoRow}
-                  onPress={() => openLocation(location)}
-                >
-                  <Ionicons name="location-outline" size={22} color={ACC} />
+              {(location.latitude || location.longitude) && (
+                <Text style={styles.locationCoords}>
+                  {location.latitude ?? "-"}, {location.longitude ?? "-"}
+                </Text>
+              )}
+            </View>
 
-                  <View style={styles.infoTextWrap}>
-                    <Text style={styles.fileName}>
-                      {location.city || "Location"}
-                    </Text>
-                    <Text style={styles.fileMeta}>
-                      {location.region || ""}
-                      {location.latitude && location.longitude
-                        ? ` • ${location.latitude}, ${location.longitude}`
-                        : ""}
-                    </Text>
-                  </View>
+            <Ionicons name="map-outline" size={18} color={MUTED} />
+          </Pressable>
 
-                  <Ionicons name="map-outline" size={18} color={MUTED} />
-                </Pressable>
-              ))
-            )}
-          </>
-        )}
+          <View style={styles.phoneRow}>
+            {location.primaryPhone ? (
+              <Pressable
+                style={styles.phoneBtn}
+                onPress={() => openPhone(location.primaryPhone!)}
+              >
+                <Ionicons name="call-outline" size={16} color={ACC} />
+                <Text style={styles.phoneText}>{location.primaryPhone}</Text>
+              </Pressable>
+            ) : null}
+
+            {location.secondaryPhone ? (
+              <Pressable
+                style={styles.phoneBtn}
+                onPress={() => openPhone(location.secondaryPhone!)}
+              >
+                <Ionicons name="call-outline" size={16} color={ACC} />
+                <Text style={styles.phoneText}>{location.secondaryPhone}</Text>
+              </Pressable>
+            ) : null}
+
+            {!location.primaryPhone && !location.secondaryPhone ? (
+              <Text style={styles.noPhoneText}>No phone numbers</Text>
+            ) : null}
+          </View>
+        </View>
+      ))
+    )}
+  </>
+)}
       </ScrollView>
     </View>
   </View>
@@ -1178,6 +1150,70 @@ infoTabText: {
 
 infoTabTextActive: {
   color: "#ffffff",
+},
+
+
+locationCard: {
+  borderWidth: 1,
+  borderColor: BORDER,
+  backgroundColor: SURFACE,
+  borderRadius: 12,
+  padding: 12,
+  marginBottom: 10,
+},
+
+locationMainRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 10,
+},
+
+locationIconBox: {
+  width: 42,
+  height: 42,
+  borderRadius: 10,
+  backgroundColor: "#ffffff",
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+locationCoords: {
+  color: MUTED,
+  fontSize: 9,
+  marginTop: 3,
+},
+
+phoneRow: {
+  flexDirection: "row",
+  flexWrap: "wrap",
+  gap: 8,
+  marginTop: 10,
+  paddingTop: 10,
+  borderTopWidth: 1,
+  borderTopColor: BORDER,
+},
+
+phoneBtn: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 5,
+  backgroundColor: "#ffffff",
+  borderWidth: 1,
+  borderColor: BORDER,
+  borderRadius: 999,
+  paddingHorizontal: 10,
+  paddingVertical: 7,
+},
+
+phoneText: {
+  color: TEXT,
+  fontSize: 11,
+  fontFamily: fonts.inter.medium as unknown as string,
+},
+
+noPhoneText: {
+  color: MUTED,
+  fontSize: 11,
 },
 
 infoRow: {

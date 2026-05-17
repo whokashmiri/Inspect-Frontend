@@ -10,6 +10,8 @@ import {
   Modal,
   Image,
   Dimensions,
+  useWindowDimensions,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { VideoView, useVideoPlayer } from "expo-video";
@@ -24,29 +26,45 @@ const MUTED = "#767B91";
 const BG = "#F8F9FC";
 
 function MediaViewerItem({ item }: { item: any }) {
-  const screen = Dimensions.get("window");
-  const isVideo = item.mediaType === "video";
+  const { width, height } = useWindowDimensions();
 
-  const player = useVideoPlayer(isVideo ? item.url : null, (player) => {
+  const isVideo =
+    item.mediaType === "video" ||
+    item.mimeType?.startsWith?.("video");
+
+  const uri = item.url || item.uri;
+
+  const mediaWidth = width;
+  const mediaHeight = height * 0.76;
+
+  const player = useVideoPlayer(isVideo ? uri : null, (player) => {
     player.loop = false;
   });
 
   return (
-    <View style={[styles.viewerPage, { height: screen.height }]}>
-      {isVideo ? (
-        <VideoView
-          player={player}
-          style={styles.viewerMedia}
-          nativeControls
-          contentFit="contain"
-        />
-      ) : (
-        <Image
-          source={{ uri: item.url || item.uri }}
-          style={styles.viewerMedia}
-          resizeMode="contain"
-        />
-      )}
+    <View style={[styles.viewerPage, { width, height }]}>
+      <View style={styles.viewerMediaCenter}>
+        {isVideo ? (
+          <VideoView
+            player={player}
+            style={{
+              width: mediaWidth,
+              height: mediaHeight,
+            }}
+            nativeControls
+            contentFit="contain"
+          />
+        ) : (
+          <Image
+            source={{ uri }}
+            style={{
+              width: mediaWidth,
+              height: mediaHeight,
+            }}
+            resizeMode="contain"
+          />
+        )}
+      </View>
     </View>
   );
 }
@@ -254,20 +272,28 @@ const [activeMediaIndex, setActiveMediaIndex] = useState(0);
         <Text style={styles.viewerEmptyText}>No images or videos found</Text>
       </View>
     ) : (
-      <FlatList
-        data={viewerMedia}
-        keyExtractor={(item, index) => `${item.id || item.url}-${index}`}
-        pagingEnabled
-        showsVerticalScrollIndicator={false}
-        onMomentumScrollEnd={(e) => {
-          const height = Dimensions.get("window").height;
-          const index = Math.round(e.nativeEvent.contentOffset.y / height);
-          setActiveMediaIndex(index);
-        }}
-        renderItem={({ item }) => (
-          <MediaViewerItem item={item} />
-        )}
-      />
+     <FlatList
+  data={viewerMedia}
+  keyExtractor={(item, index) => `${item.id || item.url}-${index}`}
+  pagingEnabled
+  snapToInterval={Dimensions.get("window").height}
+  snapToAlignment="start"
+  decelerationRate="fast"
+  disableIntervalMomentum
+  showsVerticalScrollIndicator={false}
+  removeClippedSubviews={false}
+  getItemLayout={(_, index) => ({
+    length: Dimensions.get("window").height,
+    offset: Dimensions.get("window").height * index,
+    index,
+  })}
+  onMomentumScrollEnd={(e) => {
+    const height = Dimensions.get("window").height;
+    const index = Math.round(e.nativeEvent.contentOffset.y / height);
+    setActiveMediaIndex(index);
+  }}
+  renderItem={({ item }) => <MediaViewerItem item={item} />}
+/>
     )}
   </View>
 </Modal>
@@ -436,7 +462,7 @@ viewerHeader: {
   left: 0,
   right: 0,
   zIndex: 10,
-  paddingTop: 46,
+  paddingTop: Platform.OS === "ios" ? 54 : 34,
   paddingHorizontal: 18,
   paddingBottom: 12,
   flexDirection: "row",
@@ -474,14 +500,20 @@ viewerEmptyText: {
 },
 
 viewerPage: {
-  width: "100%",
   backgroundColor: "#000",
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+viewerMediaCenter: {
+  flex: 1,
+  width: "100%",
   alignItems: "center",
   justifyContent: "center",
 },
 
 viewerMedia: {
   width: "100%",
-  height: "100%",
+  height: "76%",
 },
 });

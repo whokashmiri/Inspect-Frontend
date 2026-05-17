@@ -5,10 +5,10 @@
 import * as SecureStore from "expo-secure-store";
 
 // ─── Config ────────────────────────────────────────────────────────────────
-// export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://api.167.71.231.64.nip.io/api/v1";
+export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://api.167.71.231.64.nip.io/api/v1";
 
 
-export const BASE_URL = process.env.EXPO_PUBLIC_API_URL 
+// export const BASE_URL = process.env.EXPO_PUBLIC_API_URL 
 
 const TOKEN_KEY = "auth.accessToken";
 const REFRESH_KEY = "auth.refreshToken";
@@ -266,25 +266,24 @@ export interface ProjectUser {
 }
 
 export interface ProjectLocation {
+  id?: string;
+  name?: string;
   region?: string;
   city?: string;
-  latitude?: number;
-  longitude?: number;
+  latitude?: number | null;
+  longitude?: number | null;
   mapUrl?: string;
+  primaryPhone?: string;
+  secondaryPhone?: string;
 }
 
-export interface ProjectContact {
-  type: "primary" | "secondary" | "other" | string;
-  phone: string;
-}
+
 
 export interface ListProjectLocationsResponse {
   locations: ProjectLocation[];
 }
 
-export interface ListProjectContactsResponse {
-  contacts: ProjectContact[];
-}
+
 
 export interface UploadedImageInput {
   url: string;
@@ -364,7 +363,7 @@ export interface Project {
   inspectorFiles?: InspectorFile[];
 
    locations?: ProjectLocation[];
-  contacts?: ProjectContact[];
+ 
 
 
   
@@ -505,7 +504,7 @@ export const projectApi = {
         method: "GET",
       }
     ),
-    listLocations: (projectId: string) =>
+ listLocations: (projectId: string) =>
   request<ListProjectLocationsResponse>(
     `/projects/${projectId}/locations`,
     {
@@ -513,13 +512,7 @@ export const projectApi = {
     }
   ),
 
-listContacts: (projectId: string) =>
-  request<ListProjectContactsResponse>(
-    `/projects/${projectId}/contacts`,
-    {
-      method: "GET",
-    }
-  ),
+
 };
 
 

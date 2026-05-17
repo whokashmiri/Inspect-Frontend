@@ -9,7 +9,13 @@ import {
   Image,
   Alert,
   ActivityIndicator,
+  Modal,
+  FlatList,
+  Dimensions,
+  Platform,
 } from "react-native";
+
+import { VideoView, useVideoPlayer } from "expo-video";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { transactionApi } from "../../../api/api";
@@ -37,10 +43,59 @@ const ENVIRONMENT_OPTIONS = [
   ["medicalFacility", "Medical Facility"],
 ] as const;
 
+
+function PreviewItem({ item }: { item: any }) {
+  const { width, height } = Dimensions.get("window");
+
+const mediaWidth = width;
+const mediaHeight = height * 0.78;
+
+  const isVideo =
+    item.mediaType === "video" ||
+    item.type?.startsWith?.("video") ||
+    item.mimeType?.startsWith?.("video");
+
+  const uri = item.uri || item.url;
+
+  const player = useVideoPlayer(isVideo ? uri : null, (player) => {
+    player.loop = false;
+  });
+
+  return (
+    <View style={[styles.previewPage, { width, height }]}>
+      <View style={styles.previewCenter}>
+        {isVideo ? (
+         <VideoView
+  player={player}
+  style={{
+    width: mediaWidth,
+    height: mediaHeight,
+  }}
+  nativeControls
+  contentFit="contain"
+/>
+        ) : (
+          <Image
+  source={{ uri }}
+  style={{
+    width: mediaWidth,
+    height: mediaHeight,
+  }}
+  resizeMode="contain"
+/>
+        )}
+      </View>
+    </View>
+  );
+}
+
 export default function AssetInspection() {
   const router = useRouter();
    const [loading, setLoading] = useState(false);
   const [transactionDetails, setTransactionDetails] = useState<any>(null);
+
+  const [viewerVisible, setViewerVisible] = useState(false);
+const [viewerIndex, setViewerIndex] = useState(0);
 
   const params = useLocalSearchParams<{
     transactionId?: string;
@@ -49,7 +104,7 @@ export default function AssetInspection() {
   }>();
 
   useEffect(() => {
-    console.log("AssetInspection - incoming params:", params);
+    // console.log("AssetInspection - incoming params:", params);
   }, [params]);
 
   const transactionId = params.transactionId || "";
@@ -184,7 +239,7 @@ if (status === "under construction" || status === "underconstruction") {
           : ""
       );
 
-      setMedia(transactionRes.data || []);
+      setMedia(Array.isArray(transaction?.media) ? transaction.media : []);
     } catch (error: any) {
        console.log("LOAD TRANSACTION ERROR:", error);
       Alert.alert("Error", error?.message || "Failed to load transaction.");
@@ -224,6 +279,11 @@ const getBuildingStatus = () => {
     setCameraMode("photos");
     setCameraOpen(true);
   };
+
+  const openPreview = (index: number) => {
+  setViewerIndex(index);
+  setViewerVisible(true);
+};
 
   const pickMedia = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -421,14 +481,29 @@ if (loading) {
                   item.mediaType === "video" || item.type?.startsWith("video");
 
                 return (
-                  <View key={`${item.id || item.uri || item.url}-${index}`} style={styles.mediaCard}>
-                    {isVideo ? (
-                      <View style={styles.videoBox}>
-                        <Text style={styles.videoText}>VIDEO</Text>
-                      </View>
-                    ) : (
-                      <Image source={{ uri: item.uri || item.url }} style={styles.mediaImg} />
-                    )}
+                 <Pressable
+  key={`${item.id || item.uri || item.url}-${index}`}
+  style={styles.mediaCard}
+  onPress={() => openPreview(index)}
+>
+                   {isVideo ? (
+  <View style={styles.videoBox}>
+    {item.thumbnailUrl ? (
+      <Image source={{ uri: item.thumbnailUrl }} style={styles.mediaImg} />
+    ) : (
+      <Text style={styles.videoText}>VIDEO</Text>
+    )}
+
+    <View style={styles.playBadge}>
+      <Text style={styles.playText}>▶</Text>
+    </View>
+  </View>
+) : (
+  <Image
+    source={{ uri: item.uri || item.url }}
+    style={styles.mediaImg}
+  />
+)}
 
                     <Pressable
                       onPress={() => removeMedia(index)}
@@ -436,7 +511,7 @@ if (loading) {
                     >
                       <Text style={styles.removeText}>×</Text>
                     </Pressable>
-                  </View>
+                  </Pressable>
                 );
               })}
             </View>
@@ -619,6 +694,52 @@ if (loading) {
           )}
         </Pressable>
       </ScrollView>
+
+      <Modal
+  visible={viewerVisible}
+  transparent={false}
+  animationType="fade"
+  onRequestClose={() => setViewerVisible(false)}
+>
+  <View style={styles.viewerWrap}>
+    <View style={styles.viewerHeader}>
+      <Pressable
+        onPress={() => setViewerVisible(false)}
+        style={styles.viewerClose}
+      >
+        <Text style={styles.viewerCloseText}>×</Text>
+      </Pressable>
+
+      <Text style={styles.viewerCount}>
+        {media.length > 0 ? `${viewerIndex + 1} / ${media.length}` : "0 / 0"}
+      </Text>
+    </View>
+
+<FlatList
+  data={media}
+  pagingEnabled
+  snapToInterval={Dimensions.get("window").height}
+  snapToAlignment="start"
+  decelerationRate="fast"
+  disableIntervalMomentum
+  initialScrollIndex={viewerIndex}
+  getItemLayout={(_, index) => ({
+    length: Dimensions.get("window").height,
+    offset: Dimensions.get("window").height * index,
+    index,
+  })}
+  showsVerticalScrollIndicator={false}
+  removeClippedSubviews={false}
+  keyExtractor={(item, index) => `${item.id || item.uri || item.url}-${index}`}
+  onMomentumScrollEnd={(event) => {
+    const height = Dimensions.get("window").height;
+    const index = Math.round(event.nativeEvent.contentOffset.y / height);
+    setViewerIndex(index);
+  }}
+  renderItem={({ item }) => <PreviewItem item={item} />}
+/>
+  </View>
+</Modal>
 
       <AssetCameraModal
         visible={cameraOpen}
@@ -898,6 +1019,83 @@ radioRow: {
   alignItems: "center",
   paddingVertical: 6,
   
+},
+
+
+playBadge: {
+  position: "absolute",
+  width: 34,
+  height: 34,
+  borderRadius: 17,
+  backgroundColor: "rgba(0,0,0,0.45)",
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+playText: {
+  color: "#fff",
+  fontSize: 15,
+  fontWeight: "900",
+},
+
+viewerWrap: {
+  flex: 1,
+  backgroundColor: "#000",
+},
+
+viewerHeader: {
+  position: "absolute",
+  top: 0,
+  left: 0,
+  right: 0,
+  zIndex: 10,
+  paddingTop: Platform.OS === "ios" ? 54 : 34,
+  paddingHorizontal: 18,
+  paddingBottom: 12,
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  backgroundColor: "rgba(0,0,0,0.35)",
+},
+
+viewerClose: {
+  width: 42,
+  height: 42,
+  borderRadius: 21,
+  backgroundColor: "rgba(255,255,255,0.18)",
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+viewerCloseText: {
+  color: "#fff",
+  fontSize: 30,
+  lineHeight: 32,
+  fontWeight: "500",
+},
+
+viewerCount: {
+  color: "#fff",
+  fontSize: 14,
+  fontWeight: "900",
+},
+
+previewPage: {
+  backgroundColor: "#000",
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+previewCenter: {
+  width: "100%",
+  height: "100%",
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+previewMedia: {
+  width: "100%",
+  height: "78%",
 },
 
 conditionRow: {
