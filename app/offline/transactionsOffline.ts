@@ -232,3 +232,33 @@ export async function downloadTransactionMedia(transactions: any[]) {
 
   return updatedTransactions;
 }
+
+
+export async function getPendingInspectionSyncItems() {
+  await initInspectionSyncQueue();
+
+  return db.getAllAsync<any>(
+    `SELECT * FROM pending_inspection_sync WHERE status = ? ORDER BY createdAt ASC;`,
+    ["pending"]
+  );
+}
+
+export async function getPendingInspectionSyncCount() {
+  await initInspectionSyncQueue();
+
+  const row = await db.getFirstAsync<any>(
+    `SELECT COUNT(*) as count FROM pending_inspection_sync WHERE status = ?;`,
+    ["pending"]
+  );
+
+  return Number(row?.count || 0);
+}
+
+export async function markInspectionSyncDone(id: string) {
+  await initInspectionSyncQueue();
+
+  await db.runAsync(
+    `UPDATE pending_inspection_sync SET status = ? WHERE id = ?;`,
+    ["done", id]
+  );
+}

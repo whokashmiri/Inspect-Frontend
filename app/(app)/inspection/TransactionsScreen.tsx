@@ -1,7 +1,7 @@
 
 
 //TransactionScreen.jsx
-import React, { useCallback, useState } from "react";
+import React, { useCallback,useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -22,6 +22,9 @@ import {
   getOfflineTransactions,
   saveOfflineTransactions,
   downloadTransactionMedia,
+  getPendingInspectionSyncItems,
+  getPendingInspectionSyncCount,
+  markInspectionSyncDone,
 } from "../../offline/transactionsOffline";
 
 import { Ionicons } from "@expo/vector-icons";
@@ -98,6 +101,11 @@ const [hasMore, setHasMore] = useState(true);
 const [loadingMore, setLoadingMore] = useState(false);
 const [downloading, setDownloading] = useState(false);
 
+
+const [isOnline, setIsOnline] = useState(true);
+const [pendingSyncCount, setPendingSyncCount] = useState(0);
+const [syncing, setSyncing] = useState(false);
+
 const loadTransactions = async ({ reset = true } = {}) => {
   try {
     if (reset) {
@@ -167,6 +175,57 @@ const loadMoreTransactions = () => {
   loadTransactions({ reset: false });
 };
 
+const refreshPendingCount = async () => {
+  const count = await getPendingInspectionSyncCount();
+  setPendingSyncCount(count);
+};
+
+const syncPendingInspections = async () => {
+  if (syncing) return;
+
+  const net = await NetInfo.fetch();
+  const online = !!net.isConnected && !!net.isInternetReachable;
+
+  setIsOnline(online);
+
+  if (!online) return;
+
+  const pending = await getPendingInspectionSyncItems();
+
+  if (pending.length === 0) {
+    setPendingSyncCount(0);
+    return;
+  }
+
+  try {
+    setSyncing(true);
+
+    for (const item of pending) {
+      const data = JSON.parse(item.data || "{}");
+      const media = JSON.parse(item.media || "[]");
+
+      await transactionApi.updateInspectionData(item.transactionId, data);
+
+      if (media.length > 0) {
+        await transactionApi.addMedia({
+          transactionId: item.transactionId,
+          projectId: item.transactionId,
+          media,
+        });
+      }
+
+      await markInspectionSyncDone(item.id);
+    }
+
+    await refreshPendingCount();
+    await loadTransactions();
+  } catch (error) {
+    console.log("Sync pending inspections failed:", error);
+  } finally {
+    setSyncing(false);
+  }
+};
+
 const refreshAndDownload = async () => {
   try {
     setDownloading(true);
@@ -193,11 +252,31 @@ const refreshAndDownload = async () => {
   }
 };
 
-  useFocusEffect(
-    useCallback(() => {
-      loadTransactions();
-    }, [])
-  );
+  
+
+  useEffect(() => {
+  refreshPendingCount();
+
+  const unsubscribe = NetInfo.addEventListener((state) => {
+    const online = !!state.isConnected && !!state.isInternetReachable;
+    setIsOnline(online);
+
+    if (online) {
+      syncPendingInspections();
+    }
+  });
+
+  return unsubscribe;
+}, []);
+
+
+useFocusEffect(
+  useCallback(() => {
+    loadTransactions();
+    refreshPendingCount();
+    syncPendingInspections();
+  }, [])
+);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -258,24 +337,54 @@ const refreshAndDownload = async () => {
     <View style={styles.flex}>
      <View style={styles.header}>
   <View style={styles.headerTop}>
-    <View>
-      <Text style={styles.title}>Transactions</Text>
-      <Text style={styles.subtitle}>
-        Select a transaction to edit inspection
-      </Text>
-    </View>
+    <View style={styles.headerTitleWrap}>
+  <Text style={styles.title} numberOfLines={1}>
+    Transactions
+  </Text>
+</View>
 
-    <Pressable
-      onPress={refreshAndDownload}
-      style={styles.refreshBtn}
-      disabled={downloading}
-    >
-      {downloading ? (
-        <ActivityIndicator color="#fff" size="small" />
-      ) : (
-        <Ionicons name="download-outline" size={20} color="#fff" />
-      )}
-    </Pressable>
+    <View style={styles.headerActions}>
+  <View style={styles.netStatus}>
+    <Ionicons
+      name="wifi"
+      size={18}
+      color={isOnline ? "#168044" : "#9CA3AF"}
+    />
+  </View>
+
+ <Pressable
+  onPress={syncPendingInspections}
+  style={[
+    styles.syncBtn,
+    (!isOnline || syncing) && styles.syncBtnDisabled,
+  ]}
+  disabled={syncing}
+>
+  {syncing ? (
+    <ActivityIndicator color="#fff" size="small" />
+  ) : (
+    <>
+      <Ionicons name="sync-outline" size={16} color="#fff" />
+
+      <Text style={styles.syncText}>
+        {pendingSyncCount}
+      </Text>
+    </>
+  )}
+</Pressable>
+
+  <Pressable
+    onPress={refreshAndDownload}
+    style={styles.refreshBtn}
+    disabled={downloading}
+  >
+    {downloading ? (
+      <ActivityIndicator color="#fff" size="small" />
+    ) : (
+      <Ionicons name="download-outline" size={20} color="#fff" />
+    )}
+  </Pressable>
+</View>
   </View>
 </View>
 
@@ -446,20 +555,15 @@ const styles = StyleSheet.create({
     color: MUTED,
     fontSize: 13,
   },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 0,
-  },
+header: {
+  paddingHorizontal: 16,
+  paddingTop: Platform.OS === "ios" ? 14 : 10,
+  paddingBottom: 4,
+},
   title: {
     fontSize: 28,
     fontWeight: "500",
     color: TEXT,
-  },
-  subtitle: {
-    fontSize: 13,
-    color: MUTED,
-    marginTop: 4,
   },
   listContent: {
     padding: 18,
@@ -486,20 +590,71 @@ headerTop: {
   flexDirection: "row",
   alignItems: "center",
   justifyContent: "space-between",
+  gap: 10,
 },
 
+headerTitleWrap: {
+  flex: 1,
+  minWidth: 0,
+},
+
+
 refreshBtn: {
-  width: 42,
-  height: 42,
-  borderRadius: 21,
+  width: 36,
+  height: 36,
+  borderRadius: 18,
   backgroundColor: ACC,
   alignItems: "center",
   justifyContent: "center",
 },
 
+
 badgesWrap: {
   alignItems: "flex-end",
   gap: 8,
+},
+
+headerActions: {
+  flexShrink: 0,
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "flex-end",
+  gap: 6,
+},
+
+
+netStatus: {
+  width: 34,
+  height: 34,
+  borderRadius: 17,
+  backgroundColor: "#fff",
+  borderWidth: 1,
+  borderColor: BORDER,
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+
+syncBtn: {
+  height: 36,
+  minWidth: 48,
+  paddingHorizontal: 9,
+  borderRadius: 18,
+  backgroundColor: "#168044",
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 4,
+},
+
+syncText: {
+  color: "#fff",
+  fontSize: 13,
+  fontWeight: "900",
+},
+
+syncBtnDisabled: {
+  backgroundColor: "#7A869A",
 },
 
 completedBadge: {
