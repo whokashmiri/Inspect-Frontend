@@ -18,7 +18,14 @@ import {
 import { VideoView, useVideoPlayer } from "expo-video";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
+import NetInfo from "@react-native-community/netinfo";
 import { transactionApi } from "../../../api/api";
+import {
+  getOfflineTransactionById,
+  saveOfflineTransaction,
+  savePendingInspectionSync,
+  saveLocalInspectionMedia,
+} from "../../offline/transactionsOffline";
 import AssetCameraModal from "../../components/AssetCameraModal";
 import { useTranslation } from "react-i18next";
 
@@ -165,10 +172,31 @@ const [viewerIndex, setViewerIndex] = useState(0);
   const loadTransaction = async () => {
     try {
       setLoading(true);
+let transaction: any = null;
 
-      const transactionRes = await transactionApi.getById(transactionId);
-     
-      const transaction = transactionRes.data;
+const net = await NetInfo.fetch();
+const isOnline = !!net.isConnected && !!net.isInternetReachable;
+
+if (isOnline) {
+  try {
+    const transactionRes = await transactionApi.getById(transactionId);
+    transaction = transactionRes.data;
+
+    if (transaction) {
+      await saveOfflineTransaction(transaction);
+    }
+  } catch (error) {
+    console.log("Online transaction load failed, using offline:", error);
+    transaction = await getOfflineTransactionById(transactionId);
+  }
+} else {
+  transaction = await getOfflineTransactionById(transactionId);
+}
+
+if (!transaction) {
+  Alert.alert("Offline unavailable", "This transaction is not downloaded yet.");
+  return;
+}
       // console.log("LOADED MEDIA:", transaction?.media);
       const evalData = transaction?.evalData || {};
       // console.log("LOADED EVAL DATA:", evalData);
@@ -370,7 +398,7 @@ const getBuildingStatus = () => {
   setCameraOpen(false);
 };
 
- const handleSubmit = async () => {
+const handleSubmit = async () => {
   if (!transactionId) {
     Alert.alert("Missing transaction", "transactionId is required.");
     return;
@@ -379,7 +407,7 @@ const getBuildingStatus = () => {
   try {
     setSaving(true);
 
-    await transactionApi.updateInspectionData(transactionId, {
+    const inspectionPayload = {
       buildingCondition: {
         status: getBuildingStatus(),
         completionPct: buildingCompletion ? Number(buildingCompletion) : null,
@@ -405,29 +433,99 @@ const getBuildingStatus = () => {
             ? Number(electricityMetersCount)
             : null,
       },
-    });
+    };
 
     const newMedia = media.filter((item: any) => {
       return !item.id && (item.uri || item.localUri);
     });
 
-    if (newMedia.length > 0) {
-      if (!projectId) {
-        Alert.alert("Missing project", "projectId is required for upload.");
-        return;
-      }
+    const savedLocalMedia = await saveLocalInspectionMedia(
+      transactionId,
+      newMedia
+    );
 
-      await transactionApi.addMedia({
+    const mergedMedia = media.map((item: any) => {
+      if (item.id) return item;
+
+      const match = savedLocalMedia.find(
+        (m: any) => m.uri === item.uri || m.localUri === item.localUri
+      );
+
+      return match || item;
+    });
+
+    const updatedTransaction = {
+      ...(transactionDetails || {}),
+      id: transactionId,
+      _id: transactionId,
+      evalData: {
+        ...(transactionDetails?.evalData || {}),
+        ...inspectionPayload,
+      },
+      media: mergedMedia,
+      isCompleted: true,
+      hasPendingInspectionSync: true,
+      lastLocalUpdateAt: new Date().toISOString(),
+    };
+
+    await saveOfflineTransaction(updatedTransaction);
+
+    const net = await NetInfo.fetch();
+    const isOnline = !!net.isConnected && !!net.isInternetReachable;
+
+    if (isOnline) {
+      try {
+        await transactionApi.updateInspectionData(transactionId, inspectionPayload);
+
+        if (savedLocalMedia.length > 0) {
+          if (!projectId) {
+            throw new Error("projectId is required for media upload.");
+          }
+
+          await transactionApi.addMedia({
+            transactionId,
+            projectId,
+            media: savedLocalMedia,
+          });
+        }
+
+        await saveOfflineTransaction({
+          ...updatedTransaction,
+          hasPendingInspectionSync: false,
+          lastSyncedAt: new Date().toISOString(),
+        });
+
+        Alert.alert("Success", "Transaction inspection saved successfully.");
+      } catch (error) {
+        console.log("Online save failed, queued offline:", error);
+
+        await savePendingInspectionSync({
+          transactionId,
+          data: inspectionPayload,
+          media: savedLocalMedia,
+        });
+
+        Alert.alert(
+          "Saved offline",
+          "Inspection saved locally and will sync when internet is available."
+        );
+      }
+    } else {
+      await savePendingInspectionSync({
         transactionId,
-        projectId,
-        media: newMedia,
+        data: inspectionPayload,
+        media: savedLocalMedia,
       });
+
+      Alert.alert(
+        "Saved offline",
+        "Inspection saved locally and will sync when internet is available."
+      );
     }
 
-    Alert.alert("Success", "Transaction inspection saved successfully.");
     router.back();
   } catch (error: any) {
-     console.log("LOAD TRANSACTION ERROR:", error);
+    console.log("SAVE INSPECTION ERROR:", error);
     Alert.alert("Error", error?.message || "Something went wrong.");
   } finally {
     setSaving(false);
