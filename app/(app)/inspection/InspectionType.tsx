@@ -22,8 +22,8 @@ export default function InspectionTypeScreen() {
   if (!loaded) return null;
 
 const handleRealEstatePress = async () => {
-  console.log("AUTH USER:", user);
-  console.log("SELECTED COMPANY:", selectedCompanyId);
+  // console.log("AUTH USER:", user);
+  // console.log("SELECTED COMPANY:", selectedCompanyId);
 
   if (downloading) return;
 
@@ -36,13 +36,7 @@ const handleRealEstatePress = async () => {
         limit: 10,
       });
 
-      console.log("DOWNLOAD COMPANY RESPONSE:", {
-        success: res.success,
-        companyId: res.companyId,
-        total: res.total,
-        count: res.transactions?.length ?? 0,
-        hasMore: res.hasMore,
-      });
+    
     }
 
     router.push("/inspection/TransactionsScreen");

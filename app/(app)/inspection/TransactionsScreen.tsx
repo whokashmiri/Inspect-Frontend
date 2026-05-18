@@ -25,6 +25,7 @@ import {
   getPendingInspectionSyncItems,
   getPendingInspectionSyncCount,
   markInspectionSyncDone,
+  dedupeMedia 
 } from "../../offline/transactionsOffline";
 
 import { Ionicons } from "@expo/vector-icons";
@@ -95,6 +96,8 @@ const [viewerLoading, setViewerLoading] = useState(false);
 const [viewerMedia, setViewerMedia] = useState<any[]>([]);
 const [activeMediaIndex, setActiveMediaIndex] = useState(0);
 
+const [syncingTransactionIds, setSyncingTransactionIds] = useState<Record<string, boolean>>({});
+
 
 const [page, setPage] = useState(1);
 const [hasMore, setHasMore] = useState(true);
@@ -106,6 +109,20 @@ const [isOnline, setIsOnline] = useState(true);
 const [pendingSyncCount, setPendingSyncCount] = useState(0);
 const [syncing, setSyncing] = useState(false);
 
+
+
+const dedupeTransactions = (items: any[]) => {
+  const map = new Map();
+
+  for (const item of items) {
+    const id = String(item.id || item._id);
+    if (!id) continue;
+
+    map.set(id, item);
+  }
+
+  return Array.from(map.values());
+};
 const loadTransactions = async ({ reset = true } = {}) => {
   try {
     if (reset) {
@@ -115,7 +132,7 @@ const loadTransactions = async ({ reset = true } = {}) => {
 
    
     const net = await NetInfo.fetch();
-    const isOnline = !!net.isConnected && !!net.isInternetReachable;
+    const isOnline = !!net.isConnected && net.isInternetReachable !== false;
 
     if (isOnline) {
 
@@ -125,13 +142,7 @@ const loadTransactions = async ({ reset = true } = {}) => {
         limit: 10,
       });
 
-            console.log("TRANSACTION DOWNLOAD:", {
-  success: res.success,
-  companyId: res.companyId,
-  total: res.total,
-  count: res.transactions?.length ?? 0,
-  hasMore: res.hasMore,
-})
+
 
       const downloaded = await downloadTransactionMedia(res.transactions || []);
 
@@ -143,7 +154,7 @@ if (reset) {
 }
 
 setTransactions((prev) =>
-  reset ? downloaded : [...prev, ...downloaded]
+  dedupeTransactions(reset ? downloaded : [...prev, ...downloaded])
 );
       setHasMore(Boolean(res.hasMore));
       setPage((prev) => (reset ? 2 : prev + 1));
@@ -153,13 +164,13 @@ setTransactions((prev) =>
 
     const offlineData = await getOfflineTransactions();
 
-    setTransactions(offlineData);
+    setTransactions(dedupeTransactions(offlineData));
     setHasMore(false);
   } catch (error) {
     console.log("Failed to load transactions", error);
 
     const offlineData = await getOfflineTransactions();
-    setTransactions(offlineData);
+    setTransactions(dedupeTransactions(offlineData));
     setHasMore(false);
   } finally {
     setLoading(false);
@@ -200,25 +211,75 @@ const syncPendingInspections = async () => {
   try {
     setSyncing(true);
 
-    for (const item of pending) {
-      const data = JSON.parse(item.data || "{}");
-      const media = JSON.parse(item.media || "[]");
+   for (const item of pending) {
+  try {
+    setSyncingTransactionIds((prev) => ({
+      ...prev,
+      [String(item.transactionId)]: true,
+    }));
 
-      await transactionApi.updateInspectionData(item.transactionId, data);
+    const data = JSON.parse(item.data || "{}");
+    const media = JSON.parse(item.media || "[]");
+    const payload = { ...data } as Record<string, unknown>;
 
-      if (media.length > 0) {
-        await transactionApi.addMedia({
-          transactionId: item.transactionId,
-          projectId: item.transactionId,
-          media,
-        });
-      }
+    delete payload.projectId;
 
-      await markInspectionSyncDone(item.id);
+    await transactionApi.updateInspectionData(
+      item.transactionId,
+      payload
+    );
+
+    const uploadMedia = dedupeMedia(media).filter(
+      (m: any) => m.isLocalOnly
+    );
+
+    if (uploadMedia.length > 0) {
+      await transactionApi.addMedia({
+        transactionId: String(item.transactionId),
+        media: uploadMedia,
+      });
     }
 
+    await markInspectionSyncDone(item.id);
+
+    const fresh = await transactionApi.getById(
+      String(item.transactionId)
+    );
+
+    const serverTx = fresh.data;
+
+    const offlineData = await getOfflineTransactions();
+
+    const updatedOfflineData = offlineData.map((tx: any) => {
+      const txId = String(tx.id || tx._id);
+
+      if (txId !== String(item.transactionId)) {
+        return tx;
+      }
+
+      return {
+        ...serverTx,
+        media: dedupeMedia(serverTx.media || []),
+        imagesCount: dedupeMedia(serverTx.media || []).length,
+        hasPendingInspectionSync: false,
+        lastSyncedAt: new Date().toISOString(),
+      };
+    });
+
+    await saveOfflineTransactions(updatedOfflineData);
+    setTransactions(updatedOfflineData);
+  } catch (error) {
+    console.log("Sync pending inspections failed:", error);
+  } finally {
+    setSyncingTransactionIds((prev) => {
+      const next = { ...prev };
+      delete next[String(item.transactionId)];
+      return next;
+    });
+  }
+}
+
     await refreshPendingCount();
-    await loadTransactions();
   } catch (error) {
     console.log("Sync pending inspections failed:", error);
   } finally {
@@ -239,14 +300,14 @@ const refreshAndDownload = async () => {
     const downloaded = await downloadTransactionMedia(res.transactions || []);
     await saveOfflineTransactions(downloaded);
 
-    setTransactions(downloaded);
+    setTransactions(dedupeTransactions(downloaded));
     setPage(2);
     setHasMore(Boolean(res.hasMore));
   } catch (error) {
     console.log("Refresh download failed:", error);
 
     const offlineData = await getOfflineTransactions();
-    setTransactions(offlineData);
+   setTransactions(dedupeTransactions(offlineData));
   } finally {
     setDownloading(false);
   }
@@ -272,9 +333,21 @@ const refreshAndDownload = async () => {
 
 useFocusEffect(
   useCallback(() => {
-    loadTransactions();
-    refreshPendingCount();
-    syncPendingInspections();
+    const loadLocalFirst = async () => {
+      const offlineData = await getOfflineTransactions();
+
+      if (offlineData.length > 0) {
+        setTransactions(dedupeTransactions(offlineData));
+        setLoading(false);
+      } else {
+        await loadTransactions();
+      }
+
+      await refreshPendingCount();
+      await syncPendingInspections();
+    };
+
+    loadLocalFirst();
   }, [])
 );
 
@@ -291,11 +364,17 @@ useFocusEffect(
     return;
   }
 
-  const qs = `?transactionId=${encodeURIComponent(String(transactionId))}&projectId=${encodeURIComponent(
-    String(item.projectId || transactionId)
-  )}&propertyType=${encodeURIComponent(
-    String(item.evalData?.propertyType || "Not available")
-  )}`;
+  const projectId = item.projectId;
+
+if (!projectId) {
+  console.log("Missing projectId on transaction:", item);
+}
+
+ const qs = `?transactionId=${encodeURIComponent(String(transactionId))}&projectId=${encodeURIComponent(
+  String(projectId || "")
+)}&propertyType=${encodeURIComponent(
+  String(item.evalData?.propertyType || "Not available")
+)}`;
 
   // console.log("Navigating to AssetInspection with:", { item, qs });
 
@@ -332,6 +411,9 @@ useFocusEffect(
     setViewerLoading(false);
   }
 };
+
+
+
 
   return (
     <View style={styles.flex}>
@@ -390,7 +472,7 @@ useFocusEffect(
 
      <FlatList
   data={transactions}
-  keyExtractor={(item) => String(item.id || item._id)}
+  keyExtractor={(item, index) => `${item.id || item._id}-${index}`}
   contentContainerStyle={styles.listContent}
   refreshControl={
     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -456,9 +538,15 @@ useFocusEffect(
               </View>
 
               <View style={styles.footer}>
+  <View style={styles.imageCountWrap}>
   <Text style={styles.footerText}>
-    Images: {item.imagesCount || 0}
+    Images: {dedupeMedia(item.media || []).length || item.imagesCount || 0}
   </Text>
+
+  {(item.hasPendingInspectionSync || syncingTransactionIds[String(item.id || item._id)]) ? (
+    <ActivityIndicator size="small" color={ACC} />
+  ) : null}
+</View>
 
   <View style={styles.footerActions}>
     <Pressable
@@ -610,8 +698,17 @@ refreshBtn: {
 
 
 badgesWrap: {
-  alignItems: "flex-end",
-  gap: 8,
+  flexDirection: "row", 
+  alignItems: "center", 
+  gap: 4,               
+  // backgroundColor: "red",
+          
+},
+
+imageCountWrap: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 6,
 },
 
 headerActions: {
@@ -664,12 +761,13 @@ completedBadge: {
   paddingHorizontal: 10,
   paddingVertical: 5,
   borderRadius: 999,
+  marginBottom:5,
 },
 
 completedText: {
   color: "#168044",
-  fontSize: 12,
-  fontWeight: "700",
+  fontSize: 10,
+  fontWeight: "500",
 },
 
 
@@ -690,10 +788,12 @@ completedText: {
     paddingHorizontal: 10,
     paddingVertical: 6,
     alignSelf: "flex-start",
+      marginTop: 4,
+    
   },
   badgeText: {
-    fontSize: 11,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "500",
     color: ACC,
     textTransform: "uppercase",
   },

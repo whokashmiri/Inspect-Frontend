@@ -150,11 +150,13 @@ export async function requestForm<T>(url: string, options: {
 
 
 async function uploadFilesInBatches<T>(
+  
   files: UploadFileInput[],
   uploadFn: (file: UploadFileInput) => Promise<T>,
   batchSize = 3
 ): Promise<T[]> {
   const results: T[] = [];
+  
 
   for (let i = 0; i < files.length; i += batchSize) {
     const batch = files.slice(i, i + batchSize);
@@ -1150,74 +1152,76 @@ export const transactionApi = {
     ),
 
  addMedia: async (payload: {
-    transactionId: string;
-    projectId: string;
-    media: AssetMediaInput[];
-  }) => {
-    const localMedia = getTransactionLocalMedia(payload.media);
+  transactionId: string;
+  media: AssetMediaInput[];
+}) => {
+  const localMedia = getTransactionLocalMedia(payload.media);
 
-    if (localMedia.length === 0) {
+  if (localMedia.length === 0) {
+    return {
+      success: true,
+      message: "No new media to upload",
+      data: [],
+    } satisfies AddTransactionMediaResponse;
+  }
+
+  const localImages = localMedia.filter((file) => !isVideoFile(file));
+  const localVideos = localMedia.filter(isVideoFile);
+
+
+  const uploadedImages = await uploadFilesInBatches(
+    localImages,
+    async (image) => {
+      const uploaded = await uploadSingleFileToCloudinary({
+        file: image,
+        projectId: payload.transactionId,
+        mediaType: "image",
+      });
+
       return {
-        success: true,
-        message: "No new media to upload",
-        data: [],
-      } satisfies AddTransactionMediaResponse;
+        ...uploaded,
+        mediaType: "image" as const,
+        name: image.name,
+        originalName: image.name,
+        localId: (image as any).localId,
+      };
+    },
+    3
+  );
+
+  const uploadedVideos = await uploadFilesInBatches(
+    localVideos,
+    async (video) => {
+      const uploaded = await uploadSingleFileToCloudinary({
+        file: video,
+        projectId: payload.transactionId,
+        mediaType: "video",
+      });
+
+      return {
+        ...uploaded,
+        mediaType: "video" as const,
+        name: video.name,
+        originalName: video.name,
+        localId: (video as any).localId,
+      };
+    },
+    1
+  );
+
+  const media = [...uploadedImages, ...uploadedVideos].map((item, index) => ({
+    ...item,
+    sortIndex: index,
+  }));
+
+  return request<AddTransactionMediaResponse>(
+    `/transactions/${payload.transactionId}/media`,
+    {
+      method: "POST",
+      body: { media },
     }
-
-    const localImages = localMedia.filter((file) => !isVideoFile(file));
-    const localVideos = localMedia.filter(isVideoFile);
-
-    const uploadedImages = await uploadFilesInBatches(
-      localImages,
-      async (image) => {
-        const uploaded = await uploadSingleFileToCloudinary({
-          file: image,
-          projectId: payload.projectId,
-          mediaType: "image",
-        });
-
-        return {
-          ...uploaded,
-          mediaType: "image" as const,
-          name: image.name,
-          originalName: image.name,
-        };
-      },
-      3
-    );
-
-    const uploadedVideos = await uploadFilesInBatches(
-      localVideos,
-      async (video) => {
-        const uploaded = await uploadSingleFileToCloudinary({
-          file: video,
-          projectId: payload.projectId,
-          mediaType: "video",
-        });
-
-        return {
-          ...uploaded,
-          mediaType: "video" as const,
-          name: video.name,
-          originalName: video.name,
-        };
-      },
-      1
-    );
-
-    const media = [...uploadedImages, ...uploadedVideos].map((item, index) => ({
-      ...item,
-      sortIndex: index,
-    }));
-
-    return request<AddTransactionMediaResponse>(
-      `/transactions/${payload.transactionId}/media`,
-      {
-        method: "POST",
-        body: { media },
-      }
-    );
-  },
+  );
+},
 
   listMedia: (transactionId: string) =>
     request<ListTransactionMediaResponse>(

@@ -37,6 +37,31 @@ export async function getOfflineTransactions() {
   return rows.map((row) => JSON.parse(row.data));
 }
 
+
+function getMediaKey(item: any) {
+  return String(
+    item.serverId ||
+      item.id ||
+      item._id ||
+      item.localId ||
+      item.url ||
+      item.localUri ||
+      item.uri ||
+      ""
+  );
+}
+
+export function dedupeMedia(media: any[]) {
+  const map = new Map<string, any>();
+
+  for (const item of media || []) {
+    const key = getMediaKey(item);
+    if (!key) continue;
+    map.set(key, item);
+  }
+
+  return Array.from(map.values());
+}
 export async function getOfflineTransactionById(id: string) {
   await initTransactionsOfflineDb();
 
@@ -71,6 +96,7 @@ export async function initInspectionSyncQueue() {
     CREATE TABLE IF NOT EXISTS pending_inspection_sync (
       id TEXT PRIMARY KEY NOT NULL,
       transactionId TEXT NOT NULL,
+       projectId TEXT,
       data TEXT NOT NULL,
       media TEXT,
       createdAt TEXT NOT NULL,
@@ -81,14 +107,43 @@ export async function initInspectionSyncQueue() {
 
 export async function savePendingInspectionSync({
   transactionId,
+   projectId,
   data,
   media = [],
 }: {
   transactionId: string;
+  projectId?: string;
   data: any;
   media?: any[];
 }) {
   await initInspectionSyncQueue();
+
+  const existing = await db.getFirstAsync<any>(
+    `SELECT * FROM pending_inspection_sync
+     WHERE transactionId = ? AND status = ?;`,
+    [transactionId, "pending"]
+  );
+
+  const cleanMedia = dedupeMedia(media);
+
+  if (existing) {
+    const oldData = JSON.parse(existing.data || "{}");
+    const oldMedia = JSON.parse(existing.media || "[]");
+
+    await db.runAsync(
+      `UPDATE pending_inspection_sync
+       SET data = ?, media = ?, createdAt = ?
+       WHERE id = ?;`,
+      [
+        JSON.stringify({ ...oldData, ...data }),
+        JSON.stringify(dedupeMedia([...oldMedia, ...cleanMedia])),
+        new Date().toISOString(),
+        existing.id,
+      ]
+    );
+
+    return existing.id;
+  }
 
   const id = `inspection_${transactionId}_${Date.now()}`;
 
@@ -100,7 +155,7 @@ export async function savePendingInspectionSync({
       id,
       transactionId,
       JSON.stringify(data),
-      JSON.stringify(media),
+      JSON.stringify(cleanMedia),
       new Date().toISOString(),
       "pending",
     ]
@@ -108,7 +163,6 @@ export async function savePendingInspectionSync({
 
   return id;
 }
-
 
 export async function saveLocalInspectionMedia(
   transactionId: string,
@@ -121,18 +175,29 @@ export async function saveLocalInspectionMedia(
     await FileSystem.makeDirectoryAsync(baseDir, { intermediates: true });
   }
 
+  
   const saved = [];
 
   for (const item of media) {
     const uri = item.uri || item.localUri;
+
+  
 
     if (!uri) {
       saved.push(item);
       continue;
     }
 
+     
     if (uri.startsWith(FileSystem.documentDirectory || "")) {
-      saved.push(item);
+      saved.push({
+        ...item,
+       
+        originalUri: item.originalUri || uri,
+        uri,
+        localUri: item.localUri || uri,
+        isLocalOnly: true,
+      });
       continue;
     }
 
@@ -141,10 +206,12 @@ export async function saveLocalInspectionMedia(
       item.mimeType?.startsWith?.("video") ||
       item.type?.startsWith?.("video");
 
+      const localId = item.localId || `local_${transactionId}_${Date.now()}_${Math.random()
+  .toString(36)
+  .slice(2)}`;
+
     const ext = isVideo ? "mp4" : "jpg";
-    const fileName = `${Date.now()}_${Math.random()
-      .toString(36)
-      .slice(2)}.${ext}`;
+    const fileName = `${localId}.${ext}`;
 
     const localUri = `${baseDir}${fileName}`;
 
@@ -155,13 +222,16 @@ export async function saveLocalInspectionMedia(
 
     saved.push({
       ...item,
+      localId,
+      originalUri: item.originalUri || uri,
       uri: localUri,
       localUri,
       isLocalOnly: true,
     });
   }
 
-  return saved;
+  return dedupeMedia(saved);
+
 }
 
 export async function downloadTransactionMedia(transactions: any[]) {
@@ -175,7 +245,7 @@ export async function downloadTransactionMedia(transactions: any[]) {
   const updatedTransactions = [];
 
   for (const transaction of transactions) {
-    const media = transaction.media || [];
+   const media = dedupeMedia(transaction.media || []);
     const transactionId = String(transaction.id || transaction._id);
 
     const transactionDir = `${baseDir}${transactionId}/`;
@@ -223,7 +293,8 @@ export async function downloadTransactionMedia(transactions: any[]) {
 
     updatedTransactions.push({
       ...transaction,
-      media: downloadedMedia,
+       media: dedupeMedia(downloadedMedia),
+  imagesCount: dedupeMedia(downloadedMedia).length,
       isOfflineDownloaded: true,
     });
   }

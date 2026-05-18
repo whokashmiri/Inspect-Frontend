@@ -13,6 +13,9 @@ import {
   FlatList,
   Dimensions,
   Platform,
+  KeyboardAvoidingView,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from "react-native";
 
 import { VideoView, useVideoPlayer } from "expo-video";
@@ -107,16 +110,17 @@ export default function AssetInspection() {
   const [viewerVisible, setViewerVisible] = useState(false);
 const [viewerIndex, setViewerIndex] = useState(0);
 
+const [snackbar, setSnackbar] = useState("");
+const [notesOpen, setNotesOpen] = useState(false);
+const [inspectionNotes, setInspectionNotes] = useState("");
+
   const params = useLocalSearchParams<{
     transactionId?: string;
     projectId?: string;
     propertyType?: string;
   }>();
 
-  useEffect(() => {
-    // console.log("AssetInspection - incoming params:", params);
-  }, [params]);
-
+ 
   const transactionId = params.transactionId || "";
   const projectId = params.projectId || "";
 
@@ -165,6 +169,17 @@ const [viewerIndex, setViewerIndex] = useState(0);
 
   const [media, setMedia] = useState<any[]>([]);
 
+  const showSnackbar = (message: string) => {
+  setSnackbar(message);
+  setTimeout(() => setSnackbar(""), 2800);
+};
+
+
+ useEffect(() => {
+    // console.log("AssetInspection - incoming params:", params);
+  }, [params]);
+
+
 
   useEffect(() => {
   if (!transactionId) return;
@@ -202,6 +217,7 @@ if (!transaction) {
       // console.log("LOADED EVAL DATA:", evalData);
 
       setTransactionDetails(transaction);
+      setInspectionNotes(evalData.inspectionNotes || "");
 
       const building = evalData.buildingCondition || {};
       // console.log("LOADED BUILDING:", building);
@@ -318,6 +334,9 @@ const getBuildingStatus = () => {
   setViewerVisible(true);
 };
 
+const makeLocalMediaId = () =>
+  `local_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
   const pickMedia = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
@@ -339,6 +358,9 @@ const getBuildingStatus = () => {
       const isVideo = asset.type === "video";
 
       return {
+        localId: makeLocalMediaId(),
+        isLocalOnly: true,
+
         uri: asset.uri,
         name:
           asset.fileName ||
@@ -380,6 +402,8 @@ const getBuildingStatus = () => {
     const rawUri = item.uri || item.path || item.localUri;
 
     return {
+      localId: makeLocalMediaId(),
+      isLocalOnly: true,
       uri: rawUri?.startsWith?.("file://") ? rawUri : `file://${rawUri}`,
       name: isVideo
         ? `video_${Date.now()}_${index}.mp4`
@@ -400,14 +424,18 @@ const getBuildingStatus = () => {
 
 const handleSubmit = async () => {
   if (!transactionId) {
-    Alert.alert("Missing transaction", "transactionId is required.");
+    showSnackbar("Missing transaction id.");
     return;
   }
+
+  if (saving) return;
 
   try {
     setSaving(true);
 
     const inspectionPayload = {
+      inspectionNotes,
+
       buildingCondition: {
         status: getBuildingStatus(),
         completionPct: buildingCompletion ? Number(buildingCompletion) : null,
@@ -436,7 +464,11 @@ const handleSubmit = async () => {
     };
 
     const newMedia = media.filter((item: any) => {
-      return !item.id && (item.uri || item.localUri);
+      return (
+        item.isLocalOnly === true &&
+        !item.uploadedAt &&
+        (item.uri || item.localUri)
+      );
     });
 
     const savedLocalMedia = await saveLocalInspectionMedia(
@@ -445,24 +477,38 @@ const handleSubmit = async () => {
     );
 
     const mergedMedia = media.map((item: any) => {
-      if (item.id) return item;
+      if (!item.isLocalOnly) return item;
 
-      const match = savedLocalMedia.find(
-        (m: any) => m.uri === item.uri || m.localUri === item.localUri
-      );
+      const match = savedLocalMedia.find((m: any) => {
+        return (
+          m.localId === item.localId ||
+          m.originalUri === item.uri ||
+          m.uri === item.uri ||
+          m.localUri === item.localUri
+        );
+      });
 
-      return match || item;
+      return {
+        ...(match || item),
+        localId: item.localId,
+        isLocalOnly: true,
+        uploadedAt: null,
+      };
     });
 
     const updatedTransaction = {
       ...(transactionDetails || {}),
       id: transactionId,
       _id: transactionId,
+
+      imagesCount: mergedMedia.length,
+      media: mergedMedia,
+
       evalData: {
         ...(transactionDetails?.evalData || {}),
         ...inspectionPayload,
       },
-      media: mergedMedia,
+      
       isCompleted: true,
       hasPendingInspectionSync: true,
       lastLocalUpdateAt: new Date().toISOString(),
@@ -470,69 +516,80 @@ const handleSubmit = async () => {
 
     await saveOfflineTransaction(updatedTransaction);
 
-    const net = await NetInfo.fetch();
-    const isOnline = !!net.isConnected && !!net.isInternetReachable;
+    showSnackbar("Inspection saved locally. Syncing in background...");
+    router.back();
 
-    if (isOnline) {
+    setTimeout(async () => {
       try {
-        await transactionApi.updateInspectionData(transactionId, inspectionPayload);
+        const net = await NetInfo.fetch();
+        const isOnline = !!net.isConnected && !!net.isInternetReachable;
+
+        if (!isOnline) {
+          await savePendingInspectionSync({
+            transactionId,
+            projectId,
+            data: inspectionPayload,
+            media: savedLocalMedia,
+          });
+          return;
+        }
+
+        await transactionApi.updateInspectionData(
+          transactionId,
+          inspectionPayload
+        );
 
         if (savedLocalMedia.length > 0) {
           if (!projectId) {
-            throw new Error("projectId is required for media upload.");
+            await savePendingInspectionSync({
+              transactionId,
+              projectId,
+              data: inspectionPayload,
+              media: savedLocalMedia,
+            });
+            return;
           }
 
           await transactionApi.addMedia({
             transactionId,
-            projectId,
             media: savedLocalMedia,
           });
         }
 
+        const uploadedMedia = mergedMedia.map((item: any) => {
+          if (!item.isLocalOnly) return item;
+
+          return {
+            ...item,
+            isLocalOnly: false,
+            uploadedAt: new Date().toISOString(),
+          };
+        });
+
         await saveOfflineTransaction({
           ...updatedTransaction,
+          media: uploadedMedia,
           hasPendingInspectionSync: false,
           lastSyncedAt: new Date().toISOString(),
         });
-
-        Alert.alert("Success", "Transaction inspection saved successfully.");
       } catch (error) {
-        console.log("Online save failed, queued offline:", error);
+        console.log("Background sync failed. Queued for later:", error);
 
         await savePendingInspectionSync({
           transactionId,
+          projectId,
           data: inspectionPayload,
           media: savedLocalMedia,
         });
-
-        Alert.alert(
-          "Saved offline",
-          "Inspection saved locally and will sync when internet is available."
-        );
       }
-    } else {
-      await savePendingInspectionSync({
-        transactionId,
-        data: inspectionPayload,
-        media: savedLocalMedia,
-      });
-
-      Alert.alert(
-        "Saved offline",
-        "Inspection saved locally and will sync when internet is available."
-      );
-    }
-
-    router.back();
+    }, 0);
   } catch (error: any) {
     console.log("SAVE INSPECTION ERROR:", error);
-    Alert.alert("Error", error?.message || "Something went wrong.");
+    showSnackbar(error?.message || "Failed to save inspection.");
   } finally {
     setSaving(false);
   }
 };
-
-
 if (loading) {
   return (
     <View style={[styles.flex, styles.center]}>
@@ -542,8 +599,15 @@ if (loading) {
   );
 }
 
-  return (
-    <View style={styles.flex}>
+  
+    return (
+  <KeyboardAvoidingView
+    style={styles.flex}
+    behavior={Platform.OS === "ios" ? "padding" : "height"}
+    keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 20}
+  >
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+      <View style={styles.flex}>
       <ScrollView
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
@@ -784,6 +848,29 @@ if (loading) {
 </View>
         </Section>
 
+        <Section title="Inspection Notes">
+  <Pressable
+    onPress={() => setNotesOpen((prev) => !prev)}
+    style={styles.notesToggle}
+  >
+    <Text style={styles.notesToggleText}>
+      {notesOpen ? "Hide Notes" : "Add Notes"}
+    </Text>
+  </Pressable>
+
+  {notesOpen && (
+    <TextInput
+      value={inspectionNotes}
+      onChangeText={setInspectionNotes}
+      placeholder="Write inspection notes..."
+      placeholderTextColor={MUTED}
+      multiline
+      textAlignVertical="top"
+      style={styles.notesInput}
+    />
+  )}
+</Section>
+
         <Pressable
           disabled={saving}
           onPress={handleSubmit}
@@ -850,7 +937,15 @@ if (loading) {
         onDone={handleCameraDone}
         onScanText={() => {}}
       />
+
+          {snackbar ? (
+        <View style={styles.snackbar}>
+          <Text style={styles.snackbarText}>{snackbar}</Text>
+        </View>
+      ) : null}
     </View>
+  </TouchableWithoutFeedback>
+</KeyboardAvoidingView>
   );
 }
 
@@ -950,10 +1045,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: BG,
   },
-  container: {
-    padding: 12,
-    paddingBottom: 24,
-  },
+ container: {
+  padding: 18,
+  paddingBottom: 80,
+  flexGrow: 1,
+},
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -1028,6 +1124,53 @@ loadingText: {
     color: TEXT,
     marginBottom: 7,
   },
+
+  notesToggle: {
+  alignSelf: "flex-start",
+  backgroundColor: SURFACE,
+  paddingHorizontal: 14,
+  paddingVertical: 10,
+  borderRadius: 999,
+  borderWidth: 1,
+  borderColor: BORDER,
+},
+
+notesToggleText: {
+  color: ACC,
+  fontSize: 13,
+  fontWeight: "900",
+},
+
+notesInput: {
+  marginTop: 12,
+  minHeight: 110,
+  borderWidth: 1,
+  borderColor: BORDER,
+  borderRadius: 14,
+  padding: 12,
+  color: TEXT,
+  fontSize: 14,
+  backgroundColor: "#fff",
+},
+
+snackbar: {
+  position: "absolute",
+  left: 18,
+  right: 18,
+  bottom: 24,
+  backgroundColor: ACC,
+  borderRadius: 14,
+  paddingVertical: 13,
+  paddingHorizontal: 16,
+  zIndex: 100,
+},
+
+snackbarText: {
+  color: "#fff",
+  fontSize: 13,
+  fontWeight: "700",
+  textAlign: "center",
+},
   readOnlyBox: {
     flexDirection: "row",
     backgroundColor: "#FAFBFC",
