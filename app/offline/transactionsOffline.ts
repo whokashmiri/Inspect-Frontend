@@ -39,15 +39,15 @@ export async function getOfflineTransactions() {
 
 
 function getMediaKey(item: any) {
+  const uri = String(item.localUri || item.uri || item.originalUri || "");
+
   return String(
-    item.localId ||
-      item.serverId ||
+    item.serverId ||
       item.id ||
       item._id ||
       item.url ||
-      item.localUri ||
-      item.uri ||
-      item.originalUri ||
+      uri ||
+      item.localId ||
       item.name ||
       ""
   );
@@ -63,6 +63,29 @@ export function dedupeMedia(media: any[]) {
   }
 
   return Array.from(map.values());
+}
+
+
+function logOfflineMedia(label: string, media: any[]) {
+  console.log(
+    `[OFFLINE_MEDIA] ${label}`,
+    (media || []).map((m, i) => ({
+      i,
+      key: getMediaKey(m),
+      localId: m.localId,
+      name: m.name,
+      uri: m.uri,
+      localUri: m.localUri,
+      originalUri: m.originalUri,
+      isLocalOnly: m.isLocalOnly,
+      queuedForUpload: m.queuedForUpload,
+      uploadedAt: m.uploadedAt,
+      id: m.id,
+      _id: m._id,
+      serverId: m.serverId,
+      url: m.url,
+    }))
+  );
 }
 export async function getOfflineTransactionById(id: string) {
   await initTransactionsOfflineDb();
@@ -139,9 +162,34 @@ export async function savePendingInspectionSync({
 
   const cleanMedia = dedupeMedia(media);
 
+
+  console.log("[PENDING_INSPECTION] savePendingInspectionSync", {
+  transactionId,
+  projectId,
+  incomingCount: media.length,
+  cleanCount: cleanMedia.length,
+  hasExisting: !!existing,
+});
+
+logOfflineMedia("incoming media", media);
+logOfflineMedia("clean media", cleanMedia);
+
   if (existing) {
     const oldData = JSON.parse(existing.data || "{}");
     const oldMedia = JSON.parse(existing.media || "[]");
+
+    const mergedMedia = dedupeMedia([...oldMedia, ...cleanMedia]);
+
+console.log("[PENDING_INSPECTION] updating existing queue", {
+  transactionId,
+  oldCount: oldMedia.length,
+  newCount: cleanMedia.length,
+  mergedCount: mergedMedia.length,
+});
+
+logOfflineMedia("old queued media", oldMedia);
+logOfflineMedia("new clean media", cleanMedia);
+logOfflineMedia("merged queued media", mergedMedia);
 
     await db.runAsync(
       `UPDATE pending_inspection_sync
@@ -149,7 +197,7 @@ export async function savePendingInspectionSync({
        WHERE id = ?;`,
       [
         JSON.stringify({ ...oldData, ...data }),
-        JSON.stringify(dedupeMedia([...oldMedia, ...cleanMedia])),
+        JSON.stringify(mergedMedia),
         new Date().toISOString(),
         existing.id,
       ]
@@ -159,6 +207,15 @@ export async function savePendingInspectionSync({
   }
 
   const id = `inspection_${transactionId}_${Date.now()}`;
+
+  console.log("[PENDING_INSPECTION] creating new queue item", {
+  id,
+  transactionId,
+  projectId,
+  mediaCount: cleanMedia.length,
+});
+
+logOfflineMedia("new queued media", cleanMedia);
 
  await db.runAsync(
   `INSERT INTO pending_inspection_sync
@@ -182,6 +239,13 @@ export async function saveLocalInspectionMedia(
   transactionId: string,
   media: any[]
 ) {
+
+  console.log("[LOCAL_MEDIA_SAVE] start", {
+  transactionId,
+  inputCount: media.length,
+});
+
+logOfflineMedia("saveLocalInspectionMedia input", media);
   const baseDir = `${FileSystem.documentDirectory}transactions-media/${transactionId}/`;
 
   const dirInfo = await FileSystem.getInfoAsync(baseDir);
@@ -229,6 +293,14 @@ export async function saveLocalInspectionMedia(
 
     const localUri = `${baseDir}${fileName}`;
 
+    console.log("[LOCAL_MEDIA_SAVE] copying file", {
+  transactionId,
+  from: uri,
+  to: localUri,
+  localId,
+  isVideo,
+});
+
     await FileSystem.copyAsync({
       from: uri,
       to: localUri,
@@ -244,7 +316,17 @@ export async function saveLocalInspectionMedia(
     });
   }
 
-  return dedupeMedia(saved);
+  const result = dedupeMedia(saved);
+
+console.log("[LOCAL_MEDIA_SAVE] done", {
+  transactionId,
+  savedCount: saved.length,
+  dedupedCount: result.length,
+});
+
+logOfflineMedia("saveLocalInspectionMedia result", result);
+
+return result;
 
 }
 

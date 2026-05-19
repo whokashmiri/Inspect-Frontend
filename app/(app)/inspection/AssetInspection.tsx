@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo,useRef, useState } from "react";
 import {
   View,
   Text,
@@ -163,11 +163,34 @@ export default function AssetInspection() {
 
   const [media, setMedia] = useState<any[]>([]);
 
+
+  const recordingStartedAtRef = useRef<number | null>(null);
+
   const showSnackbar = (message: string) => {
     setSnackbar(message);
     setTimeout(() => setSnackbar(""), 2800);
   };
-
+  
+  const logMedia = (label: string, list: any[]) => {
+  console.log(
+    `[INSPECTION_MEDIA] ${label}`,
+    list.map((m, i) => ({
+      i,
+      localId: m.localId,
+      name: m.name,
+      uri: m.uri,
+      localUri: m.localUri,
+      originalUri: m.originalUri,
+      isLocalOnly: m.isLocalOnly,
+      queuedForUpload: m.queuedForUpload,
+      uploadedAt: m.uploadedAt,
+      id: m.id,
+      _id: m._id,
+      serverId: m.serverId,
+      url: m.url,
+    }))
+  );
+};
   useEffect(() => {
     // console.log("AssetInspection - incoming params:", params);
   }, [params]);
@@ -399,52 +422,91 @@ export default function AssetInspection() {
       };
     });
 
-    setMedia((prev) => dedupeMedia([...prev, ...selected]));
+    console.log("[INSPECTION] pickMedia selected count:", selected.length);
+logMedia("pickMedia selected", selected);
+logMedia("pickMedia current before append", media);
+
+setMedia((prev) => {
+  const next = dedupeMedia([...prev, ...selected]);
+  logMedia("pickMedia after append", next);
+  return next;
+});
   };
 
   const removeMedia = (index: number) => {
     setMedia((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleCameraDone = (capturedMedia: any) => {
-    if (cameraMode !== "photos") return;
+ const handleCameraDone = (capturedMedia: any) => {
+  if (cameraMode !== "photos") return;
 
-    const list = Array.isArray(capturedMedia)
-      ? capturedMedia
-      : capturedMedia
-        ? [capturedMedia]
-        : [];
+  const list = Array.isArray(capturedMedia)
+    ? capturedMedia
+    : capturedMedia
+      ? [capturedMedia]
+      : [];
 
-    const mapped = list.map((item: any, index: number) => {
-      const isVideo =
-        item.mediaType === "video" ||
-        item.type?.startsWith?.("video") ||
-        item.mimeType?.startsWith?.("video");
+  const validList = list.filter((item: any) => {
+    const rawUri = item?.uri || item?.path || item?.localUri;
 
-      const rawUri = item.uri || item.path || item.localUri;
+    if (!rawUri) {
+      console.log("[CAMERA_DONE] skipped item without uri:", item);
+      return false;
+    }
 
-      return {
-        localId: makeLocalMediaId(),
-        isLocalOnly: true,
-        uri: rawUri?.startsWith?.("file://") ? rawUri : `file://${rawUri}`,
-        name: isVideo
-          ? `video_${Date.now()}_${index}.mp4`
-          : `photo_${Date.now()}_${index}.jpg`,
-        type: isVideo ? "video/mp4" : "image/jpeg",
-        mimeType: isVideo ? "video/mp4" : "image/jpeg",
-        mediaType: isVideo ? "video" : "image",
-        duration: item.duration || null,
-        width: item.width || null,
-        height: item.height || null,
-        size: item.size || 0,
-      };
-    });
+    return true;
+  });
 
-    setMedia((prev) =>
-      dedupeMedia([...(Array.isArray(prev) ? prev : []), ...mapped]),
-    );
+  const mapped = validList.map((item: any, index: number) => {
+    const isVideo =
+      item.mediaType === "video" ||
+      item.type?.startsWith?.("video") ||
+      item.mimeType?.startsWith?.("video") ||
+      item.uri?.endsWith?.(".mp4") ||
+      item.path?.endsWith?.(".mp4");
+
+    const rawUri = item.uri || item.path || item.localUri;
+    const finalUri = rawUri?.startsWith?.("file://")
+      ? rawUri
+      : `file://${rawUri}`;
+
+    return {
+      localId: makeLocalMediaId(),
+      isLocalOnly: true,
+      uri: finalUri,
+      localUri: finalUri,
+      originalUri: finalUri,
+      name: isVideo
+        ? `video_${Date.now()}_${index}.mp4`
+        : `photo_${Date.now()}_${index}.jpg`,
+      type: isVideo ? "video/mp4" : "image/jpeg",
+      mimeType: isVideo ? "video/mp4" : "image/jpeg",
+      mediaType: isVideo ? "video" : "image",
+      duration: item.duration || null,
+      width: item.width || null,
+      height: item.height || null,
+      size: item.size || item.fileSize || 0,
+    };
+  });
+
+  console.log("[INSPECTION] camera captured count:", mapped.length);
+  logMedia("camera mapped", mapped);
+  logMedia("camera current before append", media);
+
+  if (mapped.length === 0) {
+    showSnackbar("No media captured. Please try again.");
     setCameraOpen(false);
-  };
+    return;
+  }
+
+  setMedia((prev) => {
+    const next = dedupeMedia([...(Array.isArray(prev) ? prev : []), ...mapped]);
+    logMedia("camera after append", next);
+    return next;
+  });
+
+  setCameraOpen(false);
+};
 
 
    const isUploadableLocalMedia = (item: any) => {
@@ -461,7 +523,7 @@ export default function AssetInspection() {
 };
 
 
- const handleSubmit = async () => {
+const handleSubmit = async () => {
   if (!transactionId) {
     showSnackbar("Missing transaction id.");
     return;
@@ -503,11 +565,16 @@ export default function AssetInspection() {
       },
     };
 
+    logMedia("submit media state", media);
+
     const localOnlyMedia = dedupeMedia(media).filter(isUploadableLocalMedia);
+    logMedia("submit localOnlyMedia", localOnlyMedia);
 
     const savedLocalMedia = dedupeMedia(
       await saveLocalInspectionMedia(transactionId, localOnlyMedia)
     ).filter(isUploadableLocalMedia);
+
+    logMedia("submit savedLocalMedia", savedLocalMedia);
 
     const queuedSavedLocalMedia = savedLocalMedia.map((item: any) => ({
       ...item,
@@ -515,6 +582,8 @@ export default function AssetInspection() {
       queuedForUpload: true,
       uploadedAt: null,
     }));
+
+    logMedia("submit queuedSavedLocalMedia", queuedSavedLocalMedia);
 
     const mergedMedia = dedupeMedia(
       media.map((item: any) => {
@@ -540,6 +609,9 @@ export default function AssetInspection() {
       })
     );
 
+    const net = await NetInfo.fetch();
+    const online = !!net.isConnected && net.isInternetReachable !== false;
+
     const updatedTransaction = {
       ...(transactionDetails || {}),
       id: transactionId,
@@ -551,33 +623,41 @@ export default function AssetInspection() {
         ...inspectionPayload,
       },
       isCompleted: true,
-      hasPendingInspectionSync: true,
+
+      // Important: pending only when offline
+      hasPendingInspectionSync: !online,
+
       lastLocalUpdateAt: new Date().toISOString(),
     };
 
-    // Fast local save only
     await saveOfflineTransaction(updatedTransaction);
 
-    // Queue immediately, even online.
-    // This makes Save button fast and sync happens after leaving screen.
-    await savePendingInspectionSync({
-      transactionId,
-      data: inspectionPayload,
-      media: queuedSavedLocalMedia,
-    });
+    if (online) {
+      console.log("[SUBMIT] ONLINE: direct upload only, no queue");
 
-    showSnackbar("Inspection saved. Syncing in background...");
-    router.back();
+      showSnackbar("Inspection saved. Syncing in background...");
+      router.back();
 
-    // Background online sync. Do not await before going back.
-    setTimeout(() => {
-      syncInspectionInBackground({
+      setTimeout(() => {
+        syncInspectionInBackground({
+          transactionId,
+          inspectionPayload,
+          savedLocalMedia: queuedSavedLocalMedia,
+          updatedTransaction,
+        });
+      }, 0);
+    } else {
+      console.log("[SUBMIT] OFFLINE: queue only, no direct upload");
+
+      await savePendingInspectionSync({
         transactionId,
-        inspectionPayload,
-        savedLocalMedia: queuedSavedLocalMedia,
-        updatedTransaction,
+        data: inspectionPayload,
+        media: queuedSavedLocalMedia,
       });
-    }, 0);
+
+      showSnackbar("Inspection saved offline. It will sync when online.");
+      router.back();
+    }
   } catch (error: any) {
     console.log("SAVE INSPECTION ERROR:", error);
     showSnackbar(error?.message || "Failed to save inspection.");
@@ -589,26 +669,24 @@ export default function AssetInspection() {
 const syncInspectionInBackground = async ({
   transactionId,
   inspectionPayload,
-  savedLocalMedia,
+  savedLocalMedia = [],
   updatedTransaction,
-}: {
-  transactionId: string;
-  inspectionPayload: any;
-  savedLocalMedia: any[];
-  updatedTransaction: any;
-}) => {
+}: any) => {
   try {
-    const net = await NetInfo.fetch();
-    const isOnline = !!net.isConnected && net.isInternetReachable !== false;
-
-    if (!isOnline) return;
-
-    await transactionApi.updateInspectionData(
+    console.log("[INSPECTION_SYNC] background sync started", {
       transactionId,
-      inspectionPayload
-    );
+      savedLocalMediaCount: Array.isArray(savedLocalMedia)
+        ? savedLocalMedia.length
+        : 0,
+    });
 
-    const uploadMedia = dedupeMedia(savedLocalMedia).filter((m: any) => {
+    const safeMedia = Array.isArray(savedLocalMedia) ? savedLocalMedia : [];
+
+    logMedia("background savedLocalMedia received", safeMedia);
+
+    await transactionApi.updateInspectionData(transactionId, inspectionPayload);
+
+    const uploadMedia = dedupeMedia(safeMedia).filter((m: any) => {
       return (
         m.isLocalOnly === true &&
         !m.uploadedAt &&
@@ -619,23 +697,29 @@ const syncInspectionInBackground = async ({
       );
     });
 
+    logMedia("background uploadMedia", uploadMedia);
+
     if (uploadMedia.length > 0) {
-      await transactionApi.addMedia({
+      console.log("[INSPECTION_SYNC] calling addMedia", {
         transactionId,
+        uploadCount: uploadMedia.length,
+      });
+
+      await transactionApi.addMedia({
+        transactionId: String(transactionId),
         media: uploadMedia,
       });
+
+      console.log("[INSPECTION_SYNC] addMedia completed");
     }
 
-    const fresh = await transactionApi.getById(transactionId);
+    const fresh = await transactionApi.getById(String(transactionId));
     const serverTx = fresh.data;
-    const serverMedia = dedupeMedia(serverTx?.media || []);
 
     await saveOfflineTransaction({
-      ...(serverTx || updatedTransaction),
-      id: transactionId,
-      _id: transactionId,
-      media: serverMedia,
-      imagesCount: serverMedia.length,
+      ...serverTx,
+      media: dedupeMedia(serverTx.media || []),
+      imagesCount: dedupeMedia(serverTx.media || []).length,
       hasPendingInspectionSync: false,
       lastSyncedAt: new Date().toISOString(),
     });

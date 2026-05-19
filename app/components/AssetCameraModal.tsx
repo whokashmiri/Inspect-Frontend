@@ -173,6 +173,9 @@ const lastScannedAtRef = useRef<number>(0);
 
   const camera = useRef<Camera>(null);
 
+  const recordingStartedAtRef = useRef<number | null>(null);
+const stoppingRecordingRef = useRef(false);
+
   const sliderPanResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -213,13 +216,16 @@ const lastScannedAtRef = useRef<number>(0);
       zoom.value = minZoom;
       zoomStart.value = minZoom;
       setZoomDisplay(minZoom);
-       setCaptureMode("photo");
-    setPhotos([]);
-    setVideos([]);
-    setIsRecordingVideo(false);
+      setCaptureMode("photo");
+      setPhotos([]);
+      setVideos([]);
+      setIsRecordingVideo(false);
       setPhotos([]);
       setScanText("");
       setScanError("");
+      recordingStartedAtRef.current = null;
+      stoppingRecordingRef.current = false;
+      setRecordingSeconds(0);
       setLastCapturedScanPath(null);
       setIsProcessingScan(false);
       setHasLiveCodeResult(false);
@@ -290,9 +296,20 @@ const formatRecordingTime = (seconds: number) => {
 const handleDismiss = async () => {
   if (isRecordingVideo) {
     try {
-      await camera.current?.stopRecording();
-    } catch {}
+      const startedAt = recordingStartedAtRef.current;
+      const elapsed = startedAt ? Date.now() - startedAt : 0;
+
+      if (elapsed >= 1200) {
+        stoppingRecordingRef.current = true;
+        await camera.current?.stopRecording();
+      }
+    } catch (error) {
+      console.log("[VIDEO] dismiss stop failed:", error);
+    }
   }
+
+  recordingStartedAtRef.current = null;
+  stoppingRecordingRef.current = false;
 
   setPhotos([]);
   setVideos([]);
@@ -301,9 +318,9 @@ const handleDismiss = async () => {
   setLastCapturedScanPath(null);
   setIsProcessingScan(false);
   setIsRecordingVideo(false);
+  setRecordingSeconds(0);
   onClose();
 };
-
 
   const takePhoto = async () => {
   if (!camera.current || isProcessingScan) return;
@@ -350,49 +367,109 @@ const handleDismiss = async () => {
 };
 
 const startVideoRecording = async () => {
-  if (!camera.current || isRecordingVideo) return;
+  if (!camera.current || isRecordingVideo || stoppingRecordingRef.current) return;
 
   try {
     if (!hasMicPermission) {
       const granted = await requestMicPermission();
 
       if (!granted) {
+        console.log("[VIDEO] microphone permission denied");
         return;
       }
     }
 
+    console.log("[VIDEO] start recording");
+
+    recordingStartedAtRef.current = Date.now();
+    stoppingRecordingRef.current = false;
+    setRecordingSeconds(0);
     setIsRecordingVideo(true);
 
     camera.current.startRecording({
       fileType: "mp4",
+
       onRecordingFinished: (video) => {
+        console.log("[VIDEO] recording finished", video);
+
+        const rawPath = video?.path;
+        const uri = rawPath?.startsWith?.("file://")
+          ? rawPath
+          : rawPath
+          ? `file://${rawPath}`
+          : null;
+
+        if (!uri) {
+          console.log("[VIDEO] finished but no video uri", video);
+          setIsRecordingVideo(false);
+          recordingStartedAtRef.current = null;
+          stoppingRecordingRef.current = false;
+          return;
+        }
+
         setVideos((prev) => [
           ...prev,
           {
             ...video,
+            uri,
+            localUri: uri,
+            originalUri: uri,
             mediaType: "video",
+            type: "video/mp4",
+            mimeType: "video/mp4",
+            name: `video_${Date.now()}.mp4`,
           },
         ]);
+
         setIsRecordingVideo(false);
+        recordingStartedAtRef.current = null;
+        stoppingRecordingRef.current = false;
       },
-      onRecordingError: (error) => {
+
+      onRecordingError: (error: any) => {
         console.log("VIDEO RECORDING ERROR:", error);
+
+        if (error?.code === "capture/no-data") {
+          console.log("[VIDEO] ignored too-short recording");
+        }
+
         setIsRecordingVideo(false);
+        recordingStartedAtRef.current = null;
+        stoppingRecordingRef.current = false;
       },
     });
   } catch (error) {
     console.log("START VIDEO ERROR:", error);
     setIsRecordingVideo(false);
+    recordingStartedAtRef.current = null;
+    stoppingRecordingRef.current = false;
   }
 };
 
 const stopVideoRecording = async () => {
-  if (!camera.current || !isRecordingVideo) return;
+  if (!camera.current || !isRecordingVideo || stoppingRecordingRef.current) return;
+
+  const startedAt = recordingStartedAtRef.current;
+  const elapsed = startedAt ? Date.now() - startedAt : 0;
+
+  if (elapsed < 1200) {
+    console.log("[VIDEO] stop blocked, recording too short", {
+      elapsed,
+    });
+    return;
+  }
 
   try {
+    console.log("[VIDEO] stopping recording", { elapsed });
+
+    stoppingRecordingRef.current = true;
     await camera.current.stopRecording();
-  } catch {
+  } catch (error: any) {
+    console.log("STOP VIDEO ERROR:", error);
+
     setIsRecordingVideo(false);
+    recordingStartedAtRef.current = null;
+    stoppingRecordingRef.current = false;
   }
 };
 const handleCapturePress = async () => {
