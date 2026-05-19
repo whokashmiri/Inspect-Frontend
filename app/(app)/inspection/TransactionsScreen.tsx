@@ -219,67 +219,82 @@ const syncPendingInspections = async () => {
       return;
     }
 
-    for (const item of pending) {
-      console.log("[SYNC] processing item", {
-        queueId: item.id,
-        transactionId: item.transactionId,
+  for (const item of pending) {
+  const transactionId = String(item.transactionId);
+
+  setSyncingTransactionIds((prev) => ({
+    ...prev,
+    [transactionId]: true,
+  }));
+
+  try {
+    console.log("[SYNC] processing item", {
+      queueId: item.id,
+      transactionId: item.transactionId,
+    });
+
+    const data = JSON.parse(item.data || "{}");
+    const media = dedupeMedia(JSON.parse(item.media || "[]"));
+
+    const payload = { ...data };
+    delete payload.projectId;
+
+    await transactionApi.updateInspectionData(item.transactionId, payload);
+
+    const uploadMedia = media.filter((m: any) => {
+      return (
+        m.isLocalOnly === true &&
+        !m.uploadedAt &&
+        !m.serverId &&
+        !m.id &&
+        !m._id &&
+        !m.url
+      );
+    });
+
+    if (uploadMedia.length > 0) {
+      await transactionApi.addMedia({
+        transactionId,
+        media: uploadMedia,
       });
-
-      const data = JSON.parse(item.data || "{}");
-      const media = dedupeMedia(JSON.parse(item.media || "[]"));
-
-      const payload = { ...data };
-      delete payload.projectId;
-
-      await transactionApi.updateInspectionData(item.transactionId, payload);
-
-      const uploadMedia = media.filter((m: any) => {
-        return (
-          m.isLocalOnly === true &&
-          !m.uploadedAt &&
-          !m.serverId &&
-          !m.id &&
-          !m._id &&
-          !m.url
-        );
-      });
-
-      console.log("[SYNC] uploadMedia count", uploadMedia.length);
-
-      if (uploadMedia.length > 0) {
-        await transactionApi.addMedia({
-          transactionId: String(item.transactionId),
-          media: uploadMedia,
-        });
-      }
-
-      // Mark done immediately after successful upload.
-      await markInspectionSyncDone(item.id);
-
-      const fresh = await transactionApi.getById(String(item.transactionId));
-      const serverTx = fresh.data;
-
-      const offlineData = await getOfflineTransactions();
-
-      const updatedOfflineData = offlineData.map((tx: any) => {
-        const txId = String(tx.id || tx._id);
-
-        if (txId !== String(item.transactionId)) return tx;
-
-        const serverMedia = dedupeMedia(serverTx.media || []);
-
-        return {
-          ...serverTx,
-          media: serverMedia,
-          imagesCount: serverMedia.length,
-          hasPendingInspectionSync: false,
-          lastSyncedAt: new Date().toISOString(),
-        };
-      });
-
-      await saveOfflineTransactions(updatedOfflineData);
-      setTransactions(dedupeTransactions(updatedOfflineData));
     }
+
+    await markInspectionSyncDone(item.id);
+
+    const remaining = await getPendingInspectionSyncCount();
+    setPendingSyncCount(remaining);
+
+    const fresh = await transactionApi.getById(transactionId);
+    const serverTx = fresh.data;
+
+    const offlineData = await getOfflineTransactions();
+
+    const updatedOfflineData = offlineData.map((tx: any) => {
+      const txId = String(tx.id || tx._id);
+
+      if (txId !== transactionId) return tx;
+
+      const serverMedia = dedupeMedia(serverTx.media || []);
+
+      return {
+        ...serverTx,
+        media: serverMedia,
+        imagesCount: serverMedia.length,
+        hasPendingInspectionSync: false,
+        lastSyncedAt: new Date().toISOString(),
+      };
+    });
+
+    await saveOfflineTransactions(updatedOfflineData);
+    setTransactions(dedupeTransactions(updatedOfflineData));
+  } finally {
+    setSyncingTransactionIds((prev) => {
+      const next = { ...prev };
+      delete next[transactionId];
+      return next;
+    });
+  }
+}
 
     await refreshPendingCount();
   } catch (error) {
@@ -439,22 +454,19 @@ useFocusEffect(
   onPress={syncPendingInspections}
   style={[
     styles.syncBtn,
-   (syncing || pendingSyncCount === 0) && styles.syncBtnDisabled,
+    (!isOnline || pendingSyncCount === 0) && !syncing && styles.syncBtnDisabled,
   ]}
-  disabled={syncing || pendingSyncCount === 0}
+  disabled={syncing || !isOnline || pendingSyncCount === 0}
 >
-  {syncing ? (
-  <ActivityIndicator color="#fff" size="small" />
-) : (
-  <>
-    <Ionicons name="sync-outline" size={16} color="#fff" />
+  <Ionicons name="sync-outline" size={16} color="#fff" />
 
-    {!isOnline && pendingSyncCount > 0 ? (
-      <Text style={styles.syncText}>{pendingSyncCount}</Text>
-    ) : null}
-  </>
-)}
- 
+  <Text style={styles.syncText}>
+    {syncing
+      ? "Syncing"
+      : pendingSyncCount > 0
+      ? `${pendingSyncCount}`
+      : "Synced"}
+  </Text>
 </Pressable>
 
   <Pressable
@@ -545,9 +557,15 @@ useFocusEffect(
     Images: {dedupeMedia(item.media || []).length || item.imagesCount || 0}
   </Text>
 
-  {(item.hasPendingInspectionSync || syncingTransactionIds[String(item.id || item._id)]) ? (
-    <ActivityIndicator size="small" color={ACC} />
-  ) : null}
+ {syncingTransactionIds[String(item.id || item._id)] ? (
+  <Ionicons name="sync-outline" size={16} color={ACC} />
+) : item.hasPendingInspectionSync ? (
+  <Ionicons name="sync-outline" size={16} color="#9CA3AF" />
+) : (
+  <View style={styles.syncedTicks}>
+    <Ionicons name="checkmark-done" size={17} color="#168044" />
+  </View>
+)}
 </View>
 
   <View style={styles.footerActions}>
@@ -645,6 +663,22 @@ const styles = StyleSheet.create({
     color: MUTED,
     fontSize: 13,
   },
+
+  syncBtn: {
+  height: 36,
+  minWidth: 86,
+  paddingHorizontal: 12,
+  borderRadius: 18,
+  backgroundColor: "#168044",
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 6,
+},
+syncedTicks: {
+  flexDirection: "row",
+  alignItems: "center",
+},
 header: {
   paddingHorizontal: 16,
   paddingTop: Platform.OS === "ios" ? 14 : 10,
@@ -733,18 +767,6 @@ netStatus: {
   justifyContent: "center",
 },
 
-
-syncBtn: {
-  height: 36,
-  minWidth: 48,
-  paddingHorizontal: 9,
-  borderRadius: 18,
-  backgroundColor: "#168044",
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: 4,
-},
 
 syncText: {
   color: "#fff",
