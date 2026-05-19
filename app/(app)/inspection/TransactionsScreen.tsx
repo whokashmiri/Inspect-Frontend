@@ -211,72 +211,58 @@ const syncPendingInspections = async () => {
   try {
     setSyncing(true);
 
-   for (const item of pending) {
-  try {
-    setSyncingTransactionIds((prev) => ({
-      ...prev,
-      [String(item.transactionId)]: true,
-    }));
+for (const item of pending) {
+  const data = JSON.parse(item.data || "{}");
+  const media = JSON.parse(item.media || "[]");
 
-    const data = JSON.parse(item.data || "{}");
-    const media = JSON.parse(item.media || "[]");
-    const payload = { ...data } as Record<string, unknown>;
+  const payload = { ...data };
+  delete payload.projectId;
 
-    delete payload.projectId;
+  await transactionApi.updateInspectionData(item.transactionId, payload);
 
-    await transactionApi.updateInspectionData(
-      item.transactionId,
-      payload
+  const uploadMedia = dedupeMedia(media).filter((m: any) => {
+    return (
+      m.isLocalOnly === true &&
+      !m.uploadedAt &&
+      !m.serverId &&
+      !m.id &&
+      !m._id &&
+      !m.url
     );
+  });
 
-    const uploadMedia = dedupeMedia(media).filter(
-      (m: any) => m.isLocalOnly
-    );
-
-    if (uploadMedia.length > 0) {
-      await transactionApi.addMedia({
-        transactionId: String(item.transactionId),
-        media: uploadMedia,
-      });
-    }
-
-    await markInspectionSyncDone(item.id);
-
-    const fresh = await transactionApi.getById(
-      String(item.transactionId)
-    );
-
-    const serverTx = fresh.data;
-
-    const offlineData = await getOfflineTransactions();
-
-    const updatedOfflineData = offlineData.map((tx: any) => {
-      const txId = String(tx.id || tx._id);
-
-      if (txId !== String(item.transactionId)) {
-        return tx;
-      }
-
-      return {
-        ...serverTx,
-        media: dedupeMedia(serverTx.media || []),
-        imagesCount: dedupeMedia(serverTx.media || []).length,
-        hasPendingInspectionSync: false,
-        lastSyncedAt: new Date().toISOString(),
-      };
-    });
-
-    await saveOfflineTransactions(updatedOfflineData);
-    setTransactions(updatedOfflineData);
-  } catch (error) {
-    console.log("Sync pending inspections failed:", error);
-  } finally {
-    setSyncingTransactionIds((prev) => {
-      const next = { ...prev };
-      delete next[String(item.transactionId)];
-      return next;
+  if (uploadMedia.length > 0) {
+    await transactionApi.addMedia({
+      transactionId: String(item.transactionId),
+      media: uploadMedia,
     });
   }
+
+  await markInspectionSyncDone(item.id);
+
+  const fresh = await transactionApi.getById(String(item.transactionId));
+  const serverTx = fresh.data;
+
+  const offlineData = await getOfflineTransactions();
+
+  const updatedOfflineData = offlineData.map((tx: any) => {
+    const txId = String(tx.id || tx._id);
+
+    if (txId !== String(item.transactionId)) return tx;
+
+    const serverMedia = dedupeMedia(serverTx.media || []);
+
+    return {
+      ...serverTx,
+      media: serverMedia,
+      imagesCount: serverMedia.length,
+      hasPendingInspectionSync: false,
+      lastSyncedAt: new Date().toISOString(),
+    };
+  });
+
+  await saveOfflineTransactions(updatedOfflineData);
+  setTransactions(updatedOfflineData);
 }
 
     await refreshPendingCount();
@@ -366,9 +352,7 @@ useFocusEffect(
 
   const projectId = item.projectId;
 
-if (!projectId) {
-  console.log("Missing projectId on transaction:", item);
-}
+
 
  const qs = `?transactionId=${encodeURIComponent(String(transactionId))}&projectId=${encodeURIComponent(
   String(projectId || "")

@@ -41,7 +41,7 @@ const handleRealEstatePress = async () => {
 
     router.push("/inspection/TransactionsScreen");
   } catch (error) {
-    console.log("Download transactions failed:", error);
+    // console.log("Download transactions failed:", error);
     router.push("/inspection/TransactionsScreen");
   } finally {
     setDownloading(false);

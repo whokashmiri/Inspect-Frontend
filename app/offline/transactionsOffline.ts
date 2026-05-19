@@ -40,13 +40,15 @@ export async function getOfflineTransactions() {
 
 function getMediaKey(item: any) {
   return String(
-    item.serverId ||
+    item.localId ||
+      item.serverId ||
       item.id ||
       item._id ||
-      item.localId ||
       item.url ||
       item.localUri ||
       item.uri ||
+      item.originalUri ||
+      item.name ||
       ""
   );
 }
@@ -96,13 +98,24 @@ export async function initInspectionSyncQueue() {
     CREATE TABLE IF NOT EXISTS pending_inspection_sync (
       id TEXT PRIMARY KEY NOT NULL,
       transactionId TEXT NOT NULL,
-       projectId TEXT,
       data TEXT NOT NULL,
       media TEXT,
       createdAt TEXT NOT NULL,
       status TEXT NOT NULL
     );
   `);
+
+  // Migration for old local DBs
+  try {
+    await db.execAsync(`
+      ALTER TABLE pending_inspection_sync ADD COLUMN projectId TEXT;
+    `);
+  } catch (error: any) {
+    // Ignore if column already exists
+    if (!String(error?.message || error).includes("duplicate column")) {
+      console.log("projectId migration skipped:", error);
+    }
+  }
 }
 
 export async function savePendingInspectionSync({
@@ -147,19 +160,20 @@ export async function savePendingInspectionSync({
 
   const id = `inspection_${transactionId}_${Date.now()}`;
 
-  await db.runAsync(
-    `INSERT INTO pending_inspection_sync
-     (id, transactionId, data, media, createdAt, status)
-     VALUES (?, ?, ?, ?, ?, ?);`,
-    [
-      id,
-      transactionId,
-      JSON.stringify(data),
-      JSON.stringify(cleanMedia),
-      new Date().toISOString(),
-      "pending",
-    ]
-  );
+ await db.runAsync(
+  `INSERT INTO pending_inspection_sync
+   (id, transactionId, projectId, data, media, createdAt, status)
+   VALUES (?, ?, ?, ?, ?, ?, ?);`,
+  [
+    id,
+    transactionId,
+    projectId ?? null,
+    JSON.stringify(data),
+    JSON.stringify(cleanMedia),
+    new Date().toISOString(),
+    "pending",
+  ]
+);
 
   return id;
 }

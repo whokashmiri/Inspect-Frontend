@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -28,6 +28,7 @@ import {
   saveOfflineTransaction,
   savePendingInspectionSync,
   saveLocalInspectionMedia,
+  dedupeMedia,
 } from "../../offline/transactionsOffline";
 import AssetCameraModal from "../../components/AssetCameraModal";
 import { useTranslation } from "react-i18next";
@@ -54,19 +55,18 @@ const ENVIRONMENT_OPTIONS = [
   ["medicalFacility", "assetInspection.environment.medicalFacility"],
 ] as const;
 
-
 function PreviewItem({ item }: { item: any }) {
   const { width, height } = Dimensions.get("window");
 
-const mediaWidth = width;
-const mediaHeight = height * 0.78;
+  const mediaWidth = width;
+  const mediaHeight = height * 0.78;
 
   const isVideo =
     item.mediaType === "video" ||
     item.type?.startsWith?.("video") ||
     item.mimeType?.startsWith?.("video");
 
-  const uri = item.uri || item.url;
+  const uri = item.localUri || item.uri || item.url;
 
   const player = useVideoPlayer(isVideo ? uri : null, (player) => {
     player.loop = false;
@@ -76,24 +76,24 @@ const mediaHeight = height * 0.78;
     <View style={[styles.previewPage, { width, height }]}>
       <View style={styles.previewCenter}>
         {isVideo ? (
-         <VideoView
-  player={player}
-  style={{
-    width: mediaWidth,
-    height: mediaHeight,
-  }}
-  nativeControls
-  contentFit="contain"
-/>
+          <VideoView
+            player={player}
+            style={{
+              width: mediaWidth,
+              height: mediaHeight,
+            }}
+            nativeControls
+            contentFit="contain"
+          />
         ) : (
           <Image
-  source={{ uri }}
-  style={{
-    width: mediaWidth,
-    height: mediaHeight,
-  }}
-  resizeMode="contain"
-/>
+            source={{ uri }}
+            style={{
+              width: mediaWidth,
+              height: mediaHeight,
+            }}
+            resizeMode="contain"
+          />
         )}
       </View>
     </View>
@@ -101,18 +101,17 @@ const mediaHeight = height * 0.78;
 }
 
 export default function AssetInspection() {
-
   const { t } = useTranslation();
   const router = useRouter();
-   const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [transactionDetails, setTransactionDetails] = useState<any>(null);
 
   const [viewerVisible, setViewerVisible] = useState(false);
-const [viewerIndex, setViewerIndex] = useState(0);
+  const [viewerIndex, setViewerIndex] = useState(0);
 
-const [snackbar, setSnackbar] = useState("");
-const [notesOpen, setNotesOpen] = useState(false);
-const [inspectionNotes, setInspectionNotes] = useState("");
+  const [snackbar, setSnackbar] = useState("");
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [inspectionNotes, setInspectionNotes] = useState("");
 
   const params = useLocalSearchParams<{
     transactionId?: string;
@@ -120,20 +119,19 @@ const [inspectionNotes, setInspectionNotes] = useState("");
     propertyType?: string;
   }>();
 
- 
   const transactionId = params.transactionId || "";
   const projectId = params.projectId || "";
 
   const propertyType =
-  transactionDetails?.evalData?.propertyType ||
-  params.propertyType ||
-  "Not available";
+    transactionDetails?.evalData?.propertyType ||
+    params.propertyType ||
+    "Not available";
 
   const [saving, setSaving] = useState(false);
 
   const [buildingCondition, setBuildingCondition] = useState<
-  "underConstruction" | "used" | "new" | "other" | ""
->("");
+    "underConstruction" | "used" | "new" | "other" | ""
+  >("");
 
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
@@ -141,11 +139,7 @@ const [inspectionNotes, setInspectionNotes] = useState("");
   const [buildingCompletion, setBuildingCompletion] = useState("");
   const [otherBuildingCondition, setOtherBuildingCondition] = useState("");
 
- 
-
   const [checked, setChecked] = useState<CheckedState>({
-    
-
     mosque: false,
     commercialMarket: false,
     park: false,
@@ -170,159 +164,171 @@ const [inspectionNotes, setInspectionNotes] = useState("");
   const [media, setMedia] = useState<any[]>([]);
 
   const showSnackbar = (message: string) => {
-  setSnackbar(message);
-  setTimeout(() => setSnackbar(""), 2800);
-};
+    setSnackbar(message);
+    setTimeout(() => setSnackbar(""), 2800);
+  };
 
-
- useEffect(() => {
+  useEffect(() => {
     // console.log("AssetInspection - incoming params:", params);
   }, [params]);
 
-
-
   useEffect(() => {
-  if (!transactionId) return;
+    if (!transactionId) return;
 
-  const loadTransaction = async () => {
-    try {
-      setLoading(true);
-let transaction: any = null;
+    const loadTransaction = async () => {
+      try {
+        setLoading(true);
+        let transaction: any = null;
 
-const net = await NetInfo.fetch();
-const isOnline = !!net.isConnected && !!net.isInternetReachable;
+        const net = await NetInfo.fetch();
+        const isOnline = !!net.isConnected && !!net.isInternetReachable;
 
-if (isOnline) {
-  try {
-    const transactionRes = await transactionApi.getById(transactionId);
-    transaction = transactionRes.data;
+        if (isOnline) {
+          try {
+            const transactionRes = await transactionApi.getById(transactionId);
+            transaction = transactionRes.data;
 
-    if (transaction) {
-      await saveOfflineTransaction(transaction);
-    }
-  } catch (error) {
-    console.log("Online transaction load failed, using offline:", error);
-    transaction = await getOfflineTransactionById(transactionId);
-  }
-} else {
-  transaction = await getOfflineTransactionById(transactionId);
-}
+            if (transaction) {
+              await saveOfflineTransaction(transaction);
+            }
+          } catch (error) {
+            console.log(
+              "Online transaction load failed, using offline:",
+              error,
+            );
+            transaction = await getOfflineTransactionById(transactionId);
+          }
+        } else {
+          transaction = await getOfflineTransactionById(transactionId);
+        }
 
-if (!transaction) {
-  Alert.alert("Offline unavailable", "This transaction is not downloaded yet.");
-  return;
-}
-      // console.log("LOADED MEDIA:", transaction?.media);
-      const evalData = transaction?.evalData || {};
-      // console.log("LOADED EVAL DATA:", evalData);
+        if (!transaction) {
+          Alert.alert(
+            "Offline unavailable",
+            "This transaction is not downloaded yet.",
+          );
+          return;
+        }
+        // console.log("LOADED MEDIA:", transaction?.media);
+        const evalData = transaction?.evalData || {};
+        // console.log("LOADED EVAL DATA:", evalData);
 
-      setTransactionDetails(transaction);
-      setInspectionNotes(evalData.inspectionNotes || "");
+        setTransactionDetails(transaction);
+        setInspectionNotes(evalData.inspectionNotes || "");
 
-      const building = evalData.buildingCondition || {};
-      // console.log("LOADED BUILDING:", building);
+        const building = evalData.buildingCondition || {};
+        // console.log("LOADED BUILDING:", building);
 
-      const status = String(building.status || "").toLowerCase();
+        const status = String(building.status || "").toLowerCase();
 
-if (status === "under construction" || status === "underconstruction") {
-  setBuildingCondition("underConstruction");
-} else if (status === "used") {
-  setBuildingCondition("used");
-} else if (status === "new") {
-  setBuildingCondition("new");
-} else if (status === "other") {
-  setBuildingCondition("other");
-} else {
-  setBuildingCondition("");
-}
+        if (status === "under construction" || status === "underconstruction") {
+          setBuildingCondition("underConstruction");
+        } else if (status === "used") {
+          setBuildingCondition("used");
+        } else if (status === "new") {
+          setBuildingCondition("new");
+        } else if (status === "other") {
+          setBuildingCondition("other");
+        } else {
+          setBuildingCondition("");
+        }
 
-      setBuildingCompletion(
-        building.completionPct !== null && building.completionPct !== undefined
-          ? String(building.completionPct)
-          : ""
-      );
+        setBuildingCompletion(
+          building.completionPct !== null &&
+            building.completionPct !== undefined
+            ? String(building.completionPct)
+            : "",
+        );
 
-     setOtherBuildingCondition(building.otherText || "");
+        setOtherBuildingCondition(building.otherText || "");
 
-    setMedia(transaction?.media || []);
+        setMedia(dedupeMedia(transaction?.media || []));
 
-      const environment = evalData.surroundingEnvironment || [];
-      const services = evalData.availableServices || {};
+        const environment = evalData.surroundingEnvironment || [];
+        const services = evalData.availableServices || {};
 
-      setChecked((prev) => {
-        const next = { ...prev };
+        setChecked((prev) => {
+          const next = { ...prev };
 
-        ENVIRONMENT_OPTIONS.forEach(([key]) => {
-  next[key] =
-    environment.includes(key) ||
-    environment.includes(t(`assetInspection.environment.${key}`));
-});
+          ENVIRONMENT_OPTIONS.forEach(([key]) => {
+            next[key] =
+              environment.includes(key) ||
+              environment.includes(t(`assetInspection.environment.${key}`));
+          });
 
-        next.electricity = !!services.electricity;
-        next.sanitaryDrainage = !!services.sanitaryDrainage;
-        next.telephoneLine = !!services.telephoneLine;
-        next.waterMeters = services.waterMetersCount !== null && services.waterMetersCount !== undefined;
-        next.electricityMeters =
+          next.electricity = !!services.electricity;
+          next.sanitaryDrainage = !!services.sanitaryDrainage;
+          next.telephoneLine = !!services.telephoneLine;
+          next.waterMeters =
+            services.waterMetersCount !== null &&
+            services.waterMetersCount !== undefined;
+          next.electricityMeters =
+            services.electricityMetersCount !== null &&
+            services.electricityMetersCount !== undefined;
+
+          return next;
+        });
+
+        setElectricityUnits(
+          services.electricityUnits !== null &&
+            services.electricityUnits !== undefined
+            ? String(services.electricityUnits)
+            : "",
+        );
+
+        setWaterMetersCount(
+          services.waterMetersCount !== null &&
+            services.waterMetersCount !== undefined
+            ? String(services.waterMetersCount)
+            : "",
+        );
+
+        setElectricityMetersCount(
           services.electricityMetersCount !== null &&
-          services.electricityMetersCount !== undefined;
+            services.electricityMetersCount !== undefined
+            ? String(services.electricityMetersCount)
+            : "",
+        );
 
-        return next;
-      });
+        setMedia(
+          dedupeMedia(
+            Array.isArray(transaction?.media) ? transaction.media : [],
+          ),
+        );
+      } catch (error: any) {
+        console.log("LOAD TRANSACTION ERROR:", error);
+        Alert.alert("Error", error?.message || "Failed to load transaction.");
+      } finally {
+        setLoading(false);
+      }
+    };
 
-      setElectricityUnits(
-        services.electricityUnits !== null && services.electricityUnits !== undefined
-          ? String(services.electricityUnits)
-          : ""
-      );
-
-      setWaterMetersCount(
-        services.waterMetersCount !== null && services.waterMetersCount !== undefined
-          ? String(services.waterMetersCount)
-          : ""
-      );
-
-      setElectricityMetersCount(
-        services.electricityMetersCount !== null &&
-          services.electricityMetersCount !== undefined
-          ? String(services.electricityMetersCount)
-          : ""
-      );
-
-      setMedia(Array.isArray(transaction?.media) ? transaction.media : []);
-    } catch (error: any) {
-       console.log("LOAD TRANSACTION ERROR:", error);
-      Alert.alert("Error", error?.message || "Failed to load transaction.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  loadTransaction();
-}, [transactionId]);
+    loadTransaction();
+  }, [transactionId]);
 
   const toggle = (key: string) => {
     setChecked((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   const selectedEnvironment = useMemo(() => {
-  return ENVIRONMENT_OPTIONS.filter(([key]) => checked[key]).map(
-    ([key]) => key
-  );
-}, [checked]);
-const getBuildingStatus = () => {
-  switch (buildingCondition) {
-    case "underConstruction":
-      return "Under Construction";
-    case "used":
-      return "Used";
-    case "new":
-      return "New";
-    case "other":
-      return "Other";
-    default:
-      return "";
-  }
-};
+    return ENVIRONMENT_OPTIONS.filter(([key]) => checked[key]).map(
+      ([key]) => key,
+    );
+  }, [checked]);
+  const getBuildingStatus = () => {
+    switch (buildingCondition) {
+      case "underConstruction":
+        return "Under Construction";
+      case "used":
+        return "Used";
+      case "new":
+        return "New";
+      case "other":
+        return "Other";
+      default:
+        return "";
+    }
+  };
 
   const openCamera = () => {
     setCameraMode("photos");
@@ -330,12 +336,28 @@ const getBuildingStatus = () => {
   };
 
   const openPreview = (index: number) => {
-  setViewerIndex(index);
-  setViewerVisible(true);
-};
+    setViewerIndex(index);
+    setViewerVisible(true);
+  };
 
-const makeLocalMediaId = () =>
-  `local_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const makeLocalMediaId = () =>
+    `local_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
+
+
+  const getStableMediaKey = (item: any, index?: number) =>
+    String(
+      item?.serverId ||
+        item?.id ||
+        item?._id ||
+        item?.url ||
+        item?.originalUri ||
+        item?.localUri ||
+        item?.uri ||
+        item?.localId ||
+        index ||
+        "",
+    );
 
   const pickMedia = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -377,52 +399,69 @@ const makeLocalMediaId = () =>
       };
     });
 
-    setMedia((prev) => [...prev, ...selected]);
+    setMedia((prev) => dedupeMedia([...prev, ...selected]));
   };
 
   const removeMedia = (index: number) => {
     setMedia((prev) => prev.filter((_, i) => i !== index));
   };
 
- const handleCameraDone = (capturedMedia: any) => {
-  if (cameraMode !== "photos") return;
+  const handleCameraDone = (capturedMedia: any) => {
+    if (cameraMode !== "photos") return;
 
-  const list = Array.isArray(capturedMedia)
-    ? capturedMedia
-    : capturedMedia
-    ? [capturedMedia]
-    : [];
+    const list = Array.isArray(capturedMedia)
+      ? capturedMedia
+      : capturedMedia
+        ? [capturedMedia]
+        : [];
 
-  const mapped = list.map((item: any, index: number) => {
-    const isVideo =
-      item.mediaType === "video" ||
-      item.type?.startsWith?.("video") ||
-      item.mimeType?.startsWith?.("video");
+    const mapped = list.map((item: any, index: number) => {
+      const isVideo =
+        item.mediaType === "video" ||
+        item.type?.startsWith?.("video") ||
+        item.mimeType?.startsWith?.("video");
 
-    const rawUri = item.uri || item.path || item.localUri;
+      const rawUri = item.uri || item.path || item.localUri;
 
-    return {
-      localId: makeLocalMediaId(),
-      isLocalOnly: true,
-      uri: rawUri?.startsWith?.("file://") ? rawUri : `file://${rawUri}`,
-      name: isVideo
-        ? `video_${Date.now()}_${index}.mp4`
-        : `photo_${Date.now()}_${index}.jpg`,
-      type: isVideo ? "video/mp4" : "image/jpeg",
-      mimeType: isVideo ? "video/mp4" : "image/jpeg",
-      mediaType: isVideo ? "video" : "image",
-      duration: item.duration || null,
-      width: item.width || null,
-      height: item.height || null,
-      size: item.size || 0,
-    };
-  });
+      return {
+        localId: makeLocalMediaId(),
+        isLocalOnly: true,
+        uri: rawUri?.startsWith?.("file://") ? rawUri : `file://${rawUri}`,
+        name: isVideo
+          ? `video_${Date.now()}_${index}.mp4`
+          : `photo_${Date.now()}_${index}.jpg`,
+        type: isVideo ? "video/mp4" : "image/jpeg",
+        mimeType: isVideo ? "video/mp4" : "image/jpeg",
+        mediaType: isVideo ? "video" : "image",
+        duration: item.duration || null,
+        width: item.width || null,
+        height: item.height || null,
+        size: item.size || 0,
+      };
+    });
 
-  setMedia((prev) => [...(Array.isArray(prev) ? prev : []), ...mapped]);
-  setCameraOpen(false);
+    setMedia((prev) =>
+      dedupeMedia([...(Array.isArray(prev) ? prev : []), ...mapped]),
+    );
+    setCameraOpen(false);
+  };
+
+
+   const isUploadableLocalMedia = (item: any) => {
+  return (
+    item.isLocalOnly === true &&
+    item.queuedForUpload !== true &&
+    !item.uploadedAt &&
+    !item.serverId &&
+    !item.id &&
+    !item._id &&
+    !item.url &&
+    Boolean(item.uri || item.localUri)
+  );
 };
 
-const handleSubmit = async () => {
+
+ const handleSubmit = async () => {
   if (!transactionId) {
     showSnackbar("Missing transaction id.");
     return;
@@ -439,7 +478,8 @@ const handleSubmit = async () => {
       buildingCondition: {
         status: getBuildingStatus(),
         completionPct: buildingCompletion ? Number(buildingCompletion) : null,
-        otherText: buildingCondition === "other" ? otherBuildingCondition : "",
+        otherText:
+          buildingCondition === "other" ? otherBuildingCondition : "",
       },
 
       surroundingEnvironment: selectedEnvironment,
@@ -463,125 +503,80 @@ const handleSubmit = async () => {
       },
     };
 
-    const newMedia = media.filter((item: any) => {
-      return (
-        item.isLocalOnly === true &&
-        !item.uploadedAt &&
-        (item.uri || item.localUri)
-      );
-    });
+    const localOnlyMedia = dedupeMedia(media).filter(isUploadableLocalMedia);
 
-    const savedLocalMedia = await saveLocalInspectionMedia(
-      transactionId,
-      newMedia
+    const savedLocalMedia = dedupeMedia(
+      await saveLocalInspectionMedia(transactionId, localOnlyMedia)
+    ).filter(isUploadableLocalMedia);
+
+    const queuedSavedLocalMedia = savedLocalMedia.map((item: any) => ({
+      ...item,
+      isLocalOnly: true,
+      queuedForUpload: true,
+      uploadedAt: null,
+    }));
+
+    const mergedMedia = dedupeMedia(
+      media.map((item: any) => {
+        if (!isUploadableLocalMedia(item)) return item;
+
+        const match = queuedSavedLocalMedia.find((m: any) => {
+          return (
+            m.localId === item.localId ||
+            m.originalUri === item.uri ||
+            m.originalUri === item.localUri ||
+            m.uri === item.uri ||
+            m.localUri === item.localUri
+          );
+        });
+
+        return {
+          ...(match || item),
+          localId: match?.localId || item.localId,
+          isLocalOnly: true,
+          queuedForUpload: true,
+          uploadedAt: null,
+        };
+      })
     );
-
-    const mergedMedia = media.map((item: any) => {
-      if (!item.isLocalOnly) return item;
-
-      const match = savedLocalMedia.find((m: any) => {
-        return (
-          m.localId === item.localId ||
-          m.originalUri === item.uri ||
-          m.uri === item.uri ||
-          m.localUri === item.localUri
-        );
-      });
-
-      return {
-        ...(match || item),
-        localId: item.localId,
-        isLocalOnly: true,
-        uploadedAt: null,
-      };
-    });
 
     const updatedTransaction = {
       ...(transactionDetails || {}),
       id: transactionId,
       _id: transactionId,
-
       imagesCount: mergedMedia.length,
       media: mergedMedia,
-
       evalData: {
         ...(transactionDetails?.evalData || {}),
         ...inspectionPayload,
       },
-      
       isCompleted: true,
       hasPendingInspectionSync: true,
       lastLocalUpdateAt: new Date().toISOString(),
     };
 
+    // Fast local save only
     await saveOfflineTransaction(updatedTransaction);
 
-    showSnackbar("Inspection saved locally. Syncing in background...");
+    // Queue immediately, even online.
+    // This makes Save button fast and sync happens after leaving screen.
+    await savePendingInspectionSync({
+      transactionId,
+      data: inspectionPayload,
+      media: queuedSavedLocalMedia,
+    });
+
+    showSnackbar("Inspection saved. Syncing in background...");
     router.back();
 
-    setTimeout(async () => {
-      try {
-        const net = await NetInfo.fetch();
-        const isOnline = !!net.isConnected && !!net.isInternetReachable;
-
-        if (!isOnline) {
-          await savePendingInspectionSync({
-            transactionId,
-            projectId,
-            data: inspectionPayload,
-            media: savedLocalMedia,
-          });
-          return;
-        }
-
-        await transactionApi.updateInspectionData(
-          transactionId,
-          inspectionPayload
-        );
-
-        if (savedLocalMedia.length > 0) {
-          if (!projectId) {
-            await savePendingInspectionSync({
-              transactionId,
-              projectId,
-              data: inspectionPayload,
-              media: savedLocalMedia,
-            });
-            return;
-          }
-
-          await transactionApi.addMedia({
-            transactionId,
-            media: savedLocalMedia,
-          });
-        }
-
-        const uploadedMedia = mergedMedia.map((item: any) => {
-          if (!item.isLocalOnly) return item;
-
-          return {
-            ...item,
-            isLocalOnly: false,
-            uploadedAt: new Date().toISOString(),
-          };
-        });
-
-        await saveOfflineTransaction({
-          ...updatedTransaction,
-          media: uploadedMedia,
-          hasPendingInspectionSync: false,
-          lastSyncedAt: new Date().toISOString(),
-        });
-      } catch (error) {
-        console.log("Background sync failed. Queued for later:", error);
-
-        await savePendingInspectionSync({
-          transactionId,
-          projectId,
-          data: inspectionPayload,
-          media: savedLocalMedia,
-        });
-      }
+    // Background online sync. Do not await before going back.
+    setTimeout(() => {
+      syncInspectionInBackground({
+        transactionId,
+        inspectionPayload,
+        savedLocalMedia: queuedSavedLocalMedia,
+        updatedTransaction,
+      });
     }, 0);
   } catch (error: any) {
     console.log("SAVE INSPECTION ERROR:", error);
@@ -590,362 +585,429 @@ const handleSubmit = async () => {
     setSaving(false);
   }
 };
-if (loading) {
-  return (
-    <View style={[styles.flex, styles.center]}>
-      <ActivityIndicator color={ACC} />
-      <Text style={styles.loadingText}>Loading transaction...</Text>
-    </View>
-  );
-}
 
-  
+const syncInspectionInBackground = async ({
+  transactionId,
+  inspectionPayload,
+  savedLocalMedia,
+  updatedTransaction,
+}: {
+  transactionId: string;
+  inspectionPayload: any;
+  savedLocalMedia: any[];
+  updatedTransaction: any;
+}) => {
+  try {
+    const net = await NetInfo.fetch();
+    const isOnline = !!net.isConnected && net.isInternetReachable !== false;
+
+    if (!isOnline) return;
+
+    await transactionApi.updateInspectionData(
+      transactionId,
+      inspectionPayload
+    );
+
+    const uploadMedia = dedupeMedia(savedLocalMedia).filter((m: any) => {
+      return (
+        m.isLocalOnly === true &&
+        !m.uploadedAt &&
+        !m.serverId &&
+        !m.id &&
+        !m._id &&
+        !m.url
+      );
+    });
+
+    if (uploadMedia.length > 0) {
+      await transactionApi.addMedia({
+        transactionId,
+        media: uploadMedia,
+      });
+    }
+
+    const fresh = await transactionApi.getById(transactionId);
+    const serverTx = fresh.data;
+    const serverMedia = dedupeMedia(serverTx?.media || []);
+
+    await saveOfflineTransaction({
+      ...(serverTx || updatedTransaction),
+      id: transactionId,
+      _id: transactionId,
+      media: serverMedia,
+      imagesCount: serverMedia.length,
+      hasPendingInspectionSync: false,
+      lastSyncedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.log("Background inspection sync failed:", error);
+  }
+};
+  if (loading) {
     return (
-  <KeyboardAvoidingView
-    style={styles.flex}
-    behavior={Platform.OS === "ios" ? "padding" : "height"}
-    keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 20}
-  >
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <View style={styles.flex}>
-      <ScrollView
-        contentContainerStyle={styles.container}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={styles.backBtn}>
-            <Text style={styles.backText}>‹</Text>
-          </Pressable>
+      <View style={[styles.flex, styles.center]}>
+        <ActivityIndicator color={ACC} />
+        <Text style={styles.loadingText}>Loading transaction...</Text>
+      </View>
+    );
+  }
 
-          <View style={styles.headerTextWrap}>
-            <Text style={styles.title}>{t("assetInspection.title")}</Text>
-            <Text style={styles.subtitle}>{t("assetInspection.subtitle")}</Text>
-          </View>
-        </View>
+  return (
+    <KeyboardAvoidingView
+      style={styles.flex}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 20}
+    >
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <View style={styles.flex}>
+          <ScrollView
+            contentContainerStyle={styles.container}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.header}>
+              <Pressable onPress={() => router.back()} style={styles.backBtn}>
+                <Text style={styles.backText}>‹</Text>
+              </Pressable>
 
-        <Section title="Images & Videos">
-          <View style={styles.mediaActions}>
-            <Pressable onPress={openCamera} style={styles.mediaActionBtn}>
-              <Text style={styles.mediaActionText}>{t("assetInspection.camera")}</Text>
+              <View style={styles.headerTextWrap}>
+                <Text style={styles.title}>{t("assetInspection.title")}</Text>
+                <Text style={styles.subtitle}>
+                  {t("assetInspection.subtitle")}
+                </Text>
+              </View>
+            </View>
 
-            </Pressable>
+            <Section title="Images & Videos">
+              <View style={styles.mediaActions}>
+                <Pressable onPress={openCamera} style={styles.mediaActionBtn}>
+                  <Text style={styles.mediaActionText}>
+                    {t("assetInspection.camera")}
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={pickMedia}
+                  style={[styles.mediaActionBtn, styles.secondaryActionBtn]}
+                >
+                  <Text
+                    style={[styles.mediaActionText, styles.secondaryActionText]}
+                  >
+                    {t("assetInspection.gallery")}
+                  </Text>
+                </Pressable>
+              </View>
+
+              {media.length > 0 ? (
+                <View style={styles.mediaGrid}>
+                  {media.map((item, index) => {
+                    const isVideo =
+                      item.mediaType === "video" ||
+                      item.type?.startsWith("video");
+
+                    return (
+                      <Pressable
+                        key={getStableMediaKey(item, index)}
+                        style={styles.mediaCard}
+                        onPress={() => openPreview(index)}
+                      >
+                        {isVideo ? (
+                          <View style={styles.videoBox}>
+                            {item.thumbnailUrl ? (
+                              <Image
+                                source={{ uri: item.thumbnailUrl }}
+                                style={styles.mediaImg}
+                              />
+                            ) : (
+                              <Text style={styles.videoText}>VIDEO</Text>
+                            )}
+
+                            <View style={styles.playBadge}>
+                              <Text style={styles.playText}>▶</Text>
+                            </View>
+                          </View>
+                        ) : (
+                          <Image
+                            source={{
+                              uri: item.localUri || item.uri || item.url,
+                            }}
+                            style={styles.mediaImg}
+                          />
+                        )}
+
+                        <Pressable
+                          onPress={() => removeMedia(index)}
+                          style={styles.removeBtn}
+                        >
+                          <Text style={styles.removeText}>×</Text>
+                        </Pressable>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : (
+                <Text style={styles.emptyMediaText}>
+                  {t("assetInspection.noMedia")}
+                </Text>
+              )}
+            </Section>
+
+            <Section title="Property Type">
+              <View style={styles.readOnlyBox}>
+                <Text style={styles.readOnlyLabel}>Type of Real Estate : </Text>
+                <Text style={styles.readOnlyValue}>{propertyType}</Text>
+              </View>
+            </Section>
+
+            <Section title="Building Condition">
+              <View style={styles.radioGroup}>
+                <View style={styles.conditionRow}>
+                  <RadioRow
+                    label={t("assetInspection.underConstruction")}
+                    selected={buildingCondition === "underConstruction"}
+                    onPress={() => setBuildingCondition("underConstruction")}
+                  />
+
+                  <RadioRow
+                    label={t("assetInspection.used")}
+                    selected={buildingCondition === "used"}
+                    onPress={() => setBuildingCondition("used")}
+                  />
+
+                  <RadioRow
+                    label={t("assetInspection.new")}
+                    selected={buildingCondition === "new"}
+                    onPress={() => setBuildingCondition("new")}
+                  />
+                </View>
+
+                <View style={styles.otherRow}>
+                  <View style={{ width: 90 }}>
+                    <RadioRow
+                      label={t("assetInspection.other")}
+                      selected={buildingCondition === "other"}
+                      onPress={() => setBuildingCondition("other")}
+                    />
+                  </View>
+
+                  {buildingCondition === "other" && (
+                    <TextInput
+                      value={otherBuildingCondition}
+                      onChangeText={setOtherBuildingCondition}
+                      placeholder={t("assetInspection.describeOtherCondition")}
+                      placeholderTextColor={MUTED}
+                      style={styles.otherInput}
+                    />
+                  )}
+                </View>
+              </View>
+
+              <View style={styles.completionRow}>
+                <Text style={styles.completionLabel}>
+                  {t("assetInspection.buildingCompletion")}
+                </Text>
+
+                <TextInput
+                  value={buildingCompletion}
+                  onChangeText={setBuildingCompletion}
+                  placeholder={t("assetInspection.percent")}
+                  placeholderTextColor={MUTED}
+                  keyboardType="numeric"
+                  editable={buildingCondition === "underConstruction"}
+                  style={[
+                    styles.completionInputSmall,
+                    buildingCondition !== "underConstruction" &&
+                      styles.disabledInput,
+                  ]}
+                />
+              </View>
+            </Section>
+
+            <Section title="Surrounding Environment">
+              <CheckboxGrid
+                items={ENVIRONMENT_OPTIONS as any}
+                checked={checked}
+                toggle={toggle}
+              />
+            </Section>
+
+            <Section title="Available Services">
+              <CheckboxRow
+                label={t("assetInspection.sanitaryDrainage")}
+                checked={checked.sanitaryDrainage}
+                onPress={() => toggle("sanitaryDrainage")}
+              />
+
+              <CheckboxRow
+                label={t("assetInspection.telephoneLine")}
+                checked={checked.telephoneLine}
+                onPress={() => toggle("telephoneLine")}
+              />
+              <View style={styles.electricityRow}>
+                <View style={{ flex: 1 }}>
+                  <CheckboxRow
+                    label={t("assetInspection.electricity")}
+                    checked={checked.electricity}
+                    onPress={() => toggle("electricity")}
+                  />
+                </View>
+
+                {checked.electricity && (
+                  <TextInput
+                    value={electricityUnits}
+                    onChangeText={setElectricityUnits}
+                    placeholder={t("assetInspection.units")}
+                    placeholderTextColor={MUTED}
+                    keyboardType="numeric"
+                    style={styles.rowInput}
+                  />
+                )}
+              </View>
+
+              <View style={styles.electricityRow}>
+                <View style={{ flex: 1 }}>
+                  <CheckboxRow
+                    label={t("assetInspection.waterMeters")}
+                    checked={checked.waterMeters}
+                    onPress={() => toggle("waterMeters")}
+                  />
+                </View>
+
+                {checked.waterMeters && (
+                  <TextInput
+                    value={waterMetersCount}
+                    onChangeText={setWaterMetersCount}
+                    placeholder={t("assetInspection.count")}
+                    placeholderTextColor={MUTED}
+                    keyboardType="numeric"
+                    style={styles.rowInput}
+                  />
+                )}
+              </View>
+
+              <View style={styles.electricityRow}>
+                <View style={{ flex: 1 }}>
+                  <CheckboxRow
+                    label={t("assetInspection.electricityMeters")}
+                    checked={checked.electricityMeters}
+                    onPress={() => toggle("electricityMeters")}
+                  />
+                </View>
+
+                {checked.electricityMeters && (
+                  <TextInput
+                    value={electricityMetersCount}
+                    onChangeText={setElectricityMetersCount}
+                    placeholder="Count"
+                    placeholderTextColor={MUTED}
+                    keyboardType="numeric"
+                    style={styles.rowInput}
+                  />
+                )}
+              </View>
+            </Section>
+
+            <Section title="Inspection Notes">
+              <Pressable
+                onPress={() => setNotesOpen((prev) => !prev)}
+                style={styles.notesToggle}
+              >
+                <Text style={styles.notesToggleText}>
+                  {notesOpen ? "Hide Notes" : "Add Notes"}
+                </Text>
+              </Pressable>
+
+              {notesOpen && (
+                <TextInput
+                  value={inspectionNotes}
+                  onChangeText={setInspectionNotes}
+                  placeholder="Write inspection notes..."
+                  placeholderTextColor={MUTED}
+                  multiline
+                  textAlignVertical="top"
+                  style={styles.notesInput}
+                />
+              )}
+            </Section>
 
             <Pressable
-              onPress={pickMedia}
-              style={[styles.mediaActionBtn, styles.secondaryActionBtn]}
+              disabled={saving}
+              onPress={handleSubmit}
+              style={[styles.primaryBtn, saving && styles.disabledBtn]}
             >
-             <Text style={[styles.mediaActionText, styles.secondaryActionText]}>
-  {t("assetInspection.gallery")}
-</Text>
+              {saving ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.primaryBtnText}>Save Inspection</Text>
+              )}
             </Pressable>
-          </View>
+          </ScrollView>
 
-          {media.length > 0 ? (
-            <View style={styles.mediaGrid}>
-              {media.map((item, index) => {
-                const isVideo =
-                  item.mediaType === "video" || item.type?.startsWith("video");
+          <Modal
+            visible={viewerVisible}
+            transparent={false}
+            animationType="fade"
+            onRequestClose={() => setViewerVisible(false)}
+          >
+            <View style={styles.viewerWrap}>
+              <View style={styles.viewerHeader}>
+                <Pressable
+                  onPress={() => setViewerVisible(false)}
+                  style={styles.viewerClose}
+                >
+                  <Text style={styles.viewerCloseText}>×</Text>
+                </Pressable>
 
-                return (
-                 <Pressable
-  key={`${item.id || item.uri || item.url}-${index}`}
-  style={styles.mediaCard}
-  onPress={() => openPreview(index)}
->
-                   {isVideo ? (
-  <View style={styles.videoBox}>
-    {item.thumbnailUrl ? (
-      <Image source={{ uri: item.thumbnailUrl }} style={styles.mediaImg} />
-    ) : (
-      <Text style={styles.videoText}>VIDEO</Text>
-    )}
+                <Text style={styles.viewerCount}>
+                  {media.length > 0
+                    ? `${viewerIndex + 1} / ${media.length}`
+                    : "0 / 0"}
+                </Text>
+              </View>
 
-    <View style={styles.playBadge}>
-      <Text style={styles.playText}>▶</Text>
-    </View>
-  </View>
-) : (
-  <Image
-    source={{ uri: item.uri || item.url }}
-    style={styles.mediaImg}
-  />
-)}
-
-                    <Pressable
-                      onPress={() => removeMedia(index)}
-                      style={styles.removeBtn}
-                    >
-                      <Text style={styles.removeText}>×</Text>
-                    </Pressable>
-                  </Pressable>
-                );
-              })}
+              <FlatList
+                data={media}
+                pagingEnabled
+                snapToInterval={Dimensions.get("window").height}
+                snapToAlignment="start"
+                decelerationRate="fast"
+                disableIntervalMomentum
+                initialScrollIndex={viewerIndex}
+                getItemLayout={(_, index) => ({
+                  length: Dimensions.get("window").height,
+                  offset: Dimensions.get("window").height * index,
+                  index,
+                })}
+                showsVerticalScrollIndicator={false}
+                removeClippedSubviews={false}
+                keyExtractor={(item, index) => getStableMediaKey(item, index)}
+                onMomentumScrollEnd={(event) => {
+                  const height = Dimensions.get("window").height;
+                  const index = Math.round(
+                    event.nativeEvent.contentOffset.y / height,
+                  );
+                  setViewerIndex(index);
+                }}
+                renderItem={({ item }) => <PreviewItem item={item} />}
+              />
             </View>
-          ) : (
-            <Text style={styles.emptyMediaText}>
-  {t("assetInspection.noMedia")}
-</Text>
-          )}
-        </Section>
+          </Modal>
 
-        <Section title="Property Type">
-          <View style={styles.readOnlyBox}>
-            <Text style={styles.readOnlyLabel}>Type of Real Estate : </Text>
-            <Text style={styles.readOnlyValue}>{propertyType}</Text>
-          </View>
-        </Section>
-
-       <Section title="Building Condition">
-  <View style={styles.radioGroup}>
-   <View style={styles.conditionRow}>
-  <RadioRow
-     label={t("assetInspection.underConstruction")}
-    selected={buildingCondition === "underConstruction"}
-    onPress={() => setBuildingCondition("underConstruction")}
-  />
-
-  <RadioRow
-     label={t("assetInspection.used")}
-    selected={buildingCondition === "used"}
-    onPress={() => setBuildingCondition("used")}
-  />
-
-  <RadioRow
-    label={t("assetInspection.new")}
-    selected={buildingCondition === "new"}
-    onPress={() => setBuildingCondition("new")}
-  />
-</View>
-
-    
-<View style={styles.otherRow}>
-  <View style={{ width: 90 }}>
-    <RadioRow
-       label={t("assetInspection.other")}
-      selected={buildingCondition === "other"}
-      onPress={() => setBuildingCondition("other")}
-    />
-  </View>
-
-  {buildingCondition === "other" && (
-    <TextInput
-      value={otherBuildingCondition}
-      onChangeText={setOtherBuildingCondition}
-      placeholder={t("assetInspection.describeOtherCondition")}
-      placeholderTextColor={MUTED}
-      style={styles.otherInput}
-    />
-  )}
-</View>
-  </View>
-
-
-
- <View style={styles.completionRow}>
-  <Text style={styles.completionLabel}>
-  {t("assetInspection.buildingCompletion")}
-</Text>
-
-  <TextInput
-    value={buildingCompletion}
-    onChangeText={setBuildingCompletion}
-   placeholder={t("assetInspection.percent")}
-    placeholderTextColor={MUTED}
-    keyboardType="numeric"
-    editable={buildingCondition === "underConstruction"}
-    style={[
-      styles.completionInputSmall,
-      buildingCondition !== "underConstruction" &&
-        styles.disabledInput,
-    ]}
-  />
-</View>
-</Section>
-
-        <Section title="Surrounding Environment">
-          <CheckboxGrid
-            items={ENVIRONMENT_OPTIONS as any}
-            checked={checked}
-            toggle={toggle}
+          <AssetCameraModal
+            visible={cameraOpen}
+            mode={cameraMode}
+            onClose={() => setCameraOpen(false)}
+            onDone={handleCameraDone}
+            onScanText={() => {}}
           />
-        </Section>
-
-        <Section title="Available Services">
-         
-
-          <CheckboxRow
-             label={t("assetInspection.sanitaryDrainage")}
-            checked={checked.sanitaryDrainage}
-            onPress={() => toggle("sanitaryDrainage")}
-          />
-
-          <CheckboxRow
-            label={t("assetInspection.telephoneLine")}
-            checked={checked.telephoneLine}
-            onPress={() => toggle("telephoneLine")}
-          />
-<View style={styles.electricityRow}>
-  <View style={{ flex: 1 }}>
-    <CheckboxRow
-       label={t("assetInspection.electricity")}
-      checked={checked.electricity}
-      onPress={() => toggle("electricity")}
-    />
-  </View>
-
-  {checked.electricity && (
-    <TextInput
-      value={electricityUnits}
-      onChangeText={setElectricityUnits}
-      placeholder={t("assetInspection.units")}
-      placeholderTextColor={MUTED}
-      keyboardType="numeric"
-      style={styles.rowInput}
-    />
-  )}
-</View>
-
-          <View style={styles.electricityRow}>
-  <View style={{ flex: 1 }}>
-    <CheckboxRow
-      label={t("assetInspection.waterMeters")}
-      checked={checked.waterMeters}
-      onPress={() => toggle("waterMeters")}
-    />
-  </View>
-
-  {checked.waterMeters && (
-    <TextInput
-      value={waterMetersCount}
-      onChangeText={setWaterMetersCount}
-      placeholder={t("assetInspection.count")}
-      placeholderTextColor={MUTED}
-      keyboardType="numeric"
-      style={styles.rowInput}
-    />
-  )}
-</View>
-
-          <View style={styles.electricityRow}>
-  <View style={{ flex: 1 }}>
-    <CheckboxRow
-       label={t("assetInspection.electricityMeters")}
-      checked={checked.electricityMeters}
-      onPress={() => toggle("electricityMeters")}
-    />
-  </View>
-
-  {checked.electricityMeters && (
-    <TextInput
-      value={electricityMetersCount}
-      onChangeText={setElectricityMetersCount}
-      placeholder="Count"
-      placeholderTextColor={MUTED}
-      keyboardType="numeric"
-      style={styles.rowInput}
-    />
-  )}
-</View>
-        </Section>
-
-        <Section title="Inspection Notes">
-  <Pressable
-    onPress={() => setNotesOpen((prev) => !prev)}
-    style={styles.notesToggle}
-  >
-    <Text style={styles.notesToggleText}>
-      {notesOpen ? "Hide Notes" : "Add Notes"}
-    </Text>
-  </Pressable>
-
-  {notesOpen && (
-    <TextInput
-      value={inspectionNotes}
-      onChangeText={setInspectionNotes}
-      placeholder="Write inspection notes..."
-      placeholderTextColor={MUTED}
-      multiline
-      textAlignVertical="top"
-      style={styles.notesInput}
-    />
-  )}
-</Section>
-
-        <Pressable
-          disabled={saving}
-          onPress={handleSubmit}
-          style={[styles.primaryBtn, saving && styles.disabledBtn]}
-        >
-          {saving ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.primaryBtnText}>Save Inspection</Text>
-          )}
-        </Pressable>
-      </ScrollView>
-
-      <Modal
-  visible={viewerVisible}
-  transparent={false}
-  animationType="fade"
-  onRequestClose={() => setViewerVisible(false)}
->
-  <View style={styles.viewerWrap}>
-    <View style={styles.viewerHeader}>
-      <Pressable
-        onPress={() => setViewerVisible(false)}
-        style={styles.viewerClose}
-      >
-        <Text style={styles.viewerCloseText}>×</Text>
-      </Pressable>
-
-      <Text style={styles.viewerCount}>
-        {media.length > 0 ? `${viewerIndex + 1} / ${media.length}` : "0 / 0"}
-      </Text>
-    </View>
-
-<FlatList
-  data={media}
-  pagingEnabled
-  snapToInterval={Dimensions.get("window").height}
-  snapToAlignment="start"
-  decelerationRate="fast"
-  disableIntervalMomentum
-  initialScrollIndex={viewerIndex}
-  getItemLayout={(_, index) => ({
-    length: Dimensions.get("window").height,
-    offset: Dimensions.get("window").height * index,
-    index,
-  })}
-  showsVerticalScrollIndicator={false}
-  removeClippedSubviews={false}
-  keyExtractor={(item, index) => `${item.id || item.uri || item.url}-${index}`}
-  onMomentumScrollEnd={(event) => {
-    const height = Dimensions.get("window").height;
-    const index = Math.round(event.nativeEvent.contentOffset.y / height);
-    setViewerIndex(index);
-  }}
-  renderItem={({ item }) => <PreviewItem item={item} />}
-/>
-  </View>
-</Modal>
-
-      <AssetCameraModal
-        visible={cameraOpen}
-        mode={cameraMode}
-        onClose={() => setCameraOpen(false)}
-        onDone={handleCameraDone}
-        onScanText={() => {}}
-      />
 
           {snackbar ? (
-        <View style={styles.snackbar}>
-          <Text style={styles.snackbarText}>{snackbar}</Text>
+            <View style={styles.snackbar}>
+              <Text style={styles.snackbarText}>{snackbar}</Text>
+            </View>
+          ) : null}
         </View>
-      ) : null}
-    </View>
-  </TouchableWithoutFeedback>
-</KeyboardAvoidingView>
+      </TouchableWithoutFeedback>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -1027,11 +1089,15 @@ function CheckboxGrid({
           onPress={() => toggle(key)}
           style={[styles.gridItem, checked[key] && styles.gridItemActive]}
         >
-          <View style={[styles.smallBox, checked[key] && styles.checkboxActive]}>
+          <View
+            style={[styles.smallBox, checked[key] && styles.checkboxActive]}
+          >
             {checked[key] && <Text style={styles.smallCheck}>✓</Text>}
           </View>
 
-          <Text style={[styles.gridText, checked[key] && styles.gridTextActive]}>
+          <Text
+            style={[styles.gridText, checked[key] && styles.gridTextActive]}
+          >
             {t(labelKey)}
           </Text>
         </Pressable>
@@ -1039,6 +1105,7 @@ function CheckboxGrid({
     </View>
   );
 }
+
 
 const styles = StyleSheet.create({
   flex: {
