@@ -110,11 +110,10 @@ const isSmallScreen = width < 380 || height < 700;
 const isTablet = width >= 768;
 
 const modalWidth = Math.min(width * 0.92, isTablet ? 560 : 420);
-const modalMaxHeight = height * 0.92;
-const modalMinHeight = Math.min(height * 0.7, 560);
+const modalMaxHeight = height * 1;
+const modalMinHeight = Math.min(height * 0.7, 480);
 
-const notesModalWidth = Math.min(width * 0.92, isTablet ? 480 : 420);
-const notesModalMaxHeight = height * 0.78;
+
 
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
@@ -437,8 +436,8 @@ const notesModalMaxHeight = height * 0.78;
             <KeyboardAvoidingView
               style={styles.keyboardWrap}
                behavior={Platform.OS === "ios" ? "padding" : "position"}
-                keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
-              enabled={false}
+                keyboardVerticalOffset={Platform.OS === "ios" ? 20 : 0}
+              enabled={true}
             >
               <TouchableWithoutFeedback>
                 <View
@@ -950,10 +949,6 @@ const notesModalMaxHeight = height * 0.78;
                           />
                         </View>
 
-                        <Text style={styles.helper}>
-                          {t("asset.scannedTextHelper")}
-                        </Text>
-
                         <Text style={[styles.label, { marginTop: 8 }]}>
                           {t("asset.voiceNotes")}
                         </Text>
@@ -1292,7 +1287,7 @@ const styles = StyleSheet.create({
   },
 
   keyboardWrap: {
-    flex: 1,
+  
     width: "100%",
     justifyContent: "center",
     alignItems: "center",
@@ -1305,6 +1300,8 @@ const styles = StyleSheet.create({
   borderRadius: 24,
   padding: 16,
   alignSelf: "center",
+  flex: 0,          // ← ADD THIS so it doesn't expand unboundedly
+  flexShrink: 1,    // ← ADD THIS so it can shrink when keyboard appears
 
   ...Platform.select({
     ios: {
