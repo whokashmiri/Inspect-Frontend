@@ -2136,6 +2136,7 @@ const isAssetSynced = (asset: AssetItem) => {
           );
 
           return (
+            
             <TouchableOpacity
               style={styles.rawKeyOption}
               onPress={() => {

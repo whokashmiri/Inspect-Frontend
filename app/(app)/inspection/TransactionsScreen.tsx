@@ -40,47 +40,22 @@ const TEXT = "#2A324B";
 const MUTED = "#767B91";
 const BG = "#F8F9FC";
 
-function MediaViewerItem({ item }: { item: any }) {
-  const { width, height } = useWindowDimensions();
+const SCREEN_WIDTH = Dimensions.get("window").width;
 
-  const isVideo =
-    item.mediaType === "video" ||
-    item.mimeType?.startsWith?.("video");
 
-  const uri = item.localUri || item.url || item.uri;
 
-  const mediaWidth = width;
-  const mediaHeight = height * 0.76;
-
-  const player = useVideoPlayer(isVideo ? uri : null, (player) => {
+function MediaVideoPlayer({ uri }: { uri: string }) {
+  const player = useVideoPlayer(uri, (player) => {
     player.loop = false;
+    player.play();
   });
 
   return (
-    <View style={[styles.viewerPage, { width, height }]}>
-      <View style={styles.viewerMediaCenter}>
-        {isVideo ? (
-          <VideoView
-            player={player}
-            style={{
-              width: mediaWidth,
-              height: mediaHeight,
-            }}
-            nativeControls
-            contentFit="contain"
-          />
-        ) : (
-          <Image
-            source={{ uri }}
-            style={{
-              width: mediaWidth,
-              height: mediaHeight,
-            }}
-            resizeMode="contain"
-          />
-        )}
-      </View>
-    </View>
+    <VideoView
+      player={player}
+      style={styles.videoPlayer}
+      nativeControls
+    />
   );
 }
 
@@ -406,9 +381,20 @@ useFocusEffect(
     );
   }
 
-  const openMediaViewer = async (item: any) => {
-  const transactionId = item.id || item._id;
+const normalizeMedia = (media = []) =>
+  dedupeMedia(media)
+    .map((m) => ({
+      ...m,
+      uri: m.uri || m.localUri || m.fileUri || m.url,
+      mediaType:
+        m.mediaType ||
+        m.type ||
+        (String(m.mimeType || "").startsWith("video") ? "video" : "image"),
+    }))
+    .filter((m) => !!m.uri);
 
+const openMediaViewer = async (item:any) => {
+  const transactionId = item.id || item._id;
   if (!transactionId) return;
 
   try {
@@ -416,18 +402,21 @@ useFocusEffect(
     setViewerVisible(true);
     setActiveMediaIndex(0);
 
-    const res = await transactionApi.getById(String(transactionId));
-    const media = res.data?.media || [];
+    let media = item.media || [];
 
-    setViewerMedia(Array.isArray(media) ? media : []);
+    if (isOnline) {
+      const res = await transactionApi.getById(String(transactionId));
+      media = res.data?.media || media;
+    }
+
+    setViewerMedia(normalizeMedia(media));
   } catch (error) {
     console.log("Failed to load media", error);
-    setViewerMedia([]);
+    setViewerMedia(normalizeMedia(item.media || []));
   } finally {
     setViewerLoading(false);
   }
 };
-
 
 
 
@@ -585,13 +574,14 @@ useFocusEffect(
         }}
       />
 
-      <Modal
+ <Modal
   visible={viewerVisible}
   transparent={false}
   animationType="slide"
   onRequestClose={() => setViewerVisible(false)}
 >
   <View style={styles.viewerWrap}>
+    {/* Header */}
     <View style={styles.viewerHeader}>
       <Pressable
         onPress={() => setViewerVisible(false)}
@@ -607,6 +597,7 @@ useFocusEffect(
       </Text>
     </View>
 
+    {/* Body */}
     {viewerLoading ? (
       <View style={styles.viewerCenter}>
         <ActivityIndicator color="#fff" />
@@ -618,28 +609,45 @@ useFocusEffect(
         <Text style={styles.viewerEmptyText}>No images or videos found</Text>
       </View>
     ) : (
-     <FlatList
-  data={viewerMedia}
-  keyExtractor={(item, index) => `${item.id || item.url}-${index}`}
-  pagingEnabled
-  snapToInterval={Dimensions.get("window").height}
-  snapToAlignment="start"
-  decelerationRate="fast"
-  disableIntervalMomentum
-  showsVerticalScrollIndicator={false}
-  removeClippedSubviews={false}
-  getItemLayout={(_, index) => ({
-    length: Dimensions.get("window").height,
-    offset: Dimensions.get("window").height * index,
-    index,
-  })}
-  onMomentumScrollEnd={(e) => {
-    const height = Dimensions.get("window").height;
-    const index = Math.round(e.nativeEvent.contentOffset.y / height);
-    setActiveMediaIndex(index);
-  }}
-  renderItem={({ item }) => <MediaViewerItem item={item} />}
-/>
+      <FlatList
+        data={viewerMedia}
+        keyExtractor={(_, index) => `media-${index}`}
+        showsVerticalScrollIndicator={false}
+        pagingEnabled                          // ✅ replaces snapToInterval
+        snapToAlignment="start"
+        decelerationRate="fast"
+        onViewableItemsChanged={({ viewableItems }) => {   // ✅ replaces onMomentumScrollEnd
+          if (viewableItems.length > 0) {
+            setActiveMediaIndex(viewableItems[0].index ?? 0);
+          }
+        }}
+        viewabilityConfig={{ itemVisiblePercentThreshold: 50 }}
+        contentContainerStyle={{ flexGrow: 1 }}
+        renderItem={({ item }) => (             // ✅ inline render like the working modal
+          <View
+            style={{
+              width: SCREEN_WIDTH,
+              height: Dimensions.get("window").height,
+              justifyContent: "center",
+              alignItems: "center",
+              backgroundColor: "#000",
+            }}
+          >
+            {item.mediaType === "video" ? (
+              <MediaVideoPlayer key={item.uri} uri={item.uri} />
+            ) : (
+              <Image
+                source={{ uri: item.uri }}
+                style={{
+                  width: SCREEN_WIDTH,
+                  height: Dimensions.get("window").height,
+                }}
+                resizeMode="contain"
+              />
+            )}
+          </View>
+        )}
+      />
     )}
   </View>
 </Modal>
@@ -815,6 +823,13 @@ completedText: {
       marginTop: 4,
     
   },
+
+
+  videoPlayer: {
+  width: "100%",
+  height: "100%",
+  backgroundColor: "#000",
+},
   badgeText: {
     fontSize: 10,
     fontWeight: "500",
