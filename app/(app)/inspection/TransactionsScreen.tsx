@@ -13,7 +13,6 @@ import {
   Modal,
   Image,
   Dimensions,
-  useWindowDimensions,
   Platform,
 } from "react-native";
 
@@ -424,6 +423,17 @@ const openMediaViewer = async (item:any) => {
     <View style={styles.flex}>
      <View style={styles.header}>
   <View style={styles.headerTop}>
+   
+    <Pressable
+      onPress={() => router.back()}
+      style={styles.backBtn}
+      android_ripple={{ color: "rgba(0,0,0,0.08)" }}
+      hitSlop={10}
+    >
+      <Ionicons name="chevron-back" size={22} color={ACC} />
+    </Pressable>
+  
+
     <View style={styles.headerTitleWrap}>
   <Text style={styles.title} numberOfLines={1}>
     Transactions
@@ -438,6 +448,7 @@ const openMediaViewer = async (item:any) => {
       color={isOnline ? "#168044" : "#9CA3AF"}
     />
   </View>
+
 
  <Pressable
   onPress={syncPendingInspections}
@@ -725,9 +736,33 @@ headerTop: {
   gap: 10,
 },
 
+
 headerTitleWrap: {
   flex: 1,
   minWidth: 0,
+},
+
+
+backBtn: {
+  position: "absolute",
+
+  left: 10,
+  top: "50%",
+  transform: [{ translateY: 600 }],
+
+  width: 36,
+  height: 36,
+  borderRadius: 18,
+
+  backgroundColor: "#fff",
+  borderWidth: 1,
+  borderColor: BORDER,
+
+  alignItems: "center",
+  justifyContent: "center",
+
+  zIndex: 999,
+  elevation: 999,
 },
 
 

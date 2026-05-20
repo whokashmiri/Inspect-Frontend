@@ -18,6 +18,8 @@ import {
   Keyboard,
 } from "react-native";
 
+
+
 import { VideoView, useVideoPlayer } from "expo-video";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
@@ -145,6 +147,10 @@ const [activeMediaIndex, setActiveMediaIndex] = useState(0);
 
   const transactionId = params.transactionId || "";
   const projectId = params.projectId || "";
+
+    const goBackToInspectionType = () => {
+  router.push("/inspection/InspectionType");
+};
 
   const propertyType =
     transactionDetails?.evalData?.propertyType ||
@@ -1022,6 +1028,8 @@ const closeMediaViewer = () => {
               </View>
             </KeyboardAvoidingView>
           </Modal>
+
+    
 
          {/* ══ MEDIA VIEWER MODAL ══ */}
 <Modal

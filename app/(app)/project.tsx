@@ -794,32 +794,8 @@ async function openLocation(location: ProjectLocation) {
                               )}
                             </Pressable>
 
-                            {/* <Pressable
-                              style={[
-                                styles.iconBtn,
-                                styles.removeIconBtn,
-                                (isRemoving || pendingForProject > 0) &&
-                                  styles.iconBtnDisabled,
-                              ]}
-                              onPress={(e) => {
-                                e.stopPropagation();
-                                handleRemoveOfflineProject(project);
-                              }}
-                              disabled={isRemoving || pendingForProject > 0}
-                            >
-                              {isRemoving ? (
-                                <ActivityIndicator
-                                  size="small"
-                                  color="#ff8b8b"
-                                />
-                              ) : (
-                                <Ionicons
-                                  name="trash-outline"
-                                  size={20}
-                                  color="#ff8b8b"
-                                />
-                              )}
-                            </Pressable> */}
+                        
+                               
                           </>
                         )}
                       </View>
@@ -830,6 +806,8 @@ async function openLocation(location: ProjectLocation) {
             })}
           </View>
         )}
+
+
 
 
 
@@ -1022,6 +1000,14 @@ async function openLocation(location: ProjectLocation) {
   </View>
 </Modal>
       </ScrollView>
+
+        <Pressable
+                              onPress={() => router.push("/inspection/InspectionType")}
+                              style={styles.backBtn}
+                             
+                            >
+                              <Ionicons name="chevron-back" size={22} color={ACC} />
+                            </Pressable>
     </View>
   );
 }
@@ -1135,6 +1121,28 @@ infoTabBtn: {
   alignItems: "center",
   justifyContent: "center",
   gap: 4,
+},
+
+backBtn: {
+  position: "absolute",
+
+  left: 15,
+  top: "60%",
+  transform: [{ translateY: 200 }],
+
+  width: 36,
+  height: 36,
+  borderRadius: 18,
+
+  backgroundColor: "#f4f2f2",
+  borderWidth: 1,
+  borderColor: BORDER,
+
+  alignItems: "center",
+  justifyContent: "center",
+
+  zIndex: 999,
+  elevation: 999,
 },
 
 infoTabBtnActive: {
