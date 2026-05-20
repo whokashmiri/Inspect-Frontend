@@ -17,7 +17,7 @@ import { VideoView, useVideoPlayer } from "expo-video";
 
 import {
   useWindowDimensions,
-Alert,
+  Alert,
   FlatList,
   Modal,
   RefreshControl,
