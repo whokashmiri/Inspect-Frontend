@@ -92,6 +92,8 @@ const [activeInfoTab, setActiveInfoTab] = useState<ProjectInfoTab | null>(null);
 
 const [projectLocations, setProjectLocations] = useState<ProjectLocation[]>([]);
 
+const [selectedLocation, setSelectedLocation] = useState<ProjectLocation | null>(null);
+
 
 const [locationsLoading, setLocationsLoading] = useState(false);
   const [selectedProjectForFiles, setSelectedProjectForFiles] =
@@ -380,37 +382,22 @@ async function openProjectInfoModal(project: Project) {
   try {
     setSelectedProjectForFiles(project);
     setProjectInfoModalVisible(true);
-    setActiveInfoTab(null);
+    setActiveInfoTab("locations");
 
     setInspectorFiles([]);
     setProjectLocations([]);
+
+    setLocationsLoading(true);
+
+    const result = await projectApi.listLocations(project.id);
+
+   
+
+    setProjectLocations(result.locations || []);
   } catch (error: any) {
-    Alert.alert("Error", error?.message || "Could not open project info");
-  }
-}
-
-async function openInspectorFile(file: InspectorFile) {
-  try {
-    if (!file.url) {
-      Alert.alert("File unavailable", "This file does not have a valid URL.");
-      return;
-    }
-
-    const canOpen = await Linking.canOpenURL(file.url);
-
-    if (!canOpen) {
-      Alert.alert("Cannot open file", "No app found to open this file.");
-      return;
-    }
-
-    const result = await projectApi.downloadInspectorFile(
-  selectedProjectForFiles!.id,
-  file.id
-);
-
-await Linking.openURL(result.url);
-  } catch (error: any) {
-    Alert.alert("Open failed", error?.message || "Could not open file.");
+    Alert.alert("Error", error?.message || "Could not load locations");
+  } finally {
+    setLocationsLoading(false);
   }
 }
 
@@ -835,167 +822,174 @@ async function openLocation(location: ProjectLocation) {
         </Pressable>
       </View>
 
-      <View style={styles.infoButtonsRow}>
-        <Pressable
-          style={[
-            styles.infoTabBtn,
-            activeInfoTab === "assets" && styles.infoTabBtnActive,
-          ]}
-          onPress={toggleAssetsSection}
-        >
-          <Ionicons name="document-attach-outline" size={17} color={activeInfoTab === "assets" ? "#fff" : TEXT} />
-          <Text style={[styles.infoTabText, activeInfoTab === "assets" && styles.infoTabTextActive]}>
-            Assets
-          </Text>
-        </Pressable>
-
-        <Pressable
-          style={[
-            styles.infoTabBtn,
-            activeInfoTab === "locations" && styles.infoTabBtnActive,
-          ]}
-          onPress={toggleLocationsSection}
-        >
-          <Ionicons name="location-outline" size={17} color={activeInfoTab === "locations" ? "#fff" : TEXT} />
-          <Text style={[styles.infoTabText, activeInfoTab === "locations" && styles.infoTabTextActive]}>
-            Inspection Locations
-          </Text>
-        </Pressable>
-      </View>
-
-      <ScrollView style={{ maxHeight: 420 }}>
-        {activeInfoTab === "assets" && (
-          <>
-            {filesLoading ? (
-              <ActivityIndicator color={ACC} style={{ marginTop: 24 }} />
-            ) : inspectorFiles.length === 0 ? (
-              <View style={styles.emptyWrap}>
-                <Text style={styles.emptyText}>No inspector files found</Text>
-              </View>
-            ) : (
-              inspectorFiles.map((file) => (
-                <View key={file.id} style={styles.fileRow}>
-                  <View style={styles.fileIconBox}>
-                    <Ionicons
-                      name={getFileIcon(file.type) as any}
-                      size={22}
-                      color={ACC}
-                    />
-                  </View>
-
-                  <View style={styles.fileInfo}>
-                    <Text style={styles.fileName} numberOfLines={2}>
-                      {file.name}
-                    </Text>
-                    <Text style={styles.fileMeta}>
-                      {file.type.toUpperCase()}
-                      {file.sizeBytes ? ` • ${formatFileSize(file.sizeBytes)}` : ""}
-                    </Text>
-                  </View>
-
-                  <View style={styles.fileActions}>
-                    <Pressable
-                      style={[styles.fileActionBtn, styles.viewBtn]}
-                      onPress={() => viewInspectorFile(file)}
-                      disabled={viewingFileId === file.id || downloadingFileId === file.id}
-                    >
-                      {viewingFileId === file.id ? (
-                        <ActivityIndicator size="small" color="#fff" />
-                      ) : (
-                        <Ionicons name="eye-outline" size={18} color="#fff" />
-                      )}
-                    </Pressable>
-
-                    <Pressable
-                      style={[styles.fileActionBtn, styles.downloadBtn]}
-                      onPress={() => downloadInspectorFile(file)}
-                      disabled={viewingFileId === file.id || downloadingFileId === file.id}
-                    >
-                      {downloadingFileId === file.id ? (
-                        <ActivityIndicator size="small" color="#fff" />
-                      ) : (
-                        <Ionicons name="download-outline" size={18} color="#fff" />
-                      )}
-                    </Pressable>
-                  </View>
-                </View>
-              ))
-            )}
-          </>
-        )}
-
-{activeInfoTab === "locations" && (
-  <>
-    {locationsLoading ? (
-      <ActivityIndicator color={ACC} style={{ marginTop: 24 }} />
-    ) : projectLocations.length === 0 ? (
-      <View style={styles.emptyWrap}>
-        <Text style={styles.emptyText}>No locations found</Text>
-      </View>
-    ) : (
-      projectLocations.map((location, index) => (
-        <View
-          key={`${location.id || location.mapUrl || location.name || index}`}
-          style={styles.locationCard}
-        >
-          <Pressable
-            style={styles.locationMainRow}
-            onPress={() => openLocation(location)}
-          >
-            <View style={styles.locationIconBox}>
-              <Ionicons name="location-outline" size={22} color={ACC} />
-            </View>
-
-            <View style={styles.infoTextWrap}>
-              <Text style={styles.fileName}>
-                {location.name || location.city || "Location"}
-              </Text>
-
-              <Text style={styles.fileMeta}>
-                {[location.region, location.city].filter(Boolean).join(" • ") || "No address"}
-              </Text>
-
-              {(location.latitude || location.longitude) && (
-                <Text style={styles.locationCoords}>
-                  {location.latitude ?? "-"}, {location.longitude ?? "-"}
-                </Text>
-              )}
-            </View>
-
-            <Ionicons name="map-outline" size={18} color={MUTED} />
-          </Pressable>
-
-          <View style={styles.phoneRow}>
-            {location.primaryPhone ? (
-              <Pressable
-                style={styles.phoneBtn}
-                onPress={() => openPhone(location.primaryPhone!)}
-              >
-                <Ionicons name="call-outline" size={16} color={ACC} />
-                <Text style={styles.phoneText}>{location.primaryPhone}</Text>
-              </Pressable>
-            ) : null}
-
-            {location.secondaryPhone ? (
-              <Pressable
-                style={styles.phoneBtn}
-                onPress={() => openPhone(location.secondaryPhone!)}
-              >
-                <Ionicons name="call-outline" size={16} color={ACC} />
-                <Text style={styles.phoneText}>{location.secondaryPhone}</Text>
-              </Pressable>
-            ) : null}
-
-            {!location.primaryPhone && !location.secondaryPhone ? (
-              <Text style={styles.noPhoneText}>No phone numbers</Text>
-            ) : null}
+   <ScrollView style={{ maxHeight: 420 }}>
+  {locationsLoading ? (
+    <ActivityIndicator color={ACC} style={{ marginTop: 24 }} />
+  ) : projectLocations.length === 0 ? (
+    <View style={styles.emptyWrap}>
+      <Text style={styles.emptyText}>No locations found</Text>
+    </View>
+  ) : !selectedLocation ? (
+    projectLocations.map((location, index) => (
+      <Pressable
+        key={`${location.id || location.name || index}`}
+        style={styles.locationCard}
+        onPress={() => setSelectedLocation(location)}
+      >
+        <View style={styles.locationMainRow}>
+          <View style={styles.locationIconBox}>
+            <Ionicons name="location-outline" size={22} color={ACC} />
           </View>
+
+          <View style={styles.infoTextWrap}>
+            <Text style={styles.fileName}>
+              {location.name || location.city || "Location"}
+            </Text>
+
+            <Text style={styles.fileMeta}>
+              {[location.region, location.city].filter(Boolean).join(" • ") ||
+                "No address"}
+            </Text>
+          </View>
+
+          <Ionicons name="chevron-forward" size={18} color={MUTED} />
         </View>
-      ))
-    )}
-  </>
-)}
-      </ScrollView>
+      </Pressable>
+    ))
+  ) : (
+    <View>
+      <Pressable
+        style={styles.locationBackBtn}
+        onPress={() => setSelectedLocation(null)}
+      >
+        <Ionicons name="chevron-back" size={18} color={ACC} />
+        <Text style={styles.locationBackText}>Locations</Text>
+      </Pressable>
+
+      <View style={styles.locationCard}>
+        <Pressable
+          style={styles.locationMainRow}
+          onPress={() => openLocation(selectedLocation)}
+        >
+          <View style={styles.locationIconBox}>
+            <Ionicons name="map-outline" size={22} color={ACC} />
+          </View>
+
+          <View style={styles.infoTextWrap}>
+            <Text style={styles.fileName}>
+              {selectedLocation.name || selectedLocation.city || "Location"}
+            </Text>
+
+            <Text style={styles.fileMeta}>
+              {[selectedLocation.region, selectedLocation.city]
+                .filter(Boolean)
+                .join(" • ") || "No address"}
+            </Text>
+
+            {(selectedLocation.latitude || selectedLocation.longitude) && (
+              <Text style={styles.locationCoords}>
+                {selectedLocation.latitude ?? "-"},{" "}
+                {selectedLocation.longitude ?? "-"}
+              </Text>
+            )}
+          </View>
+
+          <Ionicons name="open-outline" size={18} color={MUTED} />
+        </Pressable>
+
+        {selectedLocation.notes ? (
+          <Text style={styles.locationNotes}>{selectedLocation.notes}</Text>
+        ) : null}
+
+        <View style={styles.phoneRow}>
+          {selectedLocation.primaryPhone ? (
+            <Pressable
+              style={styles.phoneBtn}
+              onPress={() => openPhone(selectedLocation.primaryPhone!)}
+            >
+              <Ionicons name="call-outline" size={16} color={ACC} />
+              <Text style={styles.phoneText}>
+                {selectedLocation.primaryPhone}
+              </Text>
+            </Pressable>
+          ) : null}
+
+          {selectedLocation.secondaryPhone ? (
+            <Pressable
+              style={styles.phoneBtn}
+              onPress={() => openPhone(selectedLocation.secondaryPhone!)}
+            >
+              <Ionicons name="call-outline" size={16} color={ACC} />
+              <Text style={styles.phoneText}>
+                {selectedLocation.secondaryPhone}
+              </Text>
+            </Pressable>
+          ) : null}
+
+          {!selectedLocation.primaryPhone && !selectedLocation.secondaryPhone ? (
+            <Text style={styles.noPhoneText}>No phone numbers</Text>
+          ) : null}
+        </View>
+      </View>
+
+      <Text style={styles.sectionTitle}>Inspector Files</Text>
+
+      {(selectedLocation.inspectorFiles || []).length === 0 ? (
+        <View style={styles.emptyWrap}>
+          <Text style={styles.emptyText}>No files for this location</Text>
+        </View>
+      ) : (
+        (selectedLocation.inspectorFiles || []).map((file) => (
+          <View key={file.id} style={styles.fileRow}>
+            <View style={styles.fileIconBox}>
+              <Ionicons
+                name={getFileIcon(file.type) as any}
+                size={22}
+                color={ACC}
+              />
+            </View>
+
+            <View style={styles.fileInfo}>
+              <Text style={styles.fileName} numberOfLines={2}>
+                {file.name}
+              </Text>
+              <Text style={styles.fileMeta}>
+                {file.type.toUpperCase()}
+                {file.sizeBytes ? ` • ${formatFileSize(file.sizeBytes)}` : ""}
+              </Text>
+            </View>
+
+            <View style={styles.fileActions}>
+              <Pressable
+                style={[styles.fileActionBtn, styles.viewBtn]}
+                onPress={() => viewInspectorFile(file)}
+                disabled={viewingFileId === file.id || downloadingFileId === file.id}
+              >
+                {viewingFileId === file.id ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Ionicons name="eye-outline" size={18} color="#fff" />
+                )}
+              </Pressable>
+
+              <Pressable
+                style={[styles.fileActionBtn, styles.downloadBtn]}
+                onPress={() => downloadInspectorFile(file)}
+                disabled={viewingFileId === file.id || downloadingFileId === file.id}
+              >
+                {downloadingFileId === file.id ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Ionicons name="download-outline" size={18} color="#fff" />
+                )}
+              </Pressable>
+            </View>
+          </View>
+        ))
+      )}
+    </View>
+  )}
+</ScrollView>
     </View>
   </View>
 </Modal>
@@ -1063,6 +1057,37 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: fonts.inter.semiBold as unknown as string,
   },
+
+  locationBackBtn: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 4,
+  alignSelf: "flex-start",
+  marginBottom: 10,
+},
+
+locationBackText: {
+  color: ACC,
+  fontSize: 12,
+  fontFamily: fonts.inter.semiBold as unknown as string,
+},
+
+locationNotes: {
+  color: TEXT,
+  fontSize: 11,
+  marginTop: 10,
+  paddingTop: 10,
+  borderTopWidth: 1,
+  borderTopColor: BORDER,
+},
+
+sectionTitle: {
+  color: TEXT,
+  fontSize: 13,
+  marginBottom: 10,
+  marginTop: 12,
+  fontFamily: fonts.inter.semiBold as unknown as string,
+},
 
  
  filterRow: {

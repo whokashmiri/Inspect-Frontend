@@ -280,8 +280,9 @@ export interface ProjectLocation {
   mapUrl?: string;
   primaryPhone?: string;
   secondaryPhone?: string;
+  notes?: string;
+  inspectorFiles?: InspectorFile[];
 }
-
 
 
 export interface ListProjectLocationsResponse {
@@ -338,6 +339,7 @@ export interface InspectorFile {
   spacesKey?: string;
   mimeType?: string;
   sizeBytes?: number;
+  locationIds?: string[];
 }
 
 export interface ListInspectorFilesResponse {
@@ -761,8 +763,7 @@ const localVoiceNotes = getLocalUploadFiles(payload.voiceNotes);
   );
 },
   getAssetByCode: async (projectId: string, code: string) => {
-    console.log("SCANNED RAW CODE:", JSON.stringify(code));
-    console.log("PROJECT ID USED:", projectId);
+    
 
     return request<GetAssetByCodeResponse>(
       `/projects/${projectId}/assets/by-code?code=${encodeURIComponent(code)}`,
