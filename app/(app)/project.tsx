@@ -340,6 +340,8 @@ useEffect(() => {
             doneAssets: 0,
             incompleteAssets: 0,
             assetsWithNotes: 0,
+            presentAssets: 0,
+            notPresentAssets: 0,
         },
         company: {
           id: "offline-company",
@@ -640,6 +642,8 @@ async function openLocation(location: ProjectLocation) {
                 doneAssets: 0,
                 incompleteAssets: 0,
                 assetsWithNotes: 0,
+                presentAssets: 0,
+                notPresentAssets: 0,
                 };
 
 
@@ -675,6 +679,14 @@ async function openLocation(location: ProjectLocation) {
     <Text style={styles.statLabel}>{t("projectScreen.stats.total")}</Text>
   </View>
 
+
+    <View style={styles.statBox}>
+    <Text style={styles.statNumber}>{stats.notPresentAssets}</Text>
+    <Text style={styles.statLabel}>
+      Not Present
+    </Text>
+  </View>
+
   <View style={styles.statBox}>
     <Text style={styles.statNumber}>{stats.doneAssets}</Text>
     <Text style={styles.statLabel}>{t("projectScreen.stats.done")}</Text>
@@ -686,6 +698,8 @@ async function openLocation(location: ProjectLocation) {
       {t("projectScreen.stats.incomplete")}
     </Text>
   </View>
+
+
 
 
 <View style={styles.statBox}>
@@ -1332,7 +1346,7 @@ infoTextWrap: {
 
   statsRow: {
   flexDirection: "row",
-  gap: 8,
+  gap: 1,
   marginTop: 5,
 },
 

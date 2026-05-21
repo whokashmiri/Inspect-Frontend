@@ -318,6 +318,8 @@ export interface ProjectStats {
   doneAssets: number;
   incompleteAssets: number;
   assetsWithNotes: number;
+  presentAssets: number;
+  notPresentAssets: number;
 }
 
 export type InspectorFileType =
@@ -369,7 +371,7 @@ export interface Project {
   reportData?: Record<string, any>;
   inspectorFiles?: InspectorFile[];
 
-   locations?: ProjectLocation[];
+  locations?: ProjectLocation[];
  
 
 
