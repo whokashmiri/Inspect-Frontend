@@ -778,7 +778,7 @@ const localVoiceNotes = getLocalUploadFiles(payload.voiceNotes);
   listContents: (
   projectId: string,
   parentId?: string | null,
-  filter?: "all" | "done" | "incomplete",
+  filter?: "all" | "done" | "incomplete" | "not_present",
   search?: string
 ) => {
   const params = new URLSearchParams();
@@ -924,7 +924,7 @@ advancedSearchContents: (
   projectId: string,
   filters?: { key: string; value: string }[] | null,
   search?: string,
-  filter?: "all" | "done" | "incomplete",
+  filter?: "all" | "done" | "incomplete" | "not_present",
   page = 1,
   limit = 15
 ) => {

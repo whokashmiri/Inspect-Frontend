@@ -54,6 +54,7 @@
     "stats": {
     "total": "الإجمالي",
     "done": "مكتمل",
+    "not_present": "غير موجود",
     "incomplete": "غير مكتمل",
     "notes":"ملاحظات",
     "assets":"الأصول"
@@ -83,7 +84,8 @@
     "filter": {
       "all": "الكل",
       "done": "مكتمل",
-      "incomplete": "غير مكتمل"
+      "incomplete": "غير مكتمل",
+      "not_present": "غير موجود"
     },
     "search": {
       "placeholderWithKey": "ابحث في {{key}}",

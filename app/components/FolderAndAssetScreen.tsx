@@ -193,10 +193,6 @@ const closeMediaViewer = () => {
   );
 };
 
-const getAssetVideos = (asset: AssetItem) => {
-  return (asset.images || []).filter(isVideoMedia);
-};
-
 const getAssetImagesOnly = (asset: AssetItem) => {
   return (asset.images || []).filter((item: any) => !isVideoMedia(item));
 };
@@ -327,7 +323,9 @@ const handleBackPress = async () => {
 
   const [folderName, setFolderName] = useState("");
   const [navigatingFolderId, setNavigatingFolderId] = useState<string | null>(null);
-  const [filter, setFilter] = useState<"all" | "done" | "incomplete">("all");
+  const [filter, setFilter] = useState<
+  "all" | "done" | "incomplete" | "not_present"
+>("all");
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
@@ -507,6 +505,12 @@ let matchedAssets = allAssets.filter((asset: any) => {
 });
           if (filter === "done") matchedAssets = matchedAssets.filter((a) => a.isDone);
           if (filter === "incomplete") matchedAssets = matchedAssets.filter((a) => !a.isDone);
+
+          if (filter === "not_present") {
+            matchedAssets = matchedAssets.filter(
+            (a) => a.isPresent === false
+            );
+          }
           const start = (page - 1) * SEARCH_PAGE_SIZE;
           const nextAssets = matchedAssets.slice(start, start + SEARCH_PAGE_SIZE);
           setAdvancedSearchResults((prev) => (append ? [...prev, ...nextAssets] : nextAssets));
@@ -1175,11 +1179,18 @@ const submitAssetInBackground = async (draft: AssetDraft, isEdit: boolean) => {
   const total = assets.length;
   const done = assets.filter((asset) => asset.isDone).length;
   const incomplete = assets.filter((asset) => !asset.isDone).length;
+   
+
+
+  const not_present = assets.filter(
+    (asset) => asset.isPresent === false
+  ).length;
 
   return {
     all: total,
     done,
     incomplete,
+    not_present,
   };
 }, [assets]);
 
@@ -1187,6 +1198,9 @@ const submitAssetInBackground = async (draft: AssetDraft, isEdit: boolean) => {
     let filtered = assets;
     if (filter === "done") filtered = filtered.filter((a) => a.isDone);
     else if (filter === "incomplete") filtered = filtered.filter((a) => !a.isDone);
+    else if (filter === "not_present") {
+    filtered = filtered.filter((a) => a.isPresent === false);
+    }
     if (searchQuery.trim()) {
       const query = searchQuery.trim().toLowerCase();
       filtered = filtered.filter((a) => a.name.toLowerCase().includes(query));
@@ -1456,7 +1470,7 @@ const isAssetSynced = (asset: AssetItem) => {
 
         {/* ── Filter row ── */}
    <View style={styles.filterRow}>
-  {(["all", "done", "incomplete"] as const).map((f) => (
+  {(["all", "done", "incomplete" , "not_present"] as const).map((f) => (
     <TouchableOpacity
       key={f}
       style={[styles.filterBtn, filter === f && styles.filterBtnActive]}
@@ -2308,8 +2322,8 @@ const styles = StyleSheet.create({
 
   filterRow: {
   flexDirection: "row",
-  gap: 8,
-  marginBottom: 12,
+  gap: 2,
+  marginBottom: 4,
   borderBottomWidth: 1,
   borderBottomColor: BORDER,
 },
@@ -2333,7 +2347,7 @@ videoPlayer: {
 },
   filterText: {
   color: MUTED,
-  fontSize: 12,
+  fontSize: 8,
   fontWeight: "500",
 },
 

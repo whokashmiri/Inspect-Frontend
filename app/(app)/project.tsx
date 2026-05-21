@@ -1368,7 +1368,7 @@ statNumber: {
 
 statLabel: {
   color: MUTED,
-  fontSize: 8,
+  fontSize: 6,
   marginTop: 3,
   textTransform: "uppercase",
   fontFamily: fonts.inter.medium as unknown as string,

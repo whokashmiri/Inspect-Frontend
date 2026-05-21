@@ -55,6 +55,7 @@
    "total": "Total",
     "done": "Done",
     "incomplete": "Incomplete",
+    "not_present": "Not Present",
     "notes":"Notes",
     "assets":"Assets"
 },
@@ -84,6 +85,7 @@
     "filter": {
       "all": "All",
       "done": "Done",
+      "not_present": "Not Present",
       "incomplete": "Incomplete"
     },
     "search": {
