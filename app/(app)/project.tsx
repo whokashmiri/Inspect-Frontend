@@ -41,7 +41,7 @@ import { downloadProjectForOffline } from "../offline/downloader";
 import { useFonts } from "expo-font";
 import fonts from "../fonts/fonts";
 
-type FilterType = "recent" | "new";
+type FilterType = "new" | "recent" | "favorite" | "done";
 
 
 
@@ -281,37 +281,6 @@ useEffect(() => {
     }
   }
 
-  async function handleRemoveOfflineProject(project: Project) {
-    try {
-      setRemovingProjectId(project.id);
-
-      const pendingCount = await getPendingCountByProjectId(project.id);
-
-      if (pendingCount > 0) {
-        Alert.alert(
-          t("projectScreen.remove.syncRequiredTitle"),
-          t("projectScreen.remove.syncRequiredMessage")
-        );
-        return;
-      }
-
-      await clearOfflineProject(project.id);
-      await refreshDownloadedProjects();
-
-      Alert.alert(
-        t("projectScreen.remove.successTitle"),
-        t("projectScreen.remove.successMessage", { name: project.name })
-      );
-    } catch (error: any) {
-      Alert.alert(
-        t("projectScreen.remove.failTitle"),
-        error?.message || t("projectScreen.remove.failMessage")
-      );
-    } finally {
-      setRemovingProjectId(null);
-    }
-  }
-
   function openProject(project: Project) {
     router.push({
       pathname: "/(app)/FolderAndAssetScreen",
@@ -332,6 +301,7 @@ useEffect(() => {
         name: payload.name ?? t("projectScreen.offline.projectName"),
         createdAt: new Date(item.createdAt).toISOString(),
         updatedAt: new Date(item.createdAt).toISOString(),
+        isFavorite: false,
         workflowStatus: "new",
         companyId: "offline-company",
         userId: user?.id ?? "offline-user",
@@ -360,20 +330,53 @@ useEffect(() => {
     return [...offlineProjectEntries, ...projects];
   }, [offlineProjectEntries, projects]);
 
-  const filteredProjects = useMemo(() => {
-    if (filter === "recent") {
-      return [...combinedProjects].sort(
+const isRecentProject = (project?: Project | null) => {
+  if (!project?.createdAt || !project?.updatedAt) return false;
+
+  return (
+    new Date(project.updatedAt).getTime() >
+    new Date(project.createdAt).getTime()
+  );
+};
+
+const filteredProjects = useMemo(() => {
+  const safeProjects = combinedProjects.filter(Boolean) as Project[];
+
+  if (filter === "new") {
+    return safeProjects.filter(
+      (p) =>
+        (p.workflowStatus ?? "new").toLowerCase() === "new" &&
+        !p.isFavorite &&
+        !isRecentProject(p)
+    );
+  }
+
+  if (filter === "recent") {
+    return safeProjects
+      .filter(
+        (p) =>
+          isRecentProject(p) &&
+          !p.isFavorite &&
+          (p.workflowStatus ?? "new").toLowerCase() !== "done"
+      )
+      .sort(
         (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
       );
-    }
-    if (filter === "new") {
-      return combinedProjects.filter(
-        (p) => (p.workflowStatus ?? "").toLowerCase() === "new"
-      );
-    }
-    return combinedProjects;
-  }, [combinedProjects, filter]);
+  }
+
+  if (filter === "favorite") {
+    return safeProjects.filter((p) => p.isFavorite === true);
+  }
+
+  if (filter === "done") {
+    return safeProjects.filter(
+      (p) => (p.workflowStatus ?? "").toLowerCase() === "done"
+    );
+  }
+
+  return safeProjects;
+}, [combinedProjects, filter]);
 
   if (!loaded) return null;
 
@@ -520,26 +523,6 @@ async function toggleAssetsSection() {
 
 
 
-async function toggleLocationsSection() {
-  if (!selectedProjectForFiles) return;
-
-  if (activeInfoTab === "locations") {
-    setActiveInfoTab(null);
-    return;
-  }
-
-  setActiveInfoTab("locations");
-
-  try {
-    setLocationsLoading(true);
-    const result = await projectApi.listLocations(selectedProjectForFiles.id);
-    setProjectLocations(result.locations || []);
-  } catch (error: any) {
-    Alert.alert("Locations error", error?.message || "Could not load locations");
-  } finally {
-    setLocationsLoading(false);
-  }
-}
 
 async function openPhone(phone: string) {
   const cleanPhone = phone.trim();
@@ -562,6 +545,102 @@ async function openLocation(location: ProjectLocation) {
 
   await Linking.openURL(url);
 }
+
+
+async function toggleProjectDone(project: Project) {
+  if (!project?.id || project.id.startsWith("offline_")) return;
+
+  const previousStatus = project.workflowStatus;
+  const nextStatus =
+    project.workflowStatus?.toLowerCase() === "done" ? "new" : "done";
+
+  setProjects((prev) =>
+    prev
+      .filter(Boolean)
+      .map((p) =>
+        p.id === project.id ? { ...p, workflowStatus: nextStatus } : p
+      )
+  );
+
+  try {
+    console.log("CLICK DONE:", {
+  id: project.id,
+  name: project.name,
+  oldStatus: project.workflowStatus,
+  nextStatus,
+});
+    const result = await projectApi.updateProjectWorkflow(project.id, {
+      workflowStatus: nextStatus as "new" | "done",
+    });
+    console.log("DONE API RESULT:", result);
+
+    setProjects((prev) =>
+      prev
+        .filter(Boolean)
+        .map((p) => (p.id === project.id ? result.project : p))
+        .filter(Boolean)
+    );
+  } catch (error: any) {
+    setProjects((prev) =>
+      prev
+        .filter(Boolean)
+        .map((p) =>
+          p.id === project.id ? { ...p, workflowStatus: previousStatus } : p
+        )
+    );
+
+    Alert.alert("Error", error?.message || "Could not update project status");
+  }
+}
+
+async function toggleProjectFavorite(project: Project) {
+  if (!project?.id || project.id.startsWith("offline_")) return;
+
+  const previousFavorite = project.isFavorite;
+  const nextFavorite = !project.isFavorite;
+
+  setProjects((prev) =>
+    prev
+      .filter(Boolean)
+      .map((p) =>
+        p.id === project.id ? { ...p, isFavorite: nextFavorite } : p
+      )
+  );
+
+  try {
+    console.log("CLICK FAVORITE:", {
+  id: project.id,
+  name: project.name,
+  oldFavorite: project.isFavorite,
+  nextFavorite,
+});
+    const result = await projectApi.updateProjectWorkflow(project.id, {
+      isFavorite: nextFavorite,
+    });
+    console.log("FAVORITE API RESULT:", result);
+
+    setProjects((prev) =>
+      prev
+        .filter(Boolean)
+        .map((p) => (p.id === project.id ? result.project : p))
+        .filter(Boolean)
+    );
+  } catch (error: any) {
+    setProjects((prev) =>
+      prev
+        .filter(Boolean)
+        .map((p) =>
+          p.id === project.id ? { ...p, isFavorite: previousFavorite } : p
+        )
+    );
+
+    Alert.alert("Error", error?.message || "Could not update favorite");
+  }
+}
+
+
+
+
   return (
     <View style={styles.flex}>
       <ScrollView contentContainerStyle={styles.scroll}>
@@ -598,7 +677,7 @@ async function openLocation(location: ProjectLocation) {
 
         {/* ── Filter row ── */}
        <View style={styles.filterRow}>
-  {(["recent", "new"] as const).map((item) => (
+  {(["new", "recent", "favorite", "done"] as const).map((item) => (
     <Pressable
       key={item}
       onPress={() => setFilter(item)}
@@ -653,14 +732,55 @@ async function openLocation(location: ProjectLocation) {
                   style={styles.projectCard}
                   onPress={() => openProject(project)}
                 >
-                  <View style={styles.projectCardTop}>
-                    <Text style={styles.projectName}>{project.name}</Text>
-                    <View style={styles.statusPill}>
-                      <Text style={styles.statusPillText}>
-                        {getProjectStatusLabel(project, t)}
-                      </Text>
-                    </View>
-                  </View>
+                <View style={styles.projectCardTop}>
+  <Text style={styles.projectName}>{project.name}</Text>
+
+  <View style={styles.projectQuickActions}>
+    <Pressable
+      style={styles.quickActionBtn}
+      onPress={(e) => {
+        e.stopPropagation();
+        toggleProjectFavorite(project);
+      }}
+      disabled={project.id.startsWith("offline_")}
+    >
+      <Ionicons
+        name={project.isFavorite ? "heart" : "heart-outline"}
+        size={18}
+        color={project.isFavorite ? "#E63946" : MUTED}
+      />
+    </Pressable>
+
+    <Pressable
+      style={styles.quickActionBtn}
+      onPress={(e) => {
+        e.stopPropagation();
+        toggleProjectDone(project);
+      }}
+      disabled={project.id.startsWith("offline_")}
+    >
+      <Ionicons
+        name={
+          project.workflowStatus?.toLowerCase() === "done"
+            ? "checkmark-circle"
+            : "checkmark-circle-outline"
+        }
+        size={19}
+        color={
+          project.workflowStatus?.toLowerCase() === "done"
+            ? "#2A9D8F"
+            : MUTED
+        }
+      />
+    </Pressable>
+
+    <View style={styles.statusPill}>
+      <Text style={styles.statusPillText}>
+        {getProjectStatusLabel(project, t)}
+      </Text>
+    </View>
+  </View>
+</View>
 
                   <Text style={styles.projectMeta}>
                     {t("projectScreen.createdBy", {
@@ -1160,6 +1280,23 @@ infoTabBtn: {
   alignItems: "center",
   justifyContent: "center",
   gap: 4,
+},
+
+projectQuickActions: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 6,
+},
+
+quickActionBtn: {
+  width: 30,
+  height: 30,
+  borderRadius: 15,
+  backgroundColor: "#F8F9FC",
+  borderWidth: 1,
+  borderColor: BORDER,
+  alignItems: "center",
+  justifyContent: "center",
 },
 
 backBtn: {

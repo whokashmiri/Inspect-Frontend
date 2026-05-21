@@ -13,7 +13,9 @@
   },
   "filters": {
     "recent": "الأحدث",
-    "new": "جديد"
+    "new": "جديد",
+    "favorite": "المفضلة",
+  "done": "منجز"
   },
   "projectScreen": {
     "empty": "لا توجد مشاريع.",

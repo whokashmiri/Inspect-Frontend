@@ -361,6 +361,7 @@ export interface Project {
   name: string;
   createdAt: string;
   updatedAt: string;
+  isFavorite: boolean;
   workflowStatus: string;
   companyId: string;
   userId: string;
@@ -478,6 +479,8 @@ return {
  
 }
 
+
+
 export const projectApi = {
   create: (payload: { name: string }) =>
     request<CreateProjectResponse>("/projects", {
@@ -489,6 +492,19 @@ export const projectApi = {
     request<ListProjectsResponse>("/projects", {
       method: "GET",
     }),
+
+ 
+updateProjectWorkflow: (
+  projectId: string,
+  payload: {
+    workflowStatus?: "new" | "done";
+    isFavorite?: boolean;
+  }
+) =>
+  request<{ project: Project }>(`/projects/${projectId}/workflow`, {
+    method: "PATCH",
+    body: payload,
+  }),
 
   listInspectorFiles: (projectId: string) =>
     request<ListInspectorFilesResponse>(

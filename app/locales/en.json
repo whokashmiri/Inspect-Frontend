@@ -13,7 +13,9 @@
   },
   "filters": {
     "recent": "Recent",
-    "new": "New"
+    "new": "New",
+     "favorite": "Favorite",
+      "done":"Done"
   },
   "projectScreen": {
     "empty": "No projects found.",
@@ -62,7 +64,9 @@
     "filters": {
       
       "recent": "Recent",
-      "new": "New"
+      "new": "New",
+      "favorite": "Favorite",
+      "done":"Done"
     }
   },    
   "folderAssetScreen": {
