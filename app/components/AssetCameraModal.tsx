@@ -379,7 +379,7 @@ const startVideoRecording = async () => {
       }
     }
 
-    console.log("[VIDEO] start recording");
+    
 
     recordingStartedAtRef.current = Date.now();
     stoppingRecordingRef.current = false;

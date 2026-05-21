@@ -133,7 +133,7 @@ const searchTransactions = async (text: string) => {
     setTransactions(dedupeTransactions(filtered));
     setHasMore(false);
   } catch (error) {
-    console.log("Search transactions failed:", error);
+   
 
     const offlineData = await getOfflineTransactions();
 
@@ -272,7 +272,7 @@ const syncPendingInspections = async () => {
 
     const pending = await getPendingInspectionSyncItems();
 
-    console.log("[SYNC] pending items", pending.length);
+    
 
     if (pending.length === 0) {
       setPendingSyncCount(0);
@@ -288,10 +288,7 @@ const syncPendingInspections = async () => {
   }));
 
   try {
-    console.log("[SYNC] processing item", {
-      queueId: item.id,
-      transactionId: item.transactionId,
-    });
+ 
 
     const data = JSON.parse(item.data || "{}");
     const media = dedupeMedia(JSON.parse(item.media || "[]"));

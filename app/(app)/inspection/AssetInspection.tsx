@@ -199,26 +199,7 @@ const [activeMediaIndex, setActiveMediaIndex] = useState(0);
     setTimeout(() => setSnackbar(""), 2800);
   };
 
-  const logMedia = (label: string, list: any[]) => {
-    console.log(
-      `[INSPECTION_MEDIA] ${label}`,
-      list.map((m, i) => ({
-        i,
-        localId: m.localId,
-        name: m.name,
-        uri: m.uri,
-        localUri: m.localUri,
-        originalUri: m.originalUri,
-        isLocalOnly: m.isLocalOnly,
-        queuedForUpload: m.queuedForUpload,
-        uploadedAt: m.uploadedAt,
-        id: m.id,
-        _id: m._id,
-        serverId: m.serverId,
-        url: m.url,
-      }))
-    );
-  };
+ 
 
   useEffect(() => {
     if (!transactionId) return;

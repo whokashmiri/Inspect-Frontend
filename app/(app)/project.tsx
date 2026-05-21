@@ -563,16 +563,11 @@ async function toggleProjectDone(project: Project) {
   );
 
   try {
-    console.log("CLICK DONE:", {
-  id: project.id,
-  name: project.name,
-  oldStatus: project.workflowStatus,
-  nextStatus,
-});
+
     const result = await projectApi.updateProjectWorkflow(project.id, {
       workflowStatus: nextStatus as "new" | "done",
     });
-    console.log("DONE API RESULT:", result);
+
 
     setProjects((prev) =>
       prev
@@ -608,16 +603,11 @@ async function toggleProjectFavorite(project: Project) {
   );
 
   try {
-    console.log("CLICK FAVORITE:", {
-  id: project.id,
-  name: project.name,
-  oldFavorite: project.isFavorite,
-  nextFavorite,
-});
+;
     const result = await projectApi.updateProjectWorkflow(project.id, {
       isFavorite: nextFavorite,
     });
-    console.log("FAVORITE API RESULT:", result);
+    
 
     setProjects((prev) =>
       prev
