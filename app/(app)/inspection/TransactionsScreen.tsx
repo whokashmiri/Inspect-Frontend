@@ -14,6 +14,7 @@ import {
   Image,
   Dimensions,
   Platform,
+  TextInput
 } from "react-native";
 
 import NetInfo from "@react-native-community/netinfo";
@@ -83,9 +84,94 @@ const [isOnline, setIsOnline] = useState(true);
 const [pendingSyncCount, setPendingSyncCount] = useState(0);
 const [syncing, setSyncing] = useState(false);
 
+const [searchText, setSearchText] = useState("");
+const [searching, setSearching] = useState(false);
+const searchTimerRef = useRef<any>(null);
+const latestSearchRef = useRef("");
+
 const syncingRef = useRef(false);
 
 
+
+const searchTransactions = async (text: string) => {
+  const value = text.trim();
+  latestSearchRef.current = value;
+
+  if (!value) {
+    await loadTransactions({ reset: true });
+    return;
+  }
+
+  try {
+    setSearching(true);
+
+    const net = await NetInfo.fetch();
+    const online = !!net.isConnected && net.isInternetReachable !== false;
+
+    if (online) {
+      const res = await transactionApi.searchCompany({
+        assignmentNumber: value,
+        page: 1,
+        limit: 20,
+      });
+
+      if (latestSearchRef.current !== value) return;
+
+      setTransactions(dedupeTransactions(res.transactions || []));
+      setHasMore(false);
+      return;
+    }
+
+    const offlineData = await getOfflineTransactions();
+
+    const filtered = offlineData.filter((tx: any) =>
+      String(tx.assignmentNumber || "")
+        .toLowerCase()
+        .includes(value.toLowerCase())
+    );
+
+    setTransactions(dedupeTransactions(filtered));
+    setHasMore(false);
+  } catch (error) {
+    console.log("Search transactions failed:", error);
+
+    const offlineData = await getOfflineTransactions();
+
+    const filtered = offlineData.filter((tx: any) =>
+      String(tx.assignmentNumber || "")
+        .toLowerCase()
+        .includes(value.toLowerCase())
+    );
+
+    setTransactions(dedupeTransactions(filtered));
+    setHasMore(false);
+  } finally {
+    setSearching(false);
+  }
+};
+
+const handleSearchChange = (text: string) => {
+  setSearchText(text);
+
+  if (searchTimerRef.current) {
+    clearTimeout(searchTimerRef.current);
+  }
+
+  searchTimerRef.current = setTimeout(() => {
+    searchTransactions(text);
+  }, 450);
+};
+
+
+const clearSearch = () => {
+  if (searchTimerRef.current) {
+    clearTimeout(searchTimerRef.current);
+  }
+
+  setSearchText("");
+  latestSearchRef.current = "";
+  loadTransactions({ reset: true });
+};
 
 const dedupeTransactions = (items: any[]) => {
   const map = new Map();
@@ -156,7 +242,7 @@ setTransactions((prev) =>
 };
 
 const loadMoreTransactions = () => {
-  if (loadingMore || loading || refreshing || !hasMore) return;
+  if (  searchText.trim() || loadingMore || loading || refreshing || !hasMore) return;
 
   setLoadingMore(true);
   loadTransactions({ reset: false });
@@ -484,6 +570,28 @@ const openMediaViewer = async (item:any) => {
   </View>
 </View>
 
+<View style={styles.searchWrap}>
+  <Ionicons name="search-outline" size={18} color={MUTED} />
+
+  <TextInput
+    value={searchText}
+    onChangeText={handleSearchChange}
+    placeholder="Search by assignment number"
+    placeholderTextColor={MUTED}
+    style={styles.searchInput}
+    keyboardType="default"
+    autoCorrect={false}
+  />
+
+  {searching ? (
+    <ActivityIndicator size="small" color={ACC} />
+  ) : searchText.length > 0 ? (
+    <Pressable onPress={clearSearch} style={styles.clearSearchBtn}>
+      <Ionicons name="close" size={18} color={ACC} />
+    </Pressable>
+  ) : null}
+</View>
+
      <FlatList
   data={transactions}
   keyExtractor={(item, index) => `${item.id || item._id}-${index}`}
@@ -727,6 +835,38 @@ header: {
     marginBottom: 14,
   },
 
+
+searchWrap: {
+  marginHorizontal: 18,
+  marginTop: 10,
+  marginBottom: 4,
+  height: 46,
+  borderRadius: 18,
+  backgroundColor: "#fff",
+  borderWidth: 1,
+  borderColor: BORDER,
+  flexDirection: "row",
+  alignItems: "center",
+  paddingHorizontal: 14,
+  gap: 8,
+},
+
+searchInput: {
+  flex: 1,
+  height: "100%",
+  color: TEXT,
+  fontSize: 14,
+  fontWeight: "700",
+},
+
+clearSearchBtn: {
+  width: 30,
+  height: 30,
+  borderRadius: 15,
+  backgroundColor: SURFACE,
+  alignItems: "center",
+  justifyContent: "center",
+},
 
 
 headerTop: {

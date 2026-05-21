@@ -965,6 +965,9 @@ export interface TransactionBuildingCondition {
   otherText?: string | null;
 }
 
+export interface SearchCompanyTransactionsResponse
+  extends PaginatedCompanyTransactionsResponse {}
+
 export interface TransactionAvailableServices {
   electricity?: boolean;
   electricityUnits?:number | null;
@@ -1138,6 +1141,25 @@ export const transactionApi = {
         method: "PATCH",
       }
     ),
+
+    searchCompany: (params: {
+  assignmentNumber: string;
+  page?: number;
+  limit?: number;
+}) => {
+  const page = params.page ?? 1;
+  const limit = params.limit ?? 10;
+  const assignmentNumber = encodeURIComponent(
+    params.assignmentNumber.trim()
+  );
+
+  return request<SearchCompanyTransactionsResponse>(
+    `/transactions/company/search?assignmentNumber=${assignmentNumber}&page=${page}&limit=${limit}`,
+    {
+      method: "GET",
+    }
+  );
+},
 
   updateInspectionData: (
     transactionId: string,

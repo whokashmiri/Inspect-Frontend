@@ -1779,11 +1779,15 @@ const isAssetSynced = (asset: AssetItem) => {
       )}
 
       <View style={styles.syncTickBadge}>
-        <Ionicons
-          name={isAssetSynced(item) ? "checkmark-done" : "checkmark"}
-          size={12}
-          color={isAssetSynced(item) ? "#F7C59F" : "#9CA3AF"}
-        />
+        {isAssetUploading(item) ? (
+          <ActivityIndicator size="small" color="#ffffff" />
+        ) : (
+          <Ionicons
+            name={isAssetSynced(item) ? "checkmark-done" : "checkmark"}
+            size={12}
+            color={isAssetSynced(item) ? "#F7C59F" : "#9CA3AF"}
+          />
+        )}
       </View>
     </TouchableOpacity>
   </View>
