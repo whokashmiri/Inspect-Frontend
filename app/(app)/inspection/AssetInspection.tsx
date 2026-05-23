@@ -146,11 +146,8 @@ const [activeMediaIndex, setActiveMediaIndex] = useState(0);
   }>();
 
   const transactionId = params.transactionId || "";
-  const projectId = params.projectId || "";
 
-    const goBackToInspectionType = () => {
-  router.push("/inspection/InspectionType");
-};
+;
 
   const propertyType =
     transactionDetails?.evalData?.propertyType ||
@@ -193,6 +190,10 @@ const [activeMediaIndex, setActiveMediaIndex] = useState(0);
   const [media, setMedia] = useState<any[]>([]);
 
   const flatListRef = useRef<FlatList>(null);
+
+
+  const notesInputRef = useRef<TextInput>(null);
+
 
   const showSnackbar = (message: string) => {
     setSnackbar(message);
@@ -475,10 +476,14 @@ const closeMediaViewer = () => {
   };
 
   // Open notes modal — seed draft with current notes
-  const openNotesModal = () => {
-    setDraftNotes(inspectionNotes);
-    setNotesModalVisible(true);
-  };
+const openNotesModal = () => {
+  setDraftNotes(inspectionNotes || "");
+  setNotesModalVisible(true);
+
+  setTimeout(() => {
+    notesInputRef.current?.focus();
+  }, 300);
+};
 
   const saveNotes = () => {
     setInspectionNotes(draftNotes);
@@ -987,16 +992,16 @@ const closeMediaViewer = () => {
                   </Pressable>
                 </View>
 
-                <TextInput
-                  value={draftNotes}
-                  onChangeText={setDraftNotes}
-                  placeholder="Write inspection notes here..."
-                  placeholderTextColor={MUTED}
-                  multiline
-                  textAlignVertical="top"
-                  autoFocus
-                  style={styles.notesModalInput}
-                />
+               <TextInput
+  ref={notesInputRef}
+  value={draftNotes}
+  onChangeText={setDraftNotes}
+  placeholder="Write inspection notes here..."
+  placeholderTextColor={MUTED}
+  multiline
+  textAlignVertical="top"
+  style={styles.notesModalInput}
+/>
 
                 <View style={styles.notesModalActions}>
                   <Pressable onPress={cancelNotes} style={styles.notesCancelBtn}>
