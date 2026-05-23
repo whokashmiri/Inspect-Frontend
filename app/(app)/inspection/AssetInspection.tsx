@@ -401,6 +401,10 @@ const closeMediaViewer = () => {
     setMedia((prev) => dedupeMedia([...prev, ...selected]));
   };
 
+    const goToDetails = () => {
+      setActiveTab("details");
+    };
+
   const removeMedia = (index: number) => {
     setMedia((prev) => prev.filter((_, i) => i !== index));
   };
@@ -953,18 +957,20 @@ const openNotesModal = () => {
                   )}
                 </Section>
 
+
+
                 {/* Save button also available on media tab */}
-                <Pressable
-                  disabled={saving}
-                  onPress={handleSubmit}
-                  style={[styles.primaryBtn, saving && styles.disabledBtn]}
-                >
-                  {saving ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.primaryBtnText}>Save Inspection</Text>
-                  )}
-                </Pressable>
+        <Pressable
+            onPress={() => setActiveTab("details")}
+            style={[
+              styles.primaryBtn,
+              styles.tabActive,
+        ]}
+        >
+        <Text style={styles.primaryBtnText}>
+          Save & Continue to Details
+        </Text>
+        </Pressable>
               </>
             )}
           </ScrollView>
