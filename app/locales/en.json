@@ -360,6 +360,7 @@
     "missingProjectMessage": "projectId is required for upload.",
     "permissionRequired": "Permission required",
     "mediaPermissionMessage": "Please allow media access.",
+    "saveContinue": "Save & Continue to Details",
     "notAvailable": "Not available",
     "environment": {
       "mosque": "Mosque",

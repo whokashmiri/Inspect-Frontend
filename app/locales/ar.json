@@ -362,6 +362,7 @@
     "missingProjectMessage": "معرف المشروع مطلوب لرفع الملفات.",
     "permissionRequired": "الصلاحية مطلوبة",
     "mediaPermissionMessage": "يرجى السماح بالوصول إلى الوسائط.",
+    "saveContinue": "حفظ والمتابعة إلى التفاصيل",
     "notAvailable": "غير متوفر",
     "environment": {
       "mosque": "مسجد",

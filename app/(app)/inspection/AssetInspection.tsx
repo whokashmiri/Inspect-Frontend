@@ -401,9 +401,6 @@ const closeMediaViewer = () => {
     setMedia((prev) => dedupeMedia([...prev, ...selected]));
   };
 
-    const goToDetails = () => {
-      setActiveTab("details");
-    };
 
   const removeMedia = (index: number) => {
     setMedia((prev) => prev.filter((_, i) => i !== index));
@@ -679,7 +676,7 @@ const openNotesModal = () => {
             </Pressable>
             <View style={styles.headerTextWrap}>
               <Text style={styles.title}>{t("assetInspection.title")}</Text>
-              <Text style={styles.subtitle}>{t("assetInspection.subtitle")}</Text>
+              
             </View>
           </View>
 
@@ -968,7 +965,7 @@ const openNotesModal = () => {
         ]}
         >
         <Text style={styles.primaryBtnText}>
-          Save & Continue to Details
+          {t("assetInspection.saveContinue")}
         </Text>
         </Pressable>
               </>
