@@ -658,20 +658,20 @@ const openMediaViewer = async (item:any) => {
 
               <View style={styles.footer}>
   <View style={styles.imageCountWrap}>
-  <Text style={styles.footerText}>
-    Images: {dedupeMedia(item.media || []).length || item.imagesCount || 0}
-  </Text>
+    <Text style={styles.footerText}>
+      Images: {dedupeMedia(item.media || []).length || item.imagesCount || 0}
+    </Text>
 
- {syncingTransactionIds[String(item.id || item._id)] ? (
-  <Ionicons name="sync-outline" size={16} color={ACC} />
-) : item.hasPendingInspectionSync ? (
-  <Ionicons name="sync-outline" size={16} color="#9CA3AF" />
-) : (
-  <View style={styles.syncedTicks}>
-    <Ionicons name="checkmark-done" size={17} color="#168044" />
+    {syncingTransactionIds[String(item.id || item._id)] ? (
+      <ActivityIndicator size="small" color={ACC} style={styles.footerLoader} />
+    ) : item.hasPendingInspectionSync ? (
+      <Ionicons name="sync-outline" size={16} color="#9CA3AF" />
+    ) : (
+      <View style={styles.syncedTicks}>
+        <Ionicons name="checkmark-done" size={17} color="#168044" />
+      </View>
+    )}
   </View>
-)}
-</View>
 
   <View style={styles.footerActions}>
     <Pressable
@@ -1065,16 +1065,19 @@ completedText: {
   },
 
   footerActions: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 14,
-},
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+  },
+  footerLoader: {
+    marginLeft: 8,
+  },
 
-eyeBtn: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 5,
-  backgroundColor: SURFACE,
+  eyeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: SURFACE,
   paddingHorizontal: 10,
   paddingVertical: 7,
   borderRadius: 999,
