@@ -177,11 +177,24 @@ export interface AuthTokens {
 export interface User {
   id: string;
   username: string;
+  phone?: string | null;
   companyName: string;
-  role: "Manager" | "Inspector" | "Valuator" | "company_admin" |string ;
+  role: "Manager" | "Inspector" | "Valuator" | "company_admin" | string;
+  isPhoneVerified?: boolean;
   isBlocked?: boolean;
 }
 
+export interface RequestSignupOtpResponse {
+  success: boolean;
+  message: string;
+  phone: string;
+}
+
+export interface VerifySignupOtpResponse {
+  success: boolean;
+  message: string;
+  setupToken: string;
+}
 export interface LoginResponse {
   accessToken: string;
   refreshToken?: string | null;
@@ -194,6 +207,62 @@ export interface AuthResponse {
 }
 
 export const authApi = {
+
+   requestSignupOtp: (payload: { phone: string }) =>
+    request<RequestSignupOtpResponse>("/auth/signup/request-otp", {
+      method: "POST",
+      body: payload,
+      auth: false,
+    }),
+
+  verifySignupOtp: (payload: { phone: string; otp: string }) =>
+    request<VerifySignupOtpResponse>("/auth/signup/verify-otp", {
+      method: "POST",
+      body: payload,
+      auth: false,
+    }),
+
+    requestResetPasswordOtp: (payload: { phone: string }) =>
+  request<{ success: boolean; message: string; phone: string }>(
+    "/auth/forgot-password/request-otp",
+    {
+      method: "POST",
+      body: payload,
+      auth: false,
+    }
+  ),
+
+verifyResetPasswordOtp: (payload: { phone: string; otp: string }) =>
+  request<{ success: boolean; message: string; resetToken: string }>(
+    "/auth/forgot-password/verify-otp",
+    {
+      method: "POST",
+      body: payload,
+      auth: false,
+    }
+  ),
+
+resetPassword: (payload: { resetToken: string; password: string }) =>
+  request<{ success: boolean; message: string }>(
+    "/auth/forgot-password/reset-password",
+    {
+      method: "POST",
+      body: payload,
+      auth: false,
+    }
+  ),
+
+  setSignupPassword: (payload: {
+    setupToken: string;
+    password: string;
+    role?: "Manager" | "Inspector" | "Valuator" | "company_admin";
+  }) =>
+    request<AuthResponse>("/auth/signup/set-password", {
+      method: "POST",
+      body: payload,
+      auth: false,
+    }),
+
   login: (payload: { username: string; password: string }) =>
     request<AuthResponse>("/auth/login", {
       method: "POST",
@@ -221,8 +290,6 @@ export const authApi = {
     ),
 };
 
-// ─── Convenience wrapper ────────────────────────────────────────────────────
-// 
 
 
 
@@ -240,6 +307,22 @@ export async function loginAndSave(username: string, password: string) {
 }
 
 
+
+export async function setSignupPasswordAndSave(payload: {
+  setupToken: string;
+  password: string;
+  role?: "Manager" | "Inspector" | "Valuator" | "company_admin";
+}) {
+  const res = await authApi.setSignupPassword(payload);
+
+  await tokenStore.setToken(res.tokens.accessToken);
+
+  if (res.tokens.refreshToken) {
+    await tokenStore.setRefreshToken(res.tokens.refreshToken);
+  }
+
+  return res;
+}
 function getExistingUploadedMedia(files?: AssetMediaInput[]) {
   return (files || [])
     .filter((file) => {

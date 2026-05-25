@@ -6,7 +6,7 @@ import React, {
   useCallback,
 } from "react";
 import NetInfo from "@react-native-community/netinfo";
-import { authApi, loginAndSave, tokenStore, User } from "./api";
+import { authApi, loginAndSave, setSignupPasswordAndSave, tokenStore, User } from "./api";
 import {
   initAuthStorage,
   getCachedUser,
@@ -38,6 +38,7 @@ interface AuthState {
 
 interface AuthContextValue extends AuthState {
   login: (username: string, password: string) => Promise<void>;
+  completeSignup: (setupToken: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshSession: () => Promise<void>;
   selectCompany: (companyId: string) => Promise<void>;
@@ -250,6 +251,39 @@ let selectedCompanyId = await getSelectedCompanyId(user.id);
   });
 }, []);
 
+const completeSignup = useCallback(
+  async (setupToken: string, password: string) => {
+    const res = await setSignupPasswordAndSave({
+      setupToken,
+      password,
+      role: "Inspector",
+    });
+
+    const fetchedCompanies = await fetchCompaniesOnline().catch(() => []);
+    const companies = normalizeCompanies(res.user, fetchedCompanies);
+    const selectedCompanyId = getDefaultCompanyId(res.user, companies);
+
+    await cacheAuthenticatedSession({
+      user: res.user,
+      accessToken: res.tokens.accessToken,
+      refreshToken: res.tokens.refreshToken ?? null,
+      companies,
+      selectedCompanyId,
+    });
+
+    setState({
+      user: res.user,
+      isLoading: false,
+      isAuthenticated: true,
+      isOnline: true,
+      authMode: "online",
+      companies,
+      selectedCompanyId,
+    });
+  },
+  []
+);
+
   const refreshSession = useCallback(async () => {
     await bootstrap();
   }, [bootstrap]);
@@ -299,6 +333,7 @@ let selectedCompanyId = await getSelectedCompanyId(user.id);
       value={{
         ...state,
         login,
+        completeSignup,
         logout,
         refreshSession,
         selectCompany,
