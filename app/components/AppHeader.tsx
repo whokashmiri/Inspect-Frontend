@@ -7,7 +7,7 @@ import {
   Modal,
   Pressable,
   ActivityIndicator,
-  I18nManager,
+  TextInput,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import i18n from "../i18n/i18n";
@@ -24,17 +24,23 @@ const SOFT = "#F7C59F";
 
 export type HeaderUser = {
   username?: string;
-  
+  name?: string | null;
+  phone?: string | null;
   companyName?: string;
-  role?: "Manager" | "Inspector" | "Valuator" | "company_admin" |string ;
+  serviceCities?: string[];
+  isProfileCompleted?: boolean;
+  role?: "Manager" | "Inspector" | "Valuator" | "company_admin" | string;
 };
 
 type AppHeaderProps = {
   isAuthenticated?: boolean;
   user?: HeaderUser | null;
   title?: string;
-  // role?: string;
   onLogout?: () => void | Promise<void>;
+  onCompleteProfile?: (payload: {
+    name: string;
+    serviceCities: string[];
+  }) => Promise<void>;
 };
 
 const InfoRow = memo(function InfoRow({
@@ -48,48 +54,88 @@ const InfoRow = memo(function InfoRow({
 }) {
   return (
     <View style={styles.infoCard}>
-      <View style={styles.infoTopRow}>
-        <Ionicons name={icon} size={14} color="#767B91" />
-        <Text style={styles.infoLabel}>{label}</Text>
+      <View style={styles.infoInlineRow}>
+        <View style={styles.infoLeft}>
+          <Ionicons name={icon} size={14} color="#767B91" />
+          <Text style={styles.infoLabel}>{label}</Text>
+        </View>
+
+        <Text style={styles.infoValue} numberOfLines={2}>
+          {value || "-"}
+        </Text>
       </View>
-      <Text style={styles.infoValue}>{value || "-"}</Text>
     </View>
   );
 });
 
 
+  const SAUDI_CITIES = [
+  "Riyadh",
+  "Jeddah",
+  "Makkah",
+  "Madinah",
+  "Dammam",
+  "Khobar",
+  "Dhahran",
+  "Jubail",
+  "Qatif",
+  "Hofuf",
+  "Taif",
+  "Tabuk",
+  "Abha",
+  "Khamis Mushait",
+  "Buraidah",
+  "Hail",
+  "Najran",
+  "Jazan",
+  "Yanbu",
+  "Al Khafji",
+];
 
 function AppHeaderComponent({
   isAuthenticated = false,
   user = null,
   title = "ValueTech",
   onLogout,
+  onCompleteProfile,
 }: AppHeaderProps) {
- const { t } = useTranslation();
- const [isRTL, setIsRTL] = useState(true);
-const toggleLanguage = useCallback(async () => {
-      const current = i18n.language;
-      const next = current === "ar" ? "en" : "ar"; 
-      
-      // Save the language preference
-      await saveLanguagePreference(next);
-      
-      // Change the language
-      i18n.changeLanguage(next);
-      setIsRTL(next === "ar");
-    }, []);
- 
+  const { t } = useTranslation();
+  const [isRTL, setIsRTL] = useState(i18n.language === "ar");
+
   const [profileVisible, setProfileVisible] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
-  const openProfile = useCallback(() => {
-    setProfileVisible(true);
+  const [editingProfile, setEditingProfile] = useState(false);
+
+  const [profileName, setProfileName] = useState(user?.name || "");
+  const [citySearch, setCitySearch] = useState("");
+  const [selectedCities, setSelectedCities] = useState<string[]>(
+    Array.isArray(user?.serviceCities) ? user.serviceCities : []
+  );
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  const toggleLanguage = useCallback(async () => {
+    const current = i18n.language;
+    const next = current === "ar" ? "en" : "ar";
+
+    await saveLanguagePreference(next);
+    await i18n.changeLanguage(next);
+
+    setIsRTL(next === "ar");
   }, []);
 
+const openProfile = useCallback(() => {
+  setProfileName(user?.name || "");
+  setSelectedCities(Array.isArray(user?.serviceCities) ? user.serviceCities : []);
+  setCitySearch("");
+  setEditingProfile(!user?.isProfileCompleted);
+  setProfileVisible(true);
+}, [user?.name, user?.serviceCities, user?.isProfileCompleted]);
+
   const closeProfile = useCallback(() => {
-    if (loggingOut) return;
+    if (loggingOut || savingProfile) return;
     setProfileVisible(false);
-  }, [loggingOut]);
+  }, [loggingOut, savingProfile]);
 
   const handleLogout = useCallback(async () => {
     if (!onLogout || loggingOut) return;
@@ -104,47 +150,90 @@ const toggleLanguage = useCallback(async () => {
   }, [onLogout, loggingOut]);
 
   const initials = useMemo(() => {
-    const name = user?.username?.trim();
+    const name = user?.name?.trim() || user?.username?.trim();
     if (!name) return "U";
 
     const parts = name.split(/\s+/).filter(Boolean);
     if (parts.length === 1) return parts[0][0]?.toUpperCase() || "U";
 
     return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
-  }, [user?.username]);
+  }, [user?.name, user?.username]);
+
+  const citySuggestions = useMemo(() => {
+    const q = citySearch.trim().toLowerCase();
+    if (!q) return [];
+
+    return SAUDI_CITIES.filter((city) => {
+      return (
+        city.toLowerCase().includes(q) &&
+        !selectedCities.includes(city)
+      );
+    }).slice(0, 6);
+  }, [citySearch, selectedCities]);
+
+  const addCity = useCallback((city: string) => {
+    setSelectedCities((prev) =>
+      prev.includes(city) ? prev : [...prev, city]
+    );
+    setCitySearch("");
+  }, []);
+
+  const removeCity = useCallback((city: string) => {
+    setSelectedCities((prev) => prev.filter((c) => c !== city));
+  }, []);
+
+  const handleCompleteProfile = useCallback(async () => {
+    if (!onCompleteProfile || savingProfile) return;
+    if (!profileName.trim()) return;
+    if (selectedCities.length === 0) return;
+
+    try {
+      setSavingProfile(true);
+
+      await onCompleteProfile({
+        name: profileName.trim(),
+        serviceCities: selectedCities,
+      });
+
+      setEditingProfile(false);
+setProfileVisible(false);
+    } finally {
+      setSavingProfile(false);
+    }
+  }, [onCompleteProfile, savingProfile, profileName, selectedCities]);
+
+  const showProfileForm = !user?.isProfileCompleted || editingProfile;
 
   return (
     <>
-      <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-        <View style={[styles.brandRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+      <View style={[styles.header, { flexDirection: isRTL ? "row-reverse" : "row" }]}>
+        <View style={[styles.brandRow, { flexDirection: isRTL ? "row-reverse" : "row" }]}>
           <View style={styles.logoMark}>
             <View style={styles.logoInner} />
           </View>
 
           <View>
             <Text style={styles.companyName}>{title}</Text>
-            <Text style={styles.companySub}> {t('companyPage.header')}</Text>
+            <Text style={styles.companySub}>{t("companyPage.header")}</Text>
           </View>
-
-          
         </View>
 
-        
-                        <View style={[{ flexDirection: "row", marginLeft:10, alignItems: "center" }, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-                          <TouchableOpacity
-                            onPress={toggleLanguage}
-                            style={styles.langToggle}
-                            activeOpacity={0.8}
-                          >
-                            <Text style={styles.langText}>
-                              {i18n.language === "en" ? "AR" : "EN"}
-                            </Text>
-                          </TouchableOpacity>
-                        
-                         
-                        </View>
-
-
+        <View
+          style={[
+            { flexDirection: "row", marginLeft: 10, alignItems: "center" },
+            { flexDirection: isRTL ? "row-reverse" : "row" },
+          ]}
+        >
+          <TouchableOpacity
+            onPress={toggleLanguage}
+            style={styles.langToggle}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.langText}>
+              {i18n.language === "en" ? "AR" : "EN"}
+            </Text>
+          </TouchableOpacity>
+        </View>
 
         {isAuthenticated && user ? (
           <TouchableOpacity
@@ -175,38 +264,136 @@ const toggleLanguage = useCallback(async () => {
 
                 <View style={styles.profileTextWrap}>
                   <Text style={styles.profileName}>
-               {user?.username || t("header.userFallback")}
-              </Text>
+                    {user?.name || user?.username || t("header.userFallback")}
+                  </Text>
 
-            <Text style={styles.profileRole}>
-              {user?.role ? t(`${user.role}`) : t("header.member")} 
-            </Text>
+                  <Text style={styles.profileRole}>
+                    {user?.role ? t(`${user.role}`) : t("header.member")}
+                  </Text>
                 </View>
               </View>
 
               <TouchableOpacity
                 onPress={closeProfile}
                 hitSlop={10}
-                disabled={loggingOut}
+                disabled={loggingOut || savingProfile}
                 style={styles.closeBtn}
               >
                 <Ionicons name="close" size={20} color="#2A324B" />
               </TouchableOpacity>
             </View>
 
+            {showProfileForm ? (
+              <View style={styles.completeProfileBox}>
+                <Text style={styles.completeTitle}>
+                  Complete your profile to work
+                </Text>
+
+                <Text style={styles.label}>Name</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter your name"
+                  placeholderTextColor={MUTED}
+                  value={profileName}
+                  onChangeText={setProfileName}
+                />
+
+                <Text style={styles.label}>Area of Service</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Search city, e.g. Dammam"
+                  placeholderTextColor={MUTED}
+                  value={citySearch}
+                  onChangeText={setCitySearch}
+                />
+
+                {citySuggestions.length > 0 ? (
+                  <View style={styles.suggestionBox}>
+                    {citySuggestions.map((city) => (
+                      <TouchableOpacity
+                        key={city}
+                        style={styles.suggestionItem}
+                        onPress={() => addCity(city)}
+                      >
+                        <Ionicons name="location-outline" size={15} color={ACC} />
+                        <Text style={styles.suggestionText}>{city}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ) : null}
+
+                <View style={styles.cityChips}>
+                  {selectedCities.map((city) => (
+                    <TouchableOpacity
+                      key={city}
+                      style={styles.cityChip}
+                      onPress={() => removeCity(city)}
+                    >
+                      <Text style={styles.cityChipText}>{city}</Text>
+                      <Ionicons name="close" size={13} color="#ffffff" />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <TouchableOpacity
+                  style={[
+                    styles.saveProfileButton,
+                    savingProfile ? styles.logoutButtonDisabled : null,
+                  ]}
+                  disabled={savingProfile}
+                  onPress={handleCompleteProfile}
+                >
+                  {savingProfile ? (
+                    <ActivityIndicator size="small" color="#ffffff" />
+                  ) : (
+                    <Text style={styles.saveProfileText}>Save Profile</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            ) : null}
+
+
+            {user?.isProfileCompleted && !editingProfile ? (
+  <TouchableOpacity
+    style={styles.editProfileButton}
+    onPress={() => {
+      setProfileName(user?.name || "");
+      setSelectedCities(Array.isArray(user?.serviceCities) ? user.serviceCities : []);
+      setCitySearch("");
+      setEditingProfile(true);
+    }}
+  >
+    <Ionicons name="create-outline" size={15} color="#ffffff" />
+    <Text style={styles.editProfileText}>Edit Profile / Add Cities</Text>
+  </TouchableOpacity>
+) : null}
+
             <View style={styles.infoGrid}>
-              <InfoRow   label={t("header.username")} value={user?.username} icon="mail-outline" />
+             <InfoRow
+  label="Phone"
+  value={user?.phone || user?.username}
+  icon="call-outline"
+/>
+
+              <InfoRow
+                label="Name"
+                value={user?.name || undefined}
+                icon="person-outline"
+              />
+
               <InfoRow
                 label={t("header.company")}
                 value={user?.companyName}
                 icon="business-outline"
               />
+
+         
+
               <InfoRow
-                label={t("header.role")}
-                value={user?.role}
-                icon="shield-checkmark-outline"
+                label="Service Cities"
+                value={user?.serviceCities?.join(", ")}
+                icon="location-outline"
               />
-          
             </View>
 
             {onLogout ? (
@@ -220,11 +407,13 @@ const toggleLanguage = useCallback(async () => {
                 disabled={loggingOut}
               >
                 {loggingOut ? (
-                   <ActivityIndicator size="small" color="#ffffff" />
+                  <ActivityIndicator size="small" color="#ffffff" />
                 ) : (
                   <>
-                   <Ionicons name="log-out-outline" size={18} color="#ffffff" />
-                    <Text style={styles.logoutButtonText}> {t("header.logout")}</Text>
+                    <Ionicons name="log-out-outline" size={18} color="#ffffff" />
+                    <Text style={styles.logoutButtonText}>
+                      {t("header.logout")}
+                    </Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -235,7 +424,6 @@ const toggleLanguage = useCallback(async () => {
     </>
   );
 }
-
 export const AppHeader = memo(AppHeaderComponent);
 
 
@@ -372,32 +560,69 @@ const styles = StyleSheet.create({
   infoGrid: {
     gap: 10,
   },
-  infoCard: {
-    backgroundColor: SURFACE,
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-  },
+infoCard: {
+  backgroundColor: SURFACE,
+  borderWidth: 1,
+  borderColor: BORDER,
+  borderRadius: 12,
+  paddingHorizontal: 12,
+  paddingVertical: 10,
+},
+
+infoInlineRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 10,
+},
+
+infoLeft: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 7,
+},
+
+
+
+editProfileButton: {
+  backgroundColor: ACC,
+  borderRadius: 12,
+  paddingVertical: 11,
+  alignItems: "center",
+  justifyContent: "center",
+  flexDirection: "row",
+  gap: 7,
+  marginBottom: 12,
+},
+
+editProfileText: {
+  color: "#ffffff",
+  fontSize: 13,
+  fontWeight: "700",
+},
+
   infoTopRow: {
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 8,
     gap: 8,
   },
-  infoLabel: {
-    fontSize: 8,
-    fontWeight: "700",
-    color: MUTED,
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-  },
-  infoValue: {
-    fontSize: 13,
-    color: TEXT,
-    fontWeight: "600",
-  },
+infoLabel: {
+  fontSize: 8,
+  fontWeight: "700",
+  color: MUTED,
+  letterSpacing: 0.7,
+  textTransform: "uppercase",
+},
+
+ infoValue: {
+  flex: 1,
+  textAlign: "right",
+  fontSize: 13,
+  color: TEXT,
+  fontWeight: "600",
+},
+
   logoutButton: {
     backgroundColor: ACC,
     borderRadius: 14,
@@ -432,5 +657,104 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "700",
     letterSpacing: 1,
+  },
+
+
+completeProfileBox: {
+  backgroundColor: "#F8F9FC",
+  borderWidth: 1,
+  borderColor: BORDER,
+  borderRadius: 14,
+  padding: 12,
+  marginBottom: 12,
+  gap: 8,
+},
+
+completeTitle: {
+  fontSize: 13,
+  fontWeight: "700",
+  color: TEXT,
+  marginBottom: 2,
+},
+
+input: {
+  backgroundColor: "#ffffff",
+  borderWidth: 1,
+  borderColor: BORDER,
+  borderRadius: 10,
+  paddingHorizontal: 12,
+  paddingVertical: 9,
+  color: TEXT,
+  fontSize: 13,
+},
+
+suggestionBox: {
+  backgroundColor: "#ffffff",
+  borderWidth: 1,
+  borderColor: BORDER,
+  borderRadius: 12,
+  overflow: "hidden",
+},
+
+suggestionItem: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 8,
+  paddingHorizontal: 12,
+  paddingVertical: 10,
+  borderBottomWidth: 1,
+  borderBottomColor: BORDER,
+},
+
+suggestionText: {
+  color: TEXT,
+  fontSize: 13,
+  fontWeight: "600",
+},
+
+cityChips: {
+  flexDirection: "row",
+  flexWrap: "wrap",
+  gap: 8,
+},
+
+cityChip: {
+  backgroundColor: ACC,
+  borderRadius: 999,
+  paddingHorizontal: 10,
+  paddingVertical: 7,
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 6,
+},
+
+cityChipText: {
+  color: "#ffffff",
+  fontSize: 12,
+  fontWeight: "700",
+},
+
+saveProfileButton: {
+  backgroundColor: ACC,
+  borderRadius: 12,
+  paddingVertical: 11,
+  alignItems: "center",
+  justifyContent: "center",
+  marginTop: 2,
+},
+
+saveProfileText: {
+  color: "#ffffff",
+  fontSize: 14,
+  fontWeight: "700",
+},
+
+ label: {
+    fontSize: 8,
+    fontWeight: "600",
+    color: MUTED,
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+    marginBottom: 8,
   },
 });

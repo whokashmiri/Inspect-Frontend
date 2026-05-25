@@ -178,8 +178,11 @@ export interface User {
   id: string;
   username: string;
   phone?: string | null;
-  companyName: string;
-  role: "Manager" | "Inspector" | "Valuator" | "company_admin" | string;
+  name?: string | null;
+  companyName?: string;
+  role?: "Manager" | "Inspector" | "Valuator" | "company_admin" | string;
+  serviceCities?: string[];
+  isProfileCompleted?: boolean;
   isPhoneVerified?: boolean;
   isBlocked?: boolean;
 }
@@ -251,6 +254,15 @@ resetPassword: (payload: { resetToken: string; password: string }) =>
       auth: false,
     }
   ),
+
+  completeProfile: (payload: {
+  name: string;
+  serviceCities: string[];
+}) =>
+  request<User>("/auth/me/profile", {
+    method: "PUT",
+    body: payload,
+  }),
 
   setSignupPassword: (payload: {
     setupToken: string;
