@@ -15,7 +15,7 @@ import { useFonts } from 'expo-font';
 import  fonts  from '../fonts/fonts';
 import { useRouter } from "expo-router";
 import { useAuth } from "../../api/AuthContext";
-import { ApiError } from "../../api/api";
+import { ApiError , authApi } from "../../api/api";
 import { useTranslation } from "react-i18next";
 
 export default function LoginScreen() {
@@ -26,6 +26,15 @@ export default function LoginScreen() {
 const { t } = useTranslation();
   const router = useRouter();
   const { login } = useAuth();
+
+  type ForgotStep = "closed" | "phone" | "otp" | "password";
+
+const [forgotStep, setForgotStep] = useState<ForgotStep>("closed");
+const [forgotPhone, setForgotPhone] = useState("");
+const [forgotOtp, setForgotOtp] = useState("");
+const [resetToken, setResetToken] = useState("");
+const [newPassword, setNewPassword] = useState("");
+const [confirmNewPassword, setConfirmNewPassword] = useState("");
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -137,12 +146,165 @@ const { t } = useTranslation();
             )}
           </View>
 
-          {/* Forgot */}
-          <TouchableOpacity style={styles.forgotWrap}>
-            <Text style={styles.forgotText}>
-          {t("login.forgotPassword")}
-        </Text>
-          </TouchableOpacity>
+        <TouchableOpacity
+  style={styles.footer}
+  onPress={() => router.push("/signup")}
+>
+  <Text style={styles.footerText}>Don't have an account? </Text>
+  <Text style={styles.footerLink}>Create One</Text>
+</TouchableOpacity>
+
+{forgotStep !== "closed" && (
+  <View style={styles.forgotBox}>
+    <Text style={styles.forgotTitle}>Reset Password</Text>
+
+    {forgotStep === "phone" && (
+      <>
+        <TextInput
+          style={styles.input}
+          placeholder="05XXXXXXXX"
+          placeholderTextColor="#555"
+          value={forgotPhone}
+          onChangeText={setForgotPhone}
+          keyboardType="phone-pad"
+        />
+
+        <TouchableOpacity
+          style={styles.smallBtn}
+          onPress={async () => {
+            try {
+              setLoading(true);
+              const res = await authApi.requestResetPasswordOtp({
+                phone: forgotPhone.trim(),
+              });
+              setForgotPhone(res.phone || forgotPhone.trim());
+              setForgotStep("otp");
+              Alert.alert("OTP Sent", "Please check your phone.");
+            } catch (err) {
+              Alert.alert(
+                "Failed",
+                err instanceof ApiError ? err.message : "Something went wrong"
+              );
+            } finally {
+              setLoading(false);
+            }
+          }}
+        >
+          <Text style={styles.smallBtnText}>Send OTP</Text>
+        </TouchableOpacity>
+      </>
+    )}
+
+    {forgotStep === "otp" && (
+      <>
+        <TextInput
+          style={styles.input}
+          placeholder="Enter OTP"
+          placeholderTextColor="#555"
+          value={forgotOtp}
+          onChangeText={(v) => setForgotOtp(v.replace(/\D/g, "").slice(0, 6))}
+          keyboardType="number-pad"
+          maxLength={6}
+        />
+
+        <TouchableOpacity
+          style={styles.smallBtn}
+          onPress={async () => {
+            try {
+              setLoading(true);
+              const res = await authApi.verifyResetPasswordOtp({
+                phone: forgotPhone.trim(),
+                otp: forgotOtp.trim(),
+              });
+              setResetToken(res.resetToken);
+              setForgotStep("password");
+            } catch (err) {
+              Alert.alert(
+                "Failed",
+                err instanceof ApiError ? err.message : "Something went wrong"
+              );
+            } finally {
+              setLoading(false);
+            }
+          }}
+        >
+          <Text style={styles.smallBtnText}>Verify OTP</Text>
+        </TouchableOpacity>
+      </>
+    )}
+
+    {forgotStep === "password" && (
+      <>
+        <TextInput
+          style={styles.input}
+          placeholder="New password"
+          placeholderTextColor="#555"
+          value={newPassword}
+          onChangeText={setNewPassword}
+          secureTextEntry
+        />
+
+        <TextInput
+          style={styles.input}
+          placeholder="Confirm new password"
+          placeholderTextColor="#555"
+          value={confirmNewPassword}
+          onChangeText={setConfirmNewPassword}
+          secureTextEntry
+        />
+
+        <TouchableOpacity
+          style={styles.smallBtn}
+          onPress={async () => {
+            if (newPassword.length < 6) {
+              Alert.alert("Invalid Password", "Password must be at least 6 characters.");
+              return;
+            }
+
+            if (newPassword !== confirmNewPassword) {
+              Alert.alert("Invalid Password", "Passwords do not match.");
+              return;
+            }
+
+            try {
+              setLoading(true);
+
+              await authApi.resetPassword({
+                resetToken,
+                password: newPassword,
+              });
+
+              Alert.alert("Success", "Password updated. Please login.");
+
+              setForgotStep("closed");
+              setForgotPhone("");
+              setForgotOtp("");
+              setResetToken("");
+              setNewPassword("");
+              setConfirmNewPassword("");
+            } catch (err) {
+              Alert.alert(
+                "Failed",
+                err instanceof ApiError ? err.message : "Something went wrong"
+              );
+            } finally {
+              setLoading(false);
+            }
+          }}
+        >
+          <Text style={styles.smallBtnText}>Set New Password</Text>
+        </TouchableOpacity>
+      </>
+    )}
+
+    <TouchableOpacity
+      style={styles.cancelForgotBtn}
+      onPress={() => setForgotStep("closed")}
+    >
+      <Text style={styles.cancelForgotText}>Cancel</Text>
+    </TouchableOpacity>
+  </View>
+)}
 
           {/* CTA */}
           <TouchableOpacity
@@ -267,4 +429,45 @@ const styles = StyleSheet.create({
   },
   footerText: { fontSize: 14, color: MUTED },
   footerLink: { fontSize: 14, color: ACC, fontWeight: "600" },
+
+  forgotBox: {
+  backgroundColor: "#F8F9FC",
+  borderWidth: 1,
+  borderColor: BORDER,
+  borderRadius: 14,
+  padding: 14,
+  marginBottom: 18,
+  gap: 10,
+},
+
+forgotTitle: {
+  fontSize: 14,
+  fontWeight: "700",
+  color: TEXT,
+  marginBottom: 4,
+},
+
+smallBtn: {
+  backgroundColor: ACC,
+  borderRadius: 12,
+  paddingVertical: 12,
+  alignItems: "center",
+},
+
+smallBtnText: {
+  color: "#fff",
+  fontSize: 14,
+  fontWeight: "700",
+},
+
+cancelForgotBtn: {
+  alignItems: "center",
+  paddingVertical: 6,
+},
+
+cancelForgotText: {
+  color: MUTED,
+  fontSize: 13,
+  fontWeight: "600",
+},
 });
