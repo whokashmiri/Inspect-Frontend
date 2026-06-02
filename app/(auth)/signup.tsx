@@ -86,34 +86,34 @@ export default function SignupScreen() {
     }
   }
 
-  async function handleVerifyOtp() {
-    clearMessages();
+ async function handleVerifyOtp() {
+  clearMessages();
 
-    const e: typeof errors = {};
+  const e: typeof errors = {};
 
-    if (!otp.trim()) e.otp = "OTP is required.";
-    else if (!/^\d{6}$/.test(otp.trim())) e.otp = "OTP must be 6 digits.";
+  if (!otp.trim()) e.otp = "OTP is required.";
+  else if (!/^\d{4}$/.test(otp.trim())) e.otp = "OTP must be 4 digits.";
 
-    setErrors(e);
-    if (Object.keys(e).length > 0) return;
+  setErrors(e);
+  if (Object.keys(e).length > 0) return;
 
-    setLoading(true);
+  setLoading(true);
 
-    try {
-      const res = await authApi.verifySignupOtp({
-        phone: phone.trim(),
-        otp: otp.trim(),
-      });
+  try {
+    const res = await authApi.verifySignupOtp({
+      phone: phone.trim(),
+      otp: otp.trim(),
+    });
 
-      setSetupToken(res.setupToken);
-      setSuccessMessage("Phone verified. Please set your password.");
-      setStep("password");
-    } catch (err) {
-      setGlobalError(getErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
+    setSetupToken(res.setupToken);
+    setSuccessMessage("Phone verified. Please set your password.");
+    setStep("password");
+  } catch (err) {
+    setGlobalError(getErrorMessage(err));
+  } finally {
+    setLoading(false);
   }
+}
 
   async function handleSetPassword() {
     clearMessages();
