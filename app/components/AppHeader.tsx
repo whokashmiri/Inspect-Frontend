@@ -29,7 +29,7 @@ export type HeaderUser = {
   companyName?: string;
   serviceCities?: string[];
   isProfileCompleted?: boolean;
-  role?: "Manager" | "Inspector" | "Valuator" | "company_admin" | string;
+  role?: "Manager" | "Inspector" | "Valuator" | "company_admin" | "Freelance Inspector" | string;
 };
 
 type AppHeaderProps = {
@@ -182,25 +182,28 @@ const openProfile = useCallback(() => {
     setSelectedCities((prev) => prev.filter((c) => c !== city));
   }, []);
 
-  const handleCompleteProfile = useCallback(async () => {
-    if (!onCompleteProfile || savingProfile) return;
-    if (!profileName.trim()) return;
-    if (selectedCities.length === 0) return;
+ const handleCompleteProfile = useCallback(async () => {
+  if (!onCompleteProfile || savingProfile) return;
+  if (!profileName.trim()) return;
+  if (selectedCities.length === 0) return;
 
-    try {
-      setSavingProfile(true);
+  try {
+    setSavingProfile(true);
 
-      await onCompleteProfile({
-        name: profileName.trim(),
-        serviceCities: selectedCities,
-      });
+    await onCompleteProfile({
+      name: profileName.trim(),
+      serviceCities: selectedCities,
+    });
 
-      setEditingProfile(false);
-setProfileVisible(false);
-    } finally {
-      setSavingProfile(false);
-    }
-  }, [onCompleteProfile, savingProfile, profileName, selectedCities]);
+    setEditingProfile(false);
+    setProfileVisible(false);
+  } catch (err: any) {
+    console.log("Complete profile failed:", err);
+    alert(err?.message || "Failed to save profile");
+  } finally {
+    setSavingProfile(false);
+  }
+}, [onCompleteProfile, savingProfile, profileName, selectedCities]);
 
   const showProfileForm = !user?.isProfileCompleted || editingProfile;
 
