@@ -137,7 +137,7 @@ export default function SignupScreen() {
       await authApi.setSignupPassword({
         setupToken,
         password,
-        role: "Inspector",
+        role: "Freelance Inspector",
       });
 
       setSuccessMessage("Account created successfully. Complete your profile to work.");
