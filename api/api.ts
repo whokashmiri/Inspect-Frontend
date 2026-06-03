@@ -267,7 +267,7 @@ resetPassword: (payload: { resetToken: string; password: string }) =>
   setSignupPassword: (payload: {
     setupToken: string;
     password: string;
-    role?: "Manager" | "Inspector" | "Valuator" | "company_admin";
+    role?: "Manager" | "Inspector"  | "Freelance Inspector"| "Valuator" | "company_admin";
   }) =>
     request<AuthResponse>("/auth/signup/set-password", {
       method: "POST",
