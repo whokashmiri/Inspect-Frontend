@@ -5,7 +5,7 @@ export default function AuthLayout() {
   const { user } = useAuth();
 
   if (user) {
-    return <Redirect href="/home" />;
+    return <Redirect href="/inspection/InspectionType" />;
   }
 
   return <Stack screenOptions={{ headerShown: false }} />;
