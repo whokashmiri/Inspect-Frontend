@@ -478,8 +478,15 @@ export interface CreateProjectResponse {
   project: Project;
 }
 
+export interface ProjectCompanyOption {
+  id: string;
+  name: string;
+}
+
 export interface ListProjectsResponse {
   projects: Project[];
+  companies?: ProjectCompanyOption[];
+  selectedCompanyId?: string | null;
 }
 
 export const mediaApi = {
@@ -583,10 +590,15 @@ export const projectApi = {
       body: payload,
     }),
 
-  list: () =>
-    request<ListProjectsResponse>("/projects", {
+  list: (companyId?: string) =>
+  request<ListProjectsResponse>(
+    companyId
+      ? `/projects?companyId=${encodeURIComponent(companyId)}`
+      : "/projects",
+    {
       method: "GET",
-    }),
+    }
+  ),
 
  
 updateProjectWorkflow: (

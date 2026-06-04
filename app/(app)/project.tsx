@@ -61,11 +61,15 @@ export default function ProjectScreen() {
   });
 
   const router = useRouter();
-  const { user, isOnline, selectedCompanyId } = useAuth();
+  const { user, isOnline } = useAuth();
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [filter, setFilter] = useState<FilterType>("new");
   const [loading, setLoading] = useState(true);
+
+  const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
+const [selectedCompanyFilterId, setSelectedCompanyFilterId] = useState<string | null>(null);
+const [companyModalVisible, setCompanyModalVisible] = useState(false);
  
   const [globalError, setGlobalError] = useState<string | null>(null);
 
@@ -112,33 +116,33 @@ const autoRefreshRunningRef = React.useRef(false);
     setPendingProjects(pending.filter((item) => item.type === "createProject"));
   }, []);
 
-  const refreshDownloadedProjects = useCallback(async () => {
-    const downloaded = selectedCompanyId
-      ? await getDownloadedProjectsByCompany(selectedCompanyId)
-      : await getAllDownloadedProjects();
+ const refreshDownloadedProjects = useCallback(async () => {
+  const downloaded = selectedCompanyFilterId
+    ? await getDownloadedProjectsByCompany(selectedCompanyFilterId)
+    : await getAllDownloadedProjects();
 
-    const ids = downloaded.map((project) => project.id);
-    setDownloadedProjectIds(ids);
+  const ids = downloaded.map((project) => project.id);
+  setDownloadedProjectIds(ids);
 
-    const counts = await Promise.all(
-      ids.map(async (id) => {
-        const count = await getPendingCountByProjectId(id);
-        return [id, count] as const;
-      })
-    );
+  const counts = await Promise.all(
+    ids.map(async (id) => {
+      const count = await getPendingCountByProjectId(id);
+      return [id, count] as const;
+    })
+  );
 
-    setProjectPendingMap(
-      counts.reduce<Record<string, number>>((acc, [id, count]) => {
-        acc[id] = count;
-        return acc;
-      }, {})
-    );
-  }, [selectedCompanyId]);
+  setProjectPendingMap(
+    counts.reduce<Record<string, number>>((acc, [id, count]) => {
+      acc[id] = count;
+      return acc;
+    }, {})
+  );
+}, [selectedCompanyFilterId]);
 
 
-  useEffect(() => {
-    fetchProjects();
-  }, [isOnline, selectedCompanyId]);
+ useEffect(() => {
+  fetchProjects(selectedCompanyFilterId);
+}, [isOnline, selectedCompanyFilterId]);
 
 
 
@@ -187,7 +191,7 @@ useEffect(() => {
 useEffect(() => {
   autoRefreshStartedRef.current = false;
   autoRefreshRunningRef.current = false;
-}, [selectedCompanyId]);
+}, [selectedCompanyFilterId]);
 
   useEffect(() => {
     refreshPendingProjects();
@@ -201,46 +205,49 @@ useEffect(() => {
     return () => clearInterval(interval);
   }, [refreshPendingProjects, refreshDownloadedProjects]);
 
-  async function fetchProjects() {
-    setLoading(true);
-    setGlobalError(null);
+ async function fetchProjects(companyId?: string | null) {
+  setLoading(true);
+  setGlobalError(null);
 
-    try {
-      if (isOnline) {
-        const res = await projectApi.list();
-        setProjects(res.projects);
-        return;
-      }
+  try {
+    if (isOnline) {
+      const res = await projectApi.list(companyId || undefined);
 
-      const offlineProjects = selectedCompanyId
-        ? await getDownloadedProjectsByCompany(selectedCompanyId)
-        : await getAllDownloadedProjects();
+      setProjects(res.projects || []);
+      setCompanies(res.companies || []);
 
-      setProjects(offlineProjects);
-    } catch (err) {
-      if (!isOnline) {
-        try {
-          const offlineProjects = selectedCompanyId
-            ? await getDownloadedProjectsByCompany(selectedCompanyId)
-            : await getAllDownloadedProjects();
-
-          setProjects(offlineProjects);
-          setGlobalError(null);
-          return;
-        } catch {
-          // fall through
-        }
-      }
-
-      const msg =
-        err instanceof ApiError
-          ? err.message
-          : t("projectScreen.errors.loadFailed");
-      setGlobalError(msg);
-    } finally {
-      setLoading(false);
+      return;
     }
+
+    const offlineProjects = companyId
+      ? await getDownloadedProjectsByCompany(companyId)
+      : await getAllDownloadedProjects();
+
+    setProjects(offlineProjects);
+
+    const offlineCompaniesMap = new Map<string, { id: string; name: string }>();
+
+    offlineProjects.forEach((project) => {
+      if (!project.companyId) return;
+
+      offlineCompaniesMap.set(String(project.companyId), {
+        id: String(project.companyId),
+        name: project.company?.name || "Unknown Company",
+      });
+    });
+
+    setCompanies(Array.from(offlineCompaniesMap.values()));
+  } catch (err) {
+    const msg =
+      err instanceof ApiError
+        ? err.message
+        : t("projectScreen.errors.loadFailed");
+
+    setGlobalError(msg);
+  } finally {
+    setLoading(false);
   }
+}
 
 
 
@@ -656,13 +663,15 @@ async function toggleProjectFavorite(project: Project) {
         {/* ── Action row ── */}
         <View style={styles.actionRow}>
           <Pressable
-            style={styles.switchBtn}
-            onPress={() => router.replace("home")}
-          >
-            <Text style={styles.switchBtnText}>
-              {t("projectPage.switchCompany")}
-            </Text>
-          </Pressable>
+  style={styles.switchBtn}
+  onPress={() => setCompanyModalVisible(true)}
+>
+  <Text style={styles.switchBtnText}>
+    {selectedCompanyFilterId
+      ? companies.find((c) => c.id === selectedCompanyFilterId)?.name || "Company"
+      : "All Companies"}
+  </Text>
+</Pressable>
         </View>
 
         {/* ── Filter row ── */}
@@ -923,6 +932,66 @@ async function toggleProjectFavorite(project: Project) {
 
 
 <Modal
+  visible={companyModalVisible}
+  transparent
+  animationType="fade"
+  onRequestClose={() => setCompanyModalVisible(false)}
+>
+  <View style={styles.modalOverlay}>
+    <View style={styles.filesModalCard}>
+      <View style={styles.filesModalHeader}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.modalTitle}>Filter by Company</Text>
+          <Text style={styles.filesModalSubtitle}>
+            Select a company to show assigned projects
+          </Text>
+        </View>
+
+        <Pressable
+          style={styles.filesCloseBtn}
+          onPress={() => setCompanyModalVisible(false)}
+        >
+          <Ionicons name="close" size={20} color={TEXT} />
+        </Pressable>
+      </View>
+
+      <Pressable
+        style={styles.companyOption}
+        onPress={() => {
+          setSelectedCompanyFilterId(null);
+          setCompanyModalVisible(false);
+        }}
+      >
+        <Text style={styles.companyOptionText}>All Companies</Text>
+        {!selectedCompanyFilterId && (
+          <Ionicons name="checkmark-circle" size={20} color={ACC} />
+        )}
+      </Pressable>
+
+      {companies.map((company) => (
+        <Pressable
+          key={company.id}
+          style={styles.companyOption}
+          onPress={() => {
+            setSelectedCompanyFilterId(company.id);
+            setCompanyModalVisible(false);
+          }}
+        >
+          <Text style={styles.companyOptionText}>
+            {company.name || "Unknown Company"}
+          </Text>
+
+          {selectedCompanyFilterId === company.id && (
+            <Ionicons name="checkmark-circle" size={20} color={ACC} />
+          )}
+        </Pressable>
+      ))}
+    </View>
+  </View>
+</Modal>
+
+
+<Modal
   visible={projectInfoModalVisible}
   transparent
   animationType="fade"
@@ -1154,6 +1223,23 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 5,
   },
+
+
+  companyOption: {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+  paddingVertical: 14,
+  paddingHorizontal: 12,
+  borderBottomWidth: 1,
+  borderBottomColor: BORDER,
+},
+
+companyOptionText: {
+  fontSize: 15,
+  fontWeight: "600",
+  color: TEXT,
+},
   switchBtn: {
     flex: 1,
     backgroundColor: ACC,
