@@ -87,13 +87,13 @@ const handleRealEstatePress = async () => {
         </Text>
       </Pressable>
 
-         <Pressable
+         {/* <Pressable
       onPress={() => router.push("/home")}
       style={styles.backBtn}
      
     >
       <Ionicons name="chevron-back" size={22} color={ACC} />
-    </Pressable>
+    </Pressable> */}
     </View>
   );
 }
