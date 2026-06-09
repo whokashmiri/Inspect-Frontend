@@ -57,9 +57,9 @@ const handleRealEstatePress = async () => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Inspection Type</Text>
+      <Text style={styles.title}> {t("inspectionType.title")}</Text>
       <Text style={styles.subtitle}>
-        Choose the kind of inspection you want to start.
+        {t("inspectionType.subtitle")}
       </Text>
 
       <Pressable

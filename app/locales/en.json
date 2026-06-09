@@ -317,7 +317,10 @@
     "Inspector": "Inspector",
     "Valuator": "Valuator",
     "company_admin": "Company Admin"
-  }, "inspectionType":{
+  }, 
+  "inspectionType":{
+    "title": "Select Inspection Type",
+    "subtitle": "Choose the kind of inspection you want to start.",
     "realEstate" :"Real Estate",
      "equipment" :"Equipment"
   },

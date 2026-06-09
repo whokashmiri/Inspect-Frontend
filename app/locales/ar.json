@@ -320,8 +320,10 @@
     "company_admin": "مدير الشركة"
   },
   "inspectionType":{
-    "realEstate" :"Real Estate",
-     "equipment" :"Equipment"
+     "title": "اختر نوع الفحص",
+  "subtitle": "حدد نوع الفحص الذي ترغب في البدء به.",
+  "realEstate": "العقارات",
+  "equipment": "المعدات"
   },
   "assetInspection": {
     "title": "معاينة الأصل",
