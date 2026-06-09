@@ -5,17 +5,17 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
-    "scheme": "batchcam",
+    "scheme": "ValueTech",
     "icon": "./assets/Logo.png",
     "splash": {
       "backgroundColor": "#8AA39B"
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.anonymous.batchcam",
+      "bundleIdentifier": "com.anonymous.valuetech",
       "infoPlist": {
-        "NSCameraUsageDescription": "BatchCam needs camera access to capture photos",
-        "NSPhotoLibraryAddUsageDescription": "BatchCam needs access to save photos to your library."
+        "NSCameraUsageDescription": "ValueTech needs camera access to capture photos",
+        "NSPhotoLibraryAddUsageDescription": "ValueTech needs access to save photos to your library."
       }
     },
     "android": {
