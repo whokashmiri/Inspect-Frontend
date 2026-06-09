@@ -282,10 +282,10 @@
     "title": "Welcome Back",
     "subtitle": "Sign in to continue",
 
-    "username": "Username",
+    "username": "Phone Number",
     "password": "Password",
 
-    "usernamePlaceholder": "Username",
+    "usernamePlaceholder": "Phone Number",
     "passwordPlaceholder": "Your password",
 
     "forgotPassword": "Forgot password?",
@@ -296,7 +296,7 @@
     "failedTitle": "Login failed",
 
     "errors": {
-      "usernameRequired": "Username is required.",
+      "usernameRequired": "Phone number is required.",
       "passwordRequired": "Password is required."
     }
   },
