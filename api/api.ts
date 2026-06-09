@@ -5,10 +5,10 @@
 import * as SecureStore from "expo-secure-store";
 
 // ─── Config ────────────────────────────────────────────────────────────────
-// export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://api.167.71.231.64.nip.io/api/v1";
+export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://api.167.71.231.64.nip.io/api/v1";
 
 
-export const BASE_URL = process.env.EXPO_PUBLIC_API_URL 
+// export const BASE_URL = process.env.EXPO_PUBLIC_API_URL
 
 const TOKEN_KEY = "auth.accessToken";
 const REFRESH_KEY = "auth.refreshToken";
@@ -150,13 +150,13 @@ export async function requestForm<T>(url: string, options: {
 
 
 async function uploadFilesInBatches<T>(
-  
+
   files: UploadFileInput[],
   uploadFn: (file: UploadFileInput) => Promise<T>,
   batchSize = 3
 ): Promise<T[]> {
   const results: T[] = [];
-  
+
 
   for (let i = 0; i < files.length; i += batchSize) {
     const batch = files.slice(i, i + batchSize);
@@ -211,7 +211,7 @@ export interface AuthResponse {
 
 export const authApi = {
 
-   requestSignupOtp: (payload: { phone: string }) =>
+  requestSignupOtp: (payload: { phone: string }) =>
     request<RequestSignupOtpResponse>("/auth/signup/request-otp", {
       method: "POST",
       body: payload,
@@ -225,7 +225,7 @@ export const authApi = {
       auth: false,
     }),
 
-    requestResetPasswordOtp: (payload: { phone: string }) =>
+  requestResetPasswordOtp: (payload: { phone: string }) =>
   request<{ success: boolean; message: string; phone: string }>(
     "/auth/forgot-password/request-otp",
     {
@@ -247,7 +247,7 @@ verifyResetPasswordOtp: (payload: { phone: string; otp: string }) =>
 
 resetPassword: (payload: { resetToken: string; password: string }) =>
   request<{ success: boolean; message: string }>(
-    "/auth/forgot-password/reset-password",
+    "/auth/forgot-password/reset",
     {
       method: "POST",
       body: payload,
@@ -256,18 +256,18 @@ resetPassword: (payload: { resetToken: string; password: string }) =>
   ),
 
   completeProfile: (payload: {
-  name: string;
-  serviceCities: string[];
-}) =>
-  request<User>("/auth/me/profile", {
-    method: "PUT",
-    body: payload,
-  }),
+    name: string;
+    serviceCities: string[];
+  }) =>
+    request<User>("/auth/me/profile", {
+      method: "PUT",
+      body: payload,
+    }),
 
   setSignupPassword: (payload: {
     setupToken: string;
     password: string;
-    role?: "Manager" | "Inspector"  | "Freelance Inspector"| "Valuator" | "company_admin";
+    role?: "Manager" | "Inspector" | "Freelance Inspector" | "Valuator" | "company_admin";
   }) =>
     request<AuthResponse>("/auth/signup/set-password", {
       method: "POST",
@@ -468,10 +468,10 @@ export interface Project {
   inspectorFiles?: InspectorFile[];
 
   locations?: ProjectLocation[];
- 
 
 
-  
+
+
 }
 
 export interface CreateProjectResponse {
@@ -518,13 +518,13 @@ async function uploadSingleFileToCloudinary(params: {
   form.append("file", {
     uri: params.file.uri,
     name: params.file.name,
-   type:
-  params.file.type ||
-  (params.mediaType === "voice"
-    ? "audio/m4a"
-    : params.mediaType === "video"
-    ? "video/mp4"
-    : "image/jpeg"),
+    type:
+      params.file.type ||
+      (params.mediaType === "voice"
+        ? "audio/m4a"
+        : params.mediaType === "video"
+          ? "video/mp4"
+          : "image/jpeg"),
   } as any);
 
   form.append("api_key", signData.apiKey);
@@ -551,34 +551,34 @@ async function uploadSingleFileToCloudinary(params: {
   }
 
   if (params.mediaType === "voice") {
+    return {
+      url: data.secure_url,
+      publicId: data.public_id,
+      duration:
+        typeof data.duration === "number" ? Math.round(data.duration) : null,
+    };
+  }
+
+  const isVideo = params.mediaType === "video";
+
   return {
     url: data.secure_url,
     publicId: data.public_id,
+    mediaType: isVideo ? "video" : "image",
+    mimeType: params.file.type,
     duration:
-      typeof data.duration === "number" ? Math.round(data.duration) : null,
-  };
-}
-
-const isVideo = params.mediaType === "video";
-
-return {
-  url: data.secure_url,
-  publicId: data.public_id,
-  mediaType: isVideo ? "video" : "image",
-  mimeType: params.file.type,
-  duration:
-    isVideo && typeof data.duration === "number"
-      ? Math.round(data.duration)
-      : null,
-  thumbnailUrl: isVideo
-    ? data.secure_url.replace(
+      isVideo && typeof data.duration === "number"
+        ? Math.round(data.duration)
+        : null,
+    thumbnailUrl: isVideo
+      ? data.secure_url.replace(
         "/video/upload/",
         "/video/upload/so_1,f_jpg/"
       )
-    : null,
-};
+      : null,
+  };
 
- 
+
 }
 
 
@@ -591,27 +591,27 @@ export const projectApi = {
     }),
 
   list: (companyId?: string) =>
-  request<ListProjectsResponse>(
-    companyId
-      ? `/projects?companyId=${encodeURIComponent(companyId)}`
-      : "/projects",
-    {
-      method: "GET",
-    }
-  ),
+    request<ListProjectsResponse>(
+      companyId
+        ? `/projects?companyId=${encodeURIComponent(companyId)}`
+        : "/projects",
+      {
+        method: "GET",
+      }
+    ),
 
- 
-updateProjectWorkflow: (
-  projectId: string,
-  payload: {
-    workflowStatus?: "new" | "done";
-    isFavorite?: boolean;
-  }
-) =>
-  request<{ project: Project }>(`/projects/${projectId}/workflow`, {
-    method: "PATCH",
-    body: payload,
-  }),
+
+  updateProjectWorkflow: (
+    projectId: string,
+    payload: {
+      workflowStatus?: "new" | "done";
+      isFavorite?: boolean;
+    }
+  ) =>
+    request<{ project: Project }>(`/projects/${projectId}/workflow`, {
+      method: "PATCH",
+      body: payload,
+    }),
 
   listInspectorFiles: (projectId: string) =>
     request<ListInspectorFilesResponse>(
@@ -636,13 +636,13 @@ updateProjectWorkflow: (
         method: "GET",
       }
     ),
- listLocations: (projectId: string) =>
-  request<ListProjectLocationsResponse>(
-    `/projects/${projectId}/locations`,
-    {
-      method: "GET",
-    }
-  ),
+  listLocations: (projectId: string) =>
+    request<ListProjectLocationsResponse>(
+      `/projects/${projectId}/locations`,
+      {
+        method: "GET",
+      }
+    ),
 
 
 };
@@ -799,96 +799,96 @@ export const projectContentApi = {
       },
     }),
 
- createAsset: async (payload: {
-  projectId: string;
-  name: string;
-  writtenDescription?: string | null;
-  parent?: string | null;
-  folderId?: string | null;
-  images?: AssetMediaInput[];
-  voiceNotes?: AssetMediaInput[];
-  condition?: "" | "New" | "Used" | "Damaged" | "Good" | null;
-  assetType?: "vehicle" | "other" | "Vehicle" | "Other";
-  brand?: string | null;
-  model?: string | null;
-  code?: string | null;
-  manufactureYear?: string | null;
-  kilometersDriven?: string | null;
-  isDone?: boolean;
-  isPresent?: boolean;
-  hasNotes?: boolean;
-  notes?: string | null;
-}) => {
-  const localMedia = getLocalUploadFiles(payload.images);
-const localImages = localMedia.filter((file) => !isVideoFile(file));
-const localVideos = localMedia.filter(isVideoFile);
+  createAsset: async (payload: {
+    projectId: string;
+    name: string;
+    writtenDescription?: string | null;
+    parent?: string | null;
+    folderId?: string | null;
+    images?: AssetMediaInput[];
+    voiceNotes?: AssetMediaInput[];
+    condition?: "" | "New" | "Used" | "Damaged" | "Good" | null;
+    assetType?: "vehicle" | "other" | "Vehicle" | "Other";
+    brand?: string | null;
+    model?: string | null;
+    code?: string | null;
+    manufactureYear?: string | null;
+    kilometersDriven?: string | null;
+    isDone?: boolean;
+    isPresent?: boolean;
+    hasNotes?: boolean;
+    notes?: string | null;
+  }) => {
+    const localMedia = getLocalUploadFiles(payload.images);
+    const localImages = localMedia.filter((file) => !isVideoFile(file));
+    const localVideos = localMedia.filter(isVideoFile);
 
-const existingMedia = getExistingUploadedMedia(payload.images);
+    const existingMedia = getExistingUploadedMedia(payload.images);
 
-const localVoiceNotes = getLocalUploadFiles(payload.voiceNotes);
-  const uploadedImages = await uploadFilesInBatches(
-    localImages,
-    (image) =>
-      uploadSingleFileToCloudinary({
-        file: image,
-        projectId: payload.projectId,
-        mediaType: "image",
-      }),
-    3
-  );
+    const localVoiceNotes = getLocalUploadFiles(payload.voiceNotes);
+    const uploadedImages = await uploadFilesInBatches(
+      localImages,
+      (image) =>
+        uploadSingleFileToCloudinary({
+          file: image,
+          projectId: payload.projectId,
+          mediaType: "image",
+        }),
+      3
+    );
 
-  const uploadedVideos = await uploadFilesInBatches(
-  localVideos,
-  (video) =>
-    uploadSingleFileToCloudinary({
-      file: video,
-      projectId: payload.projectId,
-      mediaType: "video",
-    }),
-  1
-);
+    const uploadedVideos = await uploadFilesInBatches(
+      localVideos,
+      (video) =>
+        uploadSingleFileToCloudinary({
+          file: video,
+          projectId: payload.projectId,
+          mediaType: "video",
+        }),
+      1
+    );
 
-  const uploadedVoiceNotes = await uploadFilesInBatches(
-    localVoiceNotes,
-    (voice) =>
-      uploadSingleFileToCloudinary({
-        file: voice,
-        projectId: payload.projectId,
-        mediaType: "voice",
-      }),
-    2
-  );
+    const uploadedVoiceNotes = await uploadFilesInBatches(
+      localVoiceNotes,
+      (voice) =>
+        uploadSingleFileToCloudinary({
+          file: voice,
+          projectId: payload.projectId,
+          mediaType: "voice",
+        }),
+      2
+    );
 
-  const resolvedParentSubProjectId =
-    payload.parent ?? payload.folderId ?? null;
+    const resolvedParentSubProjectId =
+      payload.parent ?? payload.folderId ?? null;
 
-  return request<CreateAssetResponse>(
-    `/projects/${payload.projectId}/assets`,
-    {
-      method: "POST",
-      body: {
-        name: payload.name,
-        writtenDescription: payload.writtenDescription?.trim() || null,
-        parent: resolvedParentSubProjectId,
-        condition: payload.condition || undefined,
-        assetType: normalizeAssetType(payload.assetType) ?? "other",
-        brand: payload.brand?.trim() || null,
-        model: payload.model?.trim() || null,
-        code: payload.code?.trim() || null,
-        manufactureYear: payload.manufactureYear?.trim() || null,
-        kilometersDriven: payload.kilometersDriven?.trim() || null,
-        isDone: payload.isDone ?? false,
-        isPresent: payload.isPresent ?? true,
-        hasNotes: payload.hasNotes ?? false,
-        notes: payload.notes ?? null,
-        images: [...existingMedia, ...uploadedImages, ...uploadedVideos],
-        voiceNotes: uploadedVoiceNotes,
-      },
-    }
-  );
-},
+    return request<CreateAssetResponse>(
+      `/projects/${payload.projectId}/assets`,
+      {
+        method: "POST",
+        body: {
+          name: payload.name,
+          writtenDescription: payload.writtenDescription?.trim() || null,
+          parent: resolvedParentSubProjectId,
+          condition: payload.condition || undefined,
+          assetType: normalizeAssetType(payload.assetType) ?? "other",
+          brand: payload.brand?.trim() || null,
+          model: payload.model?.trim() || null,
+          code: payload.code?.trim() || null,
+          manufactureYear: payload.manufactureYear?.trim() || null,
+          kilometersDriven: payload.kilometersDriven?.trim() || null,
+          isDone: payload.isDone ?? false,
+          isPresent: payload.isPresent ?? true,
+          hasNotes: payload.hasNotes ?? false,
+          notes: payload.notes ?? null,
+          images: [...existingMedia, ...uploadedImages, ...uploadedVideos],
+          voiceNotes: uploadedVoiceNotes,
+        },
+      }
+    );
+  },
   getAssetByCode: async (projectId: string, code: string) => {
-    
+
 
     return request<GetAssetByCodeResponse>(
       `/projects/${projectId}/assets/by-code?code=${encodeURIComponent(code)}`,
@@ -899,184 +899,184 @@ const localVoiceNotes = getLocalUploadFiles(payload.voiceNotes);
   },
 
   listContents: (
-  projectId: string,
-  parentId?: string | null,
-  filter?: "all" | "done" | "incomplete" | "not_present",
-  search?: string
-) => {
-  const params = new URLSearchParams();
+    projectId: string,
+    parentId?: string | null,
+    filter?: "all" | "done" | "incomplete" | "not_present",
+    search?: string
+  ) => {
+    const params = new URLSearchParams();
 
-  const cleanSearch = search?.trim();
+    const cleanSearch = search?.trim();
 
-  // Search whole project, not current folder
-  if (!cleanSearch && parentId) {
-    params.set("parentId", parentId);
-  }
-
-  if (filter && filter !== "all") {
-    params.set("filter", filter);
-  }
-
-  if (cleanSearch) {
-    params.set("search", cleanSearch);
-  }
-
-  const qs = params.toString();
-
-  return request<ProjectContentsResponse>(
-    `/projects/${projectId}/contents${qs ? `?${qs}` : ""}`,
-    {
-      method: "GET",
+    // Search whole project, not current folder
+    if (!cleanSearch && parentId) {
+      params.set("parentId", parentId);
     }
-  );
-},
+
+    if (filter && filter !== "all") {
+      params.set("filter", filter);
+    }
+
+    if (cleanSearch) {
+      params.set("search", cleanSearch);
+    }
+
+    const qs = params.toString();
+
+    return request<ProjectContentsResponse>(
+      `/projects/${projectId}/contents${qs ? `?${qs}` : ""}`,
+      {
+        method: "GET",
+      }
+    );
+  },
   toggleAssetDone: (projectId: string, assetId: string, isDone: boolean) =>
     request(`/projects/${projectId}/assets/${assetId}/toggle-done`, {
       method: "PATCH",
       body: { isDone },
     }),
 
-updateAsset: async (payload: {
-  assetId: string;
-  projectId: string;
-  name?: string | null;
-  writtenDescription?: string | null;
-  images?: AssetMediaInput[];
-  voiceNotes?: AssetMediaInput[];
-  condition?: "" | "New" | "Used" | "Damaged" | "Good" | null;
-  assetType?: "vehicle" | "other" | "Vehicle" | "Other";
-  brand?: string | null;
-  model?: string | null;
-  code?: string | null;
-  manufactureYear?: string | null;
-  kilometersDriven?: string | null;
-  hasNotes?: boolean;
-  notes?: string | null;
-  isDone?: boolean;
-  isPresent?: boolean;
-}) => {
+  updateAsset: async (payload: {
+    assetId: string;
+    projectId: string;
+    name?: string | null;
+    writtenDescription?: string | null;
+    images?: AssetMediaInput[];
+    voiceNotes?: AssetMediaInput[];
+    condition?: "" | "New" | "Used" | "Damaged" | "Good" | null;
+    assetType?: "vehicle" | "other" | "Vehicle" | "Other";
+    brand?: string | null;
+    model?: string | null;
+    code?: string | null;
+    manufactureYear?: string | null;
+    kilometersDriven?: string | null;
+    hasNotes?: boolean;
+    notes?: string | null;
+    isDone?: boolean;
+    isPresent?: boolean;
+  }) => {
 
-  const localMedia = getLocalUploadFiles(payload.images);
-const localImages = localMedia.filter((file) => !isVideoFile(file));
-const localVideos = localMedia.filter(isVideoFile);
+    const localMedia = getLocalUploadFiles(payload.images);
+    const localImages = localMedia.filter((file) => !isVideoFile(file));
+    const localVideos = localMedia.filter(isVideoFile);
 
-const existingMedia = getExistingUploadedMedia(payload.images);
+    const existingMedia = getExistingUploadedMedia(payload.images);
 
-const localVoiceNotes = getLocalUploadFiles(payload.voiceNotes);
-  const uploadedImages = await uploadFilesInBatches(
-   localImages,
-    (image) =>
-      uploadSingleFileToCloudinary({
-        file: image,
-        projectId: payload.projectId,
-        mediaType: "image",
-      }),
-    3
-  );
+    const localVoiceNotes = getLocalUploadFiles(payload.voiceNotes);
+    const uploadedImages = await uploadFilesInBatches(
+      localImages,
+      (image) =>
+        uploadSingleFileToCloudinary({
+          file: image,
+          projectId: payload.projectId,
+          mediaType: "image",
+        }),
+      3
+    );
 
-  const uploadedVideos = await uploadFilesInBatches(
-  localVideos,
-  (video) =>
-    uploadSingleFileToCloudinary({
-      file: video,
-      projectId: payload.projectId,
-      mediaType: "video",
+    const uploadedVideos = await uploadFilesInBatches(
+      localVideos,
+      (video) =>
+        uploadSingleFileToCloudinary({
+          file: video,
+          projectId: payload.projectId,
+          mediaType: "video",
+        }),
+      1
+    );
+
+    const uploadedVoiceNotes = await uploadFilesInBatches(
+      localVoiceNotes,
+      (voice) =>
+        uploadSingleFileToCloudinary({
+          file: voice,
+          projectId: payload.projectId,
+          mediaType: "voice",
+        }),
+      2
+    );
+
+    return request<UpdateAssetResponse>(`/projects/assets/${payload.assetId}`, {
+      method: "PATCH",
+      body: {
+        name: payload.name,
+        writtenDescription: payload.writtenDescription,
+        condition: payload.condition || undefined,
+        assetType: normalizeAssetType(payload.assetType),
+        brand: payload.brand,
+        model: payload.model,
+        code: payload.code,
+        manufactureYear: payload.manufactureYear,
+        kilometersDriven: payload.kilometersDriven,
+        hasNotes: payload.hasNotes,
+        notes: payload.notes,
+        isDone: payload.isDone,
+        isPresent: payload.isPresent,
+        images: [...existingMedia, ...uploadedImages, ...uploadedVideos],
+        voiceNotes: uploadedVoiceNotes,
+      },
+    });
+  },
+
+  deleteAsset: (assetId: string) =>
+    request<DeleteAssetResponse>(`/projects/assets/${assetId}`, {
+      method: "DELETE",
     }),
-  1
-);
-
-  const uploadedVoiceNotes = await uploadFilesInBatches(
-    localVoiceNotes,
-    (voice) =>
-      uploadSingleFileToCloudinary({
-        file: voice,
-        projectId: payload.projectId,
-        mediaType: "voice",
-      }),
-    2
-  );
-
-  return request<UpdateAssetResponse>(`/projects/assets/${payload.assetId}`, {
-    method: "PATCH",
-    body: {
-      name: payload.name,
-      writtenDescription: payload.writtenDescription,
-      condition: payload.condition || undefined,
-      assetType: normalizeAssetType(payload.assetType),
-      brand: payload.brand,
-      model: payload.model,
-      code: payload.code,
-      manufactureYear: payload.manufactureYear,
-      kilometersDriven: payload.kilometersDriven,
-      hasNotes: payload.hasNotes,
-      notes: payload.notes,
-      isDone: payload.isDone,
-      isPresent: payload.isPresent,
-      images: [...existingMedia, ...uploadedImages, ...uploadedVideos],
-      voiceNotes: uploadedVoiceNotes,
-    },
-  });
-},
-
-deleteAsset: (assetId: string) =>
-  request<DeleteAssetResponse>(`/projects/assets/${assetId}`, {
-    method: "DELETE",
-  }),
 
 
- advancedGetRawDataKeys: (projectId: string) => {
-  return request<AdvancedRawDataKeysResponse>(
-    `/projects/${projectId}/contents/advanced-keys`,
-    { method: "GET" }
-  );
-},
+  advancedGetRawDataKeys: (projectId: string) => {
+    return request<AdvancedRawDataKeysResponse>(
+      `/projects/${projectId}/contents/advanced-keys`,
+      { method: "GET" }
+    );
+  },
 
-advancedGetRawDataKeyValues: (projectId: string, key: string) => {
-  const params = new URLSearchParams();
-  params.set("key", key);
+  advancedGetRawDataKeyValues: (projectId: string, key: string) => {
+    const params = new URLSearchParams();
+    params.set("key", key);
 
-  return request<{ values: string[] }>(
-    `/projects/${projectId}/contents/advanced-key-values?${params.toString()}`,
-    {
-      method: "GET",
+    return request<{ values: string[] }>(
+      `/projects/${projectId}/contents/advanced-key-values?${params.toString()}`,
+      {
+        method: "GET",
+      }
+    );
+  },
+
+  advancedSearchContents: (
+    projectId: string,
+    filters?: { key: string; value: string }[] | null,
+    search?: string,
+    filter?: "all" | "done" | "incomplete" | "not_present",
+    page = 1,
+    limit = 15
+  ) => {
+    const params = new URLSearchParams();
+
+    if (filters?.length) {
+      params.set("filters", JSON.stringify(filters));
     }
-  );
-},
 
-advancedSearchContents: (
-  projectId: string,
-  filters?: { key: string; value: string }[] | null,
-  search?: string,
-  filter?: "all" | "done" | "incomplete" | "not_present",
-  page = 1,
-  limit = 15
-) => {
-  const params = new URLSearchParams();
+    const cleanSearch = search?.trim();
 
-  if (filters?.length) {
-    params.set("filters", JSON.stringify(filters));
-  }
-
-  const cleanSearch = search?.trim();
-
-  if (cleanSearch) {
-    params.set("search", cleanSearch);
-  }
-
-  if (filter && filter !== "all") {
-    params.set("filter", filter);
-  }
-
-  params.set("page", String(page));
-  params.set("limit", String(limit));
-
-  return request<ProjectContentsResponse>(
-    `/projects/${projectId}/contents/advanced-search?${params.toString()}`,
-    {
-      method: "GET",
+    if (cleanSearch) {
+      params.set("search", cleanSearch);
     }
-  );
-},
+
+    if (filter && filter !== "all") {
+      params.set("filter", filter);
+    }
+
+    params.set("page", String(page));
+    params.set("limit", String(limit));
+
+    return request<ProjectContentsResponse>(
+      `/projects/${projectId}/contents/advanced-search?${params.toString()}`,
+      {
+        method: "GET",
+      }
+    );
+  },
 
 };
 
@@ -1092,11 +1092,11 @@ export interface TransactionBuildingCondition {
 }
 
 export interface SearchCompanyTransactionsResponse
-  extends PaginatedCompanyTransactionsResponse {}
+  extends PaginatedCompanyTransactionsResponse { }
 
 export interface TransactionAvailableServices {
   electricity?: boolean;
-  electricityUnits?:number | null;
+  electricityUnits?: number | null;
   sanitaryDrainage?: boolean;
   telephoneLine?: boolean;
   waterMetersCount?: number | null;
@@ -1229,7 +1229,7 @@ function getTransactionLocalMedia(files?: AssetMediaInput[]): UploadFileInput[] 
 export const transactionApi = {
 
 
- listCompany: (params?: { page?: number; limit?: number }) => {
+  listCompany: (params?: { page?: number; limit?: number }) => {
     const page = params?.page ?? 1;
     const limit = params?.limit ?? 10;
 
@@ -1242,7 +1242,7 @@ export const transactionApi = {
   },
 
 
-    downloadCompany: (params?: { page?: number; limit?: number }) => {
+  downloadCompany: (params?: { page?: number; limit?: number }) => {
     const page = params?.page ?? 1;
     const limit = params?.limit ?? 10;
 
@@ -1254,7 +1254,7 @@ export const transactionApi = {
     );
   },
 
-   getOfflineMedia: (transactionIds: string[]) =>
+  getOfflineMedia: (transactionIds: string[]) =>
     request<OfflineMediaResponse>("/transactions/media/offline", {
       method: "POST",
       body: { transactionIds },
@@ -1268,24 +1268,24 @@ export const transactionApi = {
       }
     ),
 
-    searchCompany: (params: {
-  assignmentNumber: string;
-  page?: number;
-  limit?: number;
-}) => {
-  const page = params.page ?? 1;
-  const limit = params.limit ?? 10;
-  const assignmentNumber = encodeURIComponent(
-    params.assignmentNumber.trim()
-  );
+  searchCompany: (params: {
+    assignmentNumber: string;
+    page?: number;
+    limit?: number;
+  }) => {
+    const page = params.page ?? 1;
+    const limit = params.limit ?? 10;
+    const assignmentNumber = encodeURIComponent(
+      params.assignmentNumber.trim()
+    );
 
-  return request<SearchCompanyTransactionsResponse>(
-    `/transactions/company/search?assignmentNumber=${assignmentNumber}&page=${page}&limit=${limit}`,
-    {
-      method: "GET",
-    }
-  );
-},
+    return request<SearchCompanyTransactionsResponse>(
+      `/transactions/company/search?assignmentNumber=${assignmentNumber}&page=${page}&limit=${limit}`,
+      {
+        method: "GET",
+      }
+    );
+  },
 
   updateInspectionData: (
     transactionId: string,
@@ -1299,77 +1299,77 @@ export const transactionApi = {
       }
     ),
 
- addMedia: async (payload: {
-  transactionId: string;
-  media: AssetMediaInput[];
-}) => {
-  const localMedia = getTransactionLocalMedia(payload.media);
+  addMedia: async (payload: {
+    transactionId: string;
+    media: AssetMediaInput[];
+  }) => {
+    const localMedia = getTransactionLocalMedia(payload.media);
 
-  if (localMedia.length === 0) {
-    return {
-      success: true,
-      message: "No new media to upload",
-      data: [],
-    } satisfies AddTransactionMediaResponse;
-  }
-
-  const localImages = localMedia.filter((file) => !isVideoFile(file));
-  const localVideos = localMedia.filter(isVideoFile);
-
-
-  const uploadedImages = await uploadFilesInBatches(
-    localImages,
-    async (image) => {
-      const uploaded = await uploadSingleFileToCloudinary({
-        file: image,
-        projectId: payload.transactionId,
-        mediaType: "image",
-      });
-
+    if (localMedia.length === 0) {
       return {
-        ...uploaded,
-        mediaType: "image" as const,
-        name: image.name,
-        originalName: image.name,
-        localId: (image as any).localId,
-      };
-    },
-    3
-  );
-
-  const uploadedVideos = await uploadFilesInBatches(
-    localVideos,
-    async (video) => {
-      const uploaded = await uploadSingleFileToCloudinary({
-        file: video,
-        projectId: payload.transactionId,
-        mediaType: "video",
-      });
-
-      return {
-        ...uploaded,
-        mediaType: "video" as const,
-        name: video.name,
-        originalName: video.name,
-        localId: (video as any).localId,
-      };
-    },
-    1
-  );
-
-  const media = [...uploadedImages, ...uploadedVideos].map((item, index) => ({
-    ...item,
-    sortIndex: index,
-  }));
-
-  return request<AddTransactionMediaResponse>(
-    `/transactions/${payload.transactionId}/media`,
-    {
-      method: "POST",
-      body: { media },
+        success: true,
+        message: "No new media to upload",
+        data: [],
+      } satisfies AddTransactionMediaResponse;
     }
-  );
-},
+
+    const localImages = localMedia.filter((file) => !isVideoFile(file));
+    const localVideos = localMedia.filter(isVideoFile);
+
+
+    const uploadedImages = await uploadFilesInBatches(
+      localImages,
+      async (image) => {
+        const uploaded = await uploadSingleFileToCloudinary({
+          file: image,
+          projectId: payload.transactionId,
+          mediaType: "image",
+        });
+
+        return {
+          ...uploaded,
+          mediaType: "image" as const,
+          name: image.name,
+          originalName: image.name,
+          localId: (image as any).localId,
+        };
+      },
+      3
+    );
+
+    const uploadedVideos = await uploadFilesInBatches(
+      localVideos,
+      async (video) => {
+        const uploaded = await uploadSingleFileToCloudinary({
+          file: video,
+          projectId: payload.transactionId,
+          mediaType: "video",
+        });
+
+        return {
+          ...uploaded,
+          mediaType: "video" as const,
+          name: video.name,
+          originalName: video.name,
+          localId: (video as any).localId,
+        };
+      },
+      1
+    );
+
+    const media = [...uploadedImages, ...uploadedVideos].map((item, index) => ({
+      ...item,
+      sortIndex: index,
+    }));
+
+    return request<AddTransactionMediaResponse>(
+      `/transactions/${payload.transactionId}/media`,
+      {
+        method: "POST",
+        body: { media },
+      }
+    );
+  },
 
   listMedia: (transactionId: string) =>
     request<ListTransactionMediaResponse>(
