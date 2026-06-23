@@ -108,6 +108,10 @@ export default function FolderAndAssetScreen({ route }: Props) {
 >([]);
 
 
+const [assetCategoryModalVisible, setAssetCategoryModalVisible] = useState(false);
+const [createAssetInitialData, setCreateAssetInitialData] =
+  useState<Partial<AssetDraft> | undefined>(undefined);
+
 
   const { width, height } = useWindowDimensions();
   const isSmallScreen = width < 380 || height < 700;
@@ -1349,6 +1353,34 @@ const isAssetSynced = (asset: AssetItem) => {
     !unsyncedAssetIds.includes(asset.id)
   );
 };
+
+
+const generateAssetName = (category: "Vehicle" | "Other") => {
+  const prefix = category === "Vehicle" ? "Vehicle" : "Asset";
+  const number = Math.floor(Math.random() * 999) + 1;
+
+  return `${prefix} ${String(number).padStart(3, "0")}`;
+};
+
+const openCreateAssetByCategory = (category: "Vehicle" | "Other") => {
+  Keyboard.dismiss();
+
+  setEditingAsset(null);
+  setCreateAssetInitialData({
+    name: generateAssetName(category),
+    assetType: category,
+    condition: "Good",
+    isPresent: true,
+    isDone: true,
+    rawData: {
+      quantity: 1,
+      customAssetType: category,
+    },
+  } as any);
+
+  setAssetCategoryModalVisible(false);
+  setAssetModalVisible(true);
+};
   
   return (
     <SafeAreaView style={styles.flex} edges={["left", "right", "bottom"]}>
@@ -1860,16 +1892,11 @@ const isAssetSynced = (asset: AssetItem) => {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.secondaryBtn}
-              onPress={() => {
+ onPress={() => {
   Keyboard.dismiss();
   setEditingAsset(null);
-  setAssetModalVisible(true);
-
-  requestAnimationFrame(() => {
-    setTimeout(() => {
-      assetWizardInputRef.current?.focus();
-    }, 80);
-  });
+  setCreateAssetInitialData(undefined);
+  setAssetCategoryModalVisible(true);
 }}
               activeOpacity={0.85}
             >
@@ -2262,6 +2289,53 @@ const isAssetSynced = (asset: AssetItem) => {
           onDetected={handleDetectedAssetCode}
         />
 
+        <Modal
+  visible={assetCategoryModalVisible}
+  transparent
+  animationType="fade"
+  onRequestClose={() => setAssetCategoryModalVisible(false)}
+>
+  <TouchableWithoutFeedback onPress={() => setAssetCategoryModalVisible(false)}>
+    <View style={styles.modalOverlay}>
+      <TouchableWithoutFeedback>
+        <View style={styles.assetCategoryCard}>
+          <Text style={styles.assetCategoryTitle}>Select category</Text>
+
+          <TouchableOpacity
+            style={styles.assetCategoryOption}
+            onPress={() => openCreateAssetByCategory("Vehicle")}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="car-outline" size={26} color={ACC} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.assetCategoryOptionTitle}>Vehicle</Text>
+              <Text style={styles.assetCategoryOptionSub}>
+                Brand, model, year and kilometers
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={MUTED} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.assetCategoryOption}
+            onPress={() => openCreateAssetByCategory("Other")}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="cube-outline" size={26} color={ACC} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.assetCategoryOptionTitle}>Other</Text>
+              <Text style={styles.assetCategoryOptionSub}>
+                Sofa, chair, TV, equipment, etc.
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={MUTED} />
+          </TouchableOpacity>
+        </View>
+      </TouchableWithoutFeedback>
+    </View>
+  </TouchableWithoutFeedback>
+</Modal>
+
         {/* ── Asset wizard modal ── */}
         <CreateAssetWizardModal
           firstInputRef={assetWizardInputRef}
@@ -2270,7 +2344,9 @@ const isAssetSynced = (asset: AssetItem) => {
           onClose={closeAssetModal}
           onSubmit={(draft) => submitAssetInBackground(draft, !!editingAsset)}
           mode={editingAsset ? "edit" : "create"}
-          initialData={editingAsset ? mapAssetToDraft(editingAsset) : undefined}
+          initialData={
+  editingAsset ? mapAssetToDraft(editingAsset) : createAssetInitialData
+}
         />
 
         {/* ── Snackbar ── */}
@@ -2326,6 +2402,47 @@ const styles = StyleSheet.create({
   marginBottom: 4,
   borderBottomWidth: 1,
   borderBottomColor: BORDER,
+},
+
+assetCategoryCard: {
+  width: "90%",
+  maxWidth: 420,
+  backgroundColor: "#ffffff",
+  borderRadius: 22,
+  borderWidth: 1,
+  borderColor: BORDER,
+  padding: 16,
+},
+
+assetCategoryTitle: {
+  color: TEXT,
+  fontSize: 16,
+  fontWeight: "800",
+  marginBottom: 14,
+},
+
+assetCategoryOption: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 12,
+  backgroundColor: SURFACE,
+  borderWidth: 1,
+  borderColor: BORDER,
+  borderRadius: 16,
+  padding: 14,
+  marginBottom: 10,
+},
+
+assetCategoryOptionTitle: {
+  color: TEXT,
+  fontSize: 15,
+  fontWeight: "800",
+},
+
+assetCategoryOptionSub: {
+  color: MUTED,
+  fontSize: 11,
+  marginTop: 2,
 },
 
 videoPlayer: {
