@@ -45,7 +45,7 @@ const getInitialDraft = (
   images: initialData?.images || [],
   name: initialData?.name || "",
   writtenDescription: initialData?.writtenDescription || "",
-  voiceNotes: initialData?.voiceNotes || [],
+  voiceNotes: initialData?.voiceNotes?.slice(0, 1) || [],
   condition: initialData?.condition || "Good",
   assetType: initialData?.assetType || "Other",
   brand: initialData?.brand || "",
@@ -53,7 +53,7 @@ const getInitialDraft = (
   manufactureYear: initialData?.manufactureYear || "",
   kilometersDriven: initialData?.kilometersDriven || "",
   isPresent: initialData?.isPresent ?? true,
-  isDone: initialData?.isDone || true,
+  isDone: initialData?.isDone ?? true,
   hasNotes: initialData?.hasNotes ?? false,
   notes: initialData?.notes || "",
 });
@@ -109,9 +109,9 @@ const showSnackbar = (
 const isSmallScreen = width < 380 || height < 700;
 const isTablet = width >= 768;
 
-const modalWidth = Math.min(width * 0.92, isTablet ? 560 : 420);
-const modalMaxHeight = height * 1;
-const modalMinHeight = Math.min(height * 0.7, 480);
+const modalWidth = Math.min(width * 0.95, isTablet ? 720 : 520);
+const modalMaxHeight = height * 0.95;
+const modalMinHeight = height * 0.88;
 
 
 
@@ -132,26 +132,99 @@ const modalMinHeight = Math.min(height * 0.7, 480);
   };
 }, []);
 
-  useEffect(() => {
-    if (visible) {
-      setStep(1);
-      setDraft(getInitialDraft(initialData));
-      setIsRecording(false);
-      setCameraMode("photos");
-      setSubmitting(false);
-    } else {
-      stopVoicePlayback();
-    }
-  }, [visible, initialData]);
+ useEffect(() => {
+  if (visible) {
+    setStep(1);
+    setDraft(getInitialDraft(initialData));
+    setIsRecording(false);
+    setCameraMode("photos");
+    setSubmitting(false);
+    didAutoOpenCameraRef.current = false;
 
-  const previewSize = useMemo(() => {
-  const columns = width < 360 ? 3 : width < 600 ? 4 : 5;
+    if (mode === "create" && initialData?.assetType && !didAutoOpenCameraRef.current) {
+      didAutoOpenCameraRef.current = true;
+
+      setTimeout(() => {
+        setCameraMode("photos");
+        setCameraOpen(true);
+      }, 350);
+    }
+  } else {
+    stopVoicePlayback();
+  }
+}, [visible, initialData, mode]);
+
+ const previewSize = useMemo(() => {
+  const columns = width < 360 ? 4 : width < 600 ? 5 : 6;
   const cardPadding = 32;
-  const gaps = (columns - 1) * 8;
+  const gaps = (columns - 1) * 6;
   const available = modalWidth - cardPadding - gaps;
 
-  return Math.max(58, Math.floor(available / columns));
+  return Math.max(44, Math.min(62, Math.floor(available / columns)));
 }, [width, modalWidth]);
+
+const didAutoOpenCameraRef = useRef(false);
+const [customTypeInput, setCustomTypeInput] = useState("");
+
+const getQuantity = () => {
+  const rawQuantity =
+    (draft as any).quantity ??
+    (draft as any).rawData?.quantity ??
+    1;
+
+  return String(rawQuantity);
+};
+
+const updateQuantity = (nextValue: number | string) => {
+  const cleaned =
+    typeof nextValue === "number"
+      ? nextValue
+      : Number(String(nextValue).replace(/[^0-9]/g, "") || 0);
+
+  const quantity = Math.max(0, cleaned);
+
+  setDraft((prev) => ({
+    ...prev,
+    rawData: {
+      ...((prev as any).rawData || {}),
+      quantity,
+    },
+  } as any));
+};
+
+const updateCustomAssetType = (value: string) => {
+  setDraft((prev) => ({
+    ...prev,
+    rawData: {
+      ...((prev as any).rawData || {}),
+      customAssetType: value,
+    },
+  } as any));
+};
+
+const [showCustomTypeInput, setShowCustomTypeInput] = useState(false);
+
+const currentCategory =
+  String(draft.assetType || "").toLowerCase() === "vehicle"
+    ? "Vehicle"
+    : "Other";
+
+const isVehicle = currentCategory === "Vehicle";
+
+const customAssetType = String(
+  (draft as any).rawData?.customAssetType || currentCategory
+).trim();
+
+const displayCategory =
+  customAssetType && customAssetType !== currentCategory
+    ? `${currentCategory} • ${customAssetType}`
+    : currentCategory;
+
+const getShortVoiceName = () => {
+  if (isRecording) return "Recording...";
+  if (!draft.voiceNotes?.[0]) return "Add voice";
+  return "Voice note";
+};
 
   const setFieldPosition = (key: string) => (e: LayoutChangeEvent) => {
     fieldPositions.current[key] = e.nativeEvent.layout.y;
@@ -205,9 +278,7 @@ const modalMinHeight = Math.min(height * 0.7, 480);
       };
     });
 
-    setTimeout(() => {
-      scrollToField("writtenDescription");
-    }, 150);
+    showSnackbar("Scanned text added", "success");
   };
 
   const pickImagesFromLibrary = async () => {
@@ -262,30 +333,33 @@ const modalMinHeight = Math.min(height * 0.7, 480);
     }
   };
 
-  const stopRecording = async () => {
-    try {
-      await recorder.stop();
-      setIsRecording(false);
+ const stopRecording = async () => {
+  try {
+    await recorder.stop();
+    setIsRecording(false);
 
-      const uri = recorder.uri;
+    const uri = recorder.uri;
 
-      if (uri) {
-        setDraft((prev) => ({
-          ...prev,
-          voiceNotes: [
-            ...(prev.voiceNotes || []),
-            {
-              uri,
-              name: `voice_note_${Date.now()}.m4a`,
-              type: "audio/m4a",
-            },
-          ],
-        }));
-      }
-    } catch (error) {
-      showSnackbar(t("asset.couldNotStopRecording"), "error");
+    if (uri) {
+      await stopVoicePlayback();
+
+      setDraft((prev) => ({
+        ...prev,
+        voiceNotes: [
+          {
+            uri,
+            name: `voice_note_${Date.now()}.m4a`,
+            type: "audio/m4a",
+          },
+        ],
+      }));
     }
-  };
+  } catch (error) {
+    showSnackbar(t("asset.couldNotStopRecording"), "error");
+  }
+};
+
+  
 
   const playVoiceNote = async (uri: string, index: number) => {
     try {
@@ -454,11 +528,71 @@ const modalMinHeight = Math.min(height * 0.7, 480);
                   ]}
                 >
                   <View style={styles.header}>
-                    <Text style={styles.title}>
-                      {mode === "edit"
-                        ? t("asset.editAsset")
-                        : t("asset.createAsset")}
-                    </Text>
+<View style={{ flex: 1 }}>
+  <View style={styles.titleRow}>
+    <Text style={styles.title}>
+      {mode === "edit" ? t("asset.editAsset") : t("asset.createAsset")}
+    </Text>
+
+    <View style={styles.categoryBadge}>
+      <Text style={styles.categoryBadgeText} numberOfLines={1}>
+        {displayCategory}
+      </Text>
+    </View>
+
+    <TouchableOpacity
+      style={styles.addTypeHeaderBtn}
+      onPress={() => setShowCustomTypeInput((prev) => !prev)}
+      activeOpacity={0.85}
+    >
+      <Ionicons name="add" size={16} color={TEXT} />
+    </TouchableOpacity>
+  </View>
+
+  {showCustomTypeInput && (
+    <View style={styles.headerTypeInputRow}>
+      <TextInput
+        placeholder="Asset type e.g. Sofa, Chair, TV"
+        placeholderTextColor="#767B91"
+        value={
+          customAssetType === "Vehicle" || customAssetType === "Other"
+            ? ""
+            : customAssetType
+        }
+        onChangeText={updateCustomAssetType}
+        style={styles.headerTypeInput}
+      />
+
+      <TouchableOpacity
+        style={styles.headerTypeSaveBtn}
+        onPress={() => {
+          const value = String(
+            (draft as any).rawData?.customAssetType || ""
+          ).trim();
+
+          if (!value) {
+            showSnackbar("Please enter asset type", "error");
+            return;
+          }
+
+          setDraft((prev) => ({
+            ...prev,
+            assetType: "Other",
+            rawData: {
+              ...((prev as any).rawData || {}),
+              customAssetType: value,
+            },
+          } as any));
+
+          setShowCustomTypeInput(false);
+        }}
+        activeOpacity={0.85}
+      >
+        <Text style={styles.headerTypeSaveText}>Add</Text>
+      </TouchableOpacity>
+    </View>
+  )}
+</View>
 
                     <TouchableOpacity
                       onPress={handleClose}
@@ -469,10 +603,10 @@ const modalMinHeight = Math.min(height * 0.7, 480);
                     </TouchableOpacity>
                   </View>
 
-                  <Text style={styles.step}>
+                  {/* <Text style={styles.step}>
                     {t("asset.stepOf", { step, total: totalSteps })}
-                  </Text>
-
+                  </Text> */}
+                  
                   <ScrollView
                     ref={scrollRef}
                     style={styles.scrollView}
@@ -482,631 +616,421 @@ const modalMinHeight = Math.min(height * 0.7, 480);
                     keyboardDismissMode="on-drag"
                     nestedScrollEnabled={true}
                   >
-                    {step === 1 && (
-                      <>
-                        <Text style={styles.label}>
-                          {t("asset.assetDetails")}
-                        </Text>
+                  <>
+  <View style={styles.topQuickRow}>
+    <View style={{ flex: 1 }}>
+      <Text style={styles.fieldLabel}>Asset name</Text>
+      <TextInput
+        ref={firstInputRef}
+        placeholder={t("asset.assetName")}
+        placeholderTextColor="#767B91"
+        value={draft.name}
+        onChangeText={(text) => {
+          if (!disableAssetName) {
+            setDraft((prev) => ({ ...prev, name: text }));
+          }
+        }}
+        editable={!disableAssetName}
+        selectTextOnFocus={!disableAssetName}
+        style={[
+          styles.input,
+          styles.compactInput,
+          disableAssetName && styles.inputDisabled,
+        ]}
+        returnKeyType="done"
+      />
+    </View>
 
-                        <View onLayout={setFieldPosition("name")}> 
-                          <Text style={styles.fieldLabel}>
-                            {t("asset.assetName")}
-                          </Text>
+    <View style={styles.quantityBox}>
+      <Text style={styles.fieldLabel}>Quantity</Text>
 
-                          <TextInput
-                           ref={firstInputRef}
-                          autoFocus={visible && mode === "create"}
-                            placeholder={t("asset.assetName")}
-                            placeholderTextColor="#767B91"
-                            value={draft.name}
-                            onChangeText={(text) => {
-                              if (!disableAssetName) {
-                                setDraft((prev) => ({
-                                  ...prev,
-                                  name: text,
-                                }));
-                              }
-                            }}
-                            editable={!disableAssetName}
-                            selectTextOnFocus={!disableAssetName}
-                            style={[
-                              styles.input,
-                              disableAssetName && styles.inputDisabled,
-                            ]}
-                            returnKeyType="next"
-                            blurOnSubmit={false}
-                            onFocus={() => scrollToField("name")}
-                          />
-                        </View>
+      <View style={styles.quantityControl}>
+        <TouchableOpacity
+          style={styles.quantityIconBtn}
+          onPress={() => updateQuantity(Number(getQuantity()) - 1)}
+        >
+          <Ionicons name="remove" size={18} color={TEXT} />
+        </TouchableOpacity>
 
-<TouchableOpacity
-  style={styles.notesCheckRow}
-  onPress={() => {
-    if (draft.hasNotes) {
-      setNotesModalVisible(true); // reopen, don't uncheck/delete
-      return;
-    }
+        <TextInput
+          value={getQuantity()}
+          onChangeText={updateQuantity}
+          keyboardType="numeric"
+          style={styles.quantityInput}
+        />
 
-    setDraft((prev) => ({
-      ...prev,
-      hasNotes: true,
-    }));
-    setNotesModalVisible(true);
-  }}
-  activeOpacity={0.8}
->
-  <Ionicons
-    name={draft.hasNotes ? "checkbox" : "square-outline"}
-    size={22}
-    color="#2A324B"
-  />
-
-  <View style={styles.notesTextWrap}>
-    <Text style={styles.notesCheckText}>Add Notes</Text>
-
-    {!!draft.notes?.trim() && (
-      <Text style={styles.notesPreview} numberOfLines={1}>
-        {draft.notes.trim()}
-      </Text>
-    )}
+        <TouchableOpacity
+          style={styles.quantityIconBtn}
+          onPress={() => updateQuantity(Number(getQuantity()) + 1)}
+        >
+          <Ionicons name="add" size={18} color={TEXT} />
+        </TouchableOpacity>
+      </View>
+    </View>
   </View>
 
-  {draft.hasNotes && (
-    <TouchableOpacity
-      onPress={() =>
-        Alert.alert(
-          t("common.confirm") || "Confirm",
-          t("asset.removeNotesConfirm") || "Remove notes?",
-          [
-            { text: t("common.cancel") || "Cancel", style: "cancel" },
-            {
-              text: t("common.remove") || "Remove",
-              style: "destructive",
-              onPress: () =>
-                setDraft((prev) => ({
-                  ...prev,
-                  hasNotes: false,
-                  notes: "",
-                })),
+  
+
+ 
+
+  {!!customTypeInput && (
+    <View style={styles.customTypeRow}>
+      <TextInput
+        placeholder="Example: Sofa, Chair, TV"
+        placeholderTextColor="#767B91"
+        value={customAssetType === "Vehicle" || customAssetType === "Other" ? "" : customAssetType}
+        onChangeText={updateCustomAssetType}
+        style={[styles.input, styles.compactInput, { flex: 1 }]}
+      />
+
+      <TouchableOpacity
+        style={styles.addTypeSaveBtn}
+        onPress={() => {
+          const value = String((draft as any).rawData?.customAssetType || "").trim();
+
+          if (!value) {
+            showSnackbar("Please enter asset type", "error");
+            return;
+          }
+
+          setDraft((prev) => ({
+            ...prev,
+            assetType: "Other",
+            rawData: {
+              ...((prev as any).rawData || {}),
+              customAssetType: value,
             },
-          ]
-        )
-      }
-      style={styles.notesRemoveBtn}
-    >
-      <Text style={styles.notesRemoveText}>✕</Text>
-    </TouchableOpacity>
+          } as any));
+
+          setCustomTypeInput("");
+        }}
+      >
+        <Text style={styles.primaryText}>Add</Text>
+      </TouchableOpacity>
+    </View>
   )}
-</TouchableOpacity>
 
-
-<Text style={styles.fieldLabel}>
-  {t("asset.assetIsPresent") || "Asset is present"}
-</Text>
-
-<View style={styles.radioRow}>
-  <TouchableOpacity
-    style={styles.radioOption}
-    onPress={() =>
-      setDraft((prev) => ({
-        ...prev,
-        isPresent: true,
-      }))
-    }
-    activeOpacity={0.8}
-  >
-    <Ionicons
-      name={draft.isPresent ? "radio-button-on" : "radio-button-off"}
-      size={22}
-      color={ACC}
-    />
-    <Text style={styles.radioText}>{t("common.yes") || "Yes"}</Text>
-  </TouchableOpacity>
-
-  <TouchableOpacity
-    style={styles.radioOption}
-    onPress={async () => {
-      const updatedDraft = {
-        ...draft,
-        isPresent: false,
-      };
-
-      setDraft(updatedDraft);
-
-      if (submitting) return;
-
-      setSubmitting(true);
-
-      try {
-        await onSubmit(updatedDraft);
-        await handleClose();
-      } catch (error: any) {
-        setSubmitting(false);
-        Alert.alert(
-          t("common.error"),
-          error?.message || t("asset.failedToSaveAsset")
-        );
+  <Text style={styles.fieldLabel}>{t("asset.condition")}</Text>
+  <View style={styles.pickerWrap}>
+    <Picker
+      selectedValue={draft.condition}
+      onValueChange={(value) =>
+        setDraft((prev) => ({
+          ...prev,
+          condition: value,
+        }))
       }
+      dropdownIconColor="#2A324B"
+      style={styles.picker}
+    >
+      <Picker.Item label={t("asset.conditionGood")} value="Good" />
+      <Picker.Item label={t("asset.conditionNew")} value="New" />
+      <Picker.Item label={t("asset.conditionUsed")} value="Used" />
+      <Picker.Item label={t("asset.conditionDamaged")} value="Damaged" />
+    </Picker>
+  </View>
+
+  {isVehicle && (
+    <View style={styles.vehicleGrid}>
+      <View style={styles.vehicleField}>
+        <Text style={styles.fieldLabel}>{t("asset.brand")}</Text>
+        <TextInput
+          placeholder={t("asset.brand")}
+          placeholderTextColor="#767B91"
+          value={draft.brand}
+          onChangeText={(text) =>
+            setDraft((prev) => ({ ...prev, brand: text }))
+          }
+          style={[styles.input, styles.compactInput]}
+        />
+      </View>
+
+      <View style={styles.vehicleField}>
+        <Text style={styles.fieldLabel}>{t("asset.model")}</Text>
+        <TextInput
+          placeholder={t("asset.model")}
+          placeholderTextColor="#767B91"
+          value={draft.model}
+          onChangeText={(text) =>
+            setDraft((prev) => ({ ...prev, model: text }))
+          }
+          style={[styles.input, styles.compactInput]}
+        />
+      </View>
+
+      <View style={styles.vehicleField}>
+        <Text style={styles.fieldLabel}>{t("asset.manufactureYear")}</Text>
+        <TextInput
+          placeholder={t("asset.manufactureYear")}
+          placeholderTextColor="#767B91"
+          value={draft.manufactureYear}
+          keyboardType="numeric"
+          onChangeText={(text) =>
+            setDraft((prev) => ({ ...prev, manufactureYear: text }))
+          }
+          style={[styles.input, styles.compactInput]}
+        />
+      </View>
+
+      <View style={styles.vehicleField}>
+        <Text style={styles.fieldLabel}>{t("asset.kilometersDriven")}</Text>
+        <TextInput
+          placeholder={t("asset.kilometersDriven")}
+          placeholderTextColor="#767B91"
+          value={draft.kilometersDriven}
+          keyboardType="numeric"
+          onChangeText={(text) =>
+            setDraft((prev) => ({ ...prev, kilometersDriven: text }))
+          }
+          style={[styles.input, styles.compactInput]}
+        />
+      </View>
+    </View>
+  )}
+
+  <TouchableOpacity
+    style={styles.notesCheckRow}
+    onPress={() => {
+      if (draft.hasNotes) {
+        setNotesModalVisible(true);
+        return;
+      }
+
+      setDraft((prev) => ({ ...prev, hasNotes: true }));
+      setNotesModalVisible(true);
     }}
     activeOpacity={0.8}
   >
     <Ionicons
-      name={!draft.isPresent ? "radio-button-on" : "radio-button-off"}
+      name={draft.hasNotes ? "checkbox" : "square-outline"}
       size={22}
-      color={ACC}
+      color="#2A324B"
     />
-    <Text style={styles.radioText}>{t("common.no") || "No"}</Text>
-  </TouchableOpacity>
-</View>
 
+    <View style={styles.notesTextWrap}>
+      <Text style={styles.notesCheckText}>Add Notes</Text>
 
-
-                        <Text style={styles.fieldLabel}>
-
-                          {t("asset.condition")}
-                        </Text>
-
-                        <View style={styles.pickerWrap}>
-                          <Picker
-                            selectedValue={draft.condition}
-                            onValueChange={(value) =>
-                              setDraft((prev) => ({
-                                ...prev,
-                                condition: value,
-                              }))
-                            }
-                            dropdownIconColor="#2A324B"
-                            style={styles.picker}
-                          >
-                            <Picker.Item
-                              label={t("asset.conditionGood")}
-                              value="Good"
-                            />
-                            <Picker.Item
-                              label={t("asset.conditionNew")}
-                              value="New"
-                            />
-                            <Picker.Item
-                              label={t("asset.conditionUsed")}
-                              value="Used"
-                            />
-                            <Picker.Item
-                              label={t("asset.conditionDamaged")}
-                              value="Damaged"
-                            />
-                          </Picker>
-                        </View>
-
-                        <Text style={styles.fieldLabel}>
-                          {t("asset.assetType")}
-                        </Text>
-
-                        <View style={styles.pickerWrap}>
-                          <Picker
-                            selectedValue={draft.assetType}
-                            onValueChange={(value) =>
-                              setDraft((prev) => ({
-                                ...prev,
-                                assetType: value,
-                              }))
-                            }
-                            dropdownIconColor="#fff"
-                            style={styles.picker}
-                          >
-                            <Picker.Item
-                              label={t("asset.typeOther")}
-                              value="Other"
-                            />
-                            <Picker.Item
-                              label={t("asset.typeVehicle")}
-                              value="Vehicle"
-                            />
-                          </Picker>
-                        </View>
-
-                        {draft.assetType === "Vehicle" && (
-                          <>
-                            <View onLayout={setFieldPosition("brand")}>
-                              <Text style={styles.fieldLabel}>
-                                {t("asset.brand")}
-                              </Text>
-
-                              <TextInput
-                                placeholder={t("asset.brand")}
-                                placeholderTextColor="#666"
-                                value={draft.brand}
-                                onChangeText={(text) =>
-                                  setDraft((prev) => ({
-                                    ...prev,
-                                    brand: text,
-                                  }))
-                                }
-                                style={styles.input}
-                                returnKeyType="next"
-                                blurOnSubmit={false}
-                                onFocus={() => scrollToField("brand")}
-                              />
-                            </View>
-
-                            <View onLayout={setFieldPosition("model")}>
-                              <Text style={styles.fieldLabel}>
-                                {t("asset.model")}
-                              </Text>
-
-                              <TextInput
-                                placeholder={t("asset.model")}
-                                placeholderTextColor="#666"
-                                value={draft.model}
-                                onChangeText={(text) =>
-                                  setDraft((prev) => ({
-                                    ...prev,
-                                    model: text,
-                                  }))
-                                }
-                                style={[styles.input, styles.modelInput]}
-                                returnKeyType="next"
-                                blurOnSubmit={false}
-                                onFocus={() => scrollToField("model")}
-                              />
-                            </View>
-
-                            <View
-                              onLayout={setFieldPosition("manufactureYear")}
-                            >
-                              <Text style={styles.fieldLabel}>
-                                {t("asset.manufactureYear")}
-                              </Text>
-
-                              <TextInput
-                                placeholder={t("asset.manufactureYear")}
-                                placeholderTextColor="#666"
-                                value={draft.manufactureYear}
-                                onChangeText={(text) =>
-                                  setDraft((prev) => ({
-                                    ...prev,
-                                    manufactureYear: text,
-                                  }))
-                                }
-                                keyboardType="numeric"
-                                style={styles.input}
-                                returnKeyType="next"
-                                blurOnSubmit={false}
-                                onFocus={() =>
-                                  scrollToField("manufactureYear")
-                                }
-                              />
-                            </View>
-
-                            <View
-                              onLayout={setFieldPosition("kilometersDriven")}
-                            >
-                              <Text style={styles.fieldLabel}>
-                                {t("asset.kilometersDriven")}
-                              </Text>
-
-                              <TextInput
-                                placeholder={t("asset.kilometersDriven")}
-                                placeholderTextColor="#666"
-                                value={draft.kilometersDriven}
-                                onChangeText={(text) =>
-                                  setDraft((prev) => ({
-                                    ...prev,
-                                    kilometersDriven: text,
-                                  }))
-                                }
-                                keyboardType="numeric"
-                                style={styles.input}
-                                returnKeyType="done"
-                                onFocus={() =>
-                                  scrollToField("kilometersDriven")
-                                }
-                              />
-                            </View>
-                          </>
-                        )}
-
-
-
-                      </>
-                    )}
-
-                    {step === 2 && (
-                      <>
-                        <Text style={styles.label}>
-                          {t("asset.uploadImages")}
-                        </Text>
-
-                        <View style={styles.imageActionRow}>
-                          <TouchableOpacity
-                            style={[
-                              styles.primaryBtn,
-                              styles.flexBtn,
-                              {
-                                flexDirection: "row",
-                                alignItems: "center",
-                                justifyContent: "center",
-                              },
-                            ]}
-                            onPress={openPhotoCamera}
-                            activeOpacity={0.85}
-                          >
-                            <MaterialIcons
-                              name="photo-camera"
-                              size={18}
-                              color="#fff"
-                              style={{ marginRight: 8 }}
-                            />
-                            <Text style={styles.primaryText}>
-                              {t("asset.openCamera")}
-                            </Text>
-                          </TouchableOpacity>
-
-                          <TouchableOpacity
-                            style={[styles.darkBtn, styles.flexBtn]}
-                            onPress={pickImagesFromLibrary}
-                            activeOpacity={0.85}
-                          >
-                            <Text style={styles.darkBtnText}>
-                              {t("asset.uploadFromPhone")}
-                            </Text>
-                          </TouchableOpacity>
-
-                          <TouchableOpacity
-                            style={[styles.darkBtn, styles.flexBtn]}
-                            onPress={openScanCamera}
-                            activeOpacity={0.85}
-                          >
-                            <Text style={styles.darkBtnText}>
-                              {t("asset.scanText")}
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-
-
-
-                        <Text style={styles.helper}>
-                          {t("asset.imagesSelected", {
-                            count: draft.images.length,
-                          })}
-                        </Text>
-
-
-
-                        {draft.images.length > 0 && (
-                          <View style={styles.previewGrid}>
-
-                            {draft.images.map((img, index) => {
-  const imageUri = img.uri || img.url;
-  if (!imageUri) return null;
-
-  return (
-    <View
-      key={`${imageUri}-${index}`}
-      style={[
-        styles.previewItem,
-        {
-          width: previewSize,
-          height: previewSize,
-        },
-      ]}
-    >
-      <Image source={{ uri: imageUri }} style={styles.previewImage} />
-
-      <TouchableOpacity
-        style={styles.removeBadge}
-        onPress={() => removeImage(index)}
-      >
-        <Text style={styles.removeBadgeText}>✕</Text>
-      </TouchableOpacity>
-    </View>
-  );
-})}
-                           
-                          </View>
-                        )}
-                      </>
-                    )}
-
-                    {step === 3 && (
-                      <>
-                        <View style={styles.descriptionHeader}>
-                          <Text style={styles.label}>
-                            {t("asset.description")}
-                          </Text>
-
-                          <TouchableOpacity
-                            style={styles.scanBtn}
-                            onPress={openScanCamera}
-                            activeOpacity={0.85}
-                          >
-                            <Text style={styles.scanBtnText}>
-                              {t("asset.scanText")}
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-
-                        <View
-                          onLayout={setFieldPosition("writtenDescription")}
-                          style={styles.descriptionInputWrapper}
-                        >
-                          <TextInput
-                            placeholder={t("asset.writeSomething")}
-                            placeholderTextColor="#666"
-                            value={draft.writtenDescription}
-                            onChangeText={(text) =>
-                              setDraft((prev) => ({
-                                ...prev,
-                                writtenDescription: text,
-                              }))
-                            }
-                            style={[styles.input, styles.textArea]}
-                            multiline
-                            scrollEnabled
-                            textAlignVertical="top"
-                            onFocus={() =>
-                              scrollToField("writtenDescription")
-                            }
-                          />
-                        </View>
-
-                        <Text style={[styles.label, { marginTop: 8 }]}>
-                          {t("asset.voiceNotes")}
-                        </Text>
-
-                                                <View style={styles.roww}>
-  <TouchableOpacity
-    style={styles.primaryBtn}
-    onPress={isRecording ? stopRecording : startRecording}
-  >
-    <Text style={styles.primaryText}>
-      {isRecording
-        ? t("asset.stopRecording")
-        : t("asset.recordVoiceNote")}
-    </Text>
-  </TouchableOpacity>
-
-  <TouchableOpacity
-    style={styles.checkboxWrap}
-    onPress={() =>
-      setDraft((prev) => ({
-        ...prev,
-        isDone: !prev.isDone,
-      }))
-    }
-    activeOpacity={0.7}
-  >
-    <View
-      style={[
-        styles.checkbox,
-        draft.isDone && styles.checkboxChecked,
-      ]}
-    >
-      {draft.isDone && (
-        <Text style={styles.checkmark}>✓</Text>
+      {!!draft.notes?.trim() && (
+        <Text style={styles.notesPreview} numberOfLines={1}>
+          {draft.notes.trim()}
+        </Text>
       )}
     </View>
-
-    <Text style={styles.checkboxLabel}>
-      {t("asset.markAsDone")}
-    </Text>
   </TouchableOpacity>
+
+<View style={styles.recordDoneRow}>
+  <View style={styles.voiceCompactRow}>
+    <TouchableOpacity
+      style={[
+        styles.voiceIconBtn,
+        isRecording && styles.voiceRecordingBtn,
+      ]}
+      onPress={isRecording ? stopRecording : startRecording}
+      activeOpacity={0.85}
+    >
+      <Ionicons
+        name={isRecording ? "stop" : "mic-outline"}
+        size={19}
+        color="#ffffff"
+      />
+    </TouchableOpacity>
+
+    {!!draft.voiceNotes?.[0] && !isRecording && (
+      <TouchableOpacity
+        style={styles.voiceSmallAction}
+        onPress={() => {
+          const note = draft.voiceNotes?.[0];
+          const uri = note?.uri || note?.url || "";
+          if (!uri) return;
+
+          playVoiceNote(uri, 0);
+        }}
+        activeOpacity={0.85}
+      >
+        <Ionicons
+          name={playingIndex === 0 ? "pause-circle" : "play-circle"}
+          size={24}
+          color={ACC}
+        />
+      </TouchableOpacity>
+    )}
+
+    <Text style={styles.voiceCompactText} numberOfLines={1}>
+      {getShortVoiceName()}
+    </Text>
+
+    {!!draft.voiceNotes?.[0] && !isRecording && (
+      <TouchableOpacity
+        style={styles.voiceSmallAction}
+        onPress={() => removeVoiceNote(0)}
+        activeOpacity={0.85}
+      >
+        <Ionicons name="trash-outline" size={21} color="#FF4444" />
+      </TouchableOpacity>
+    )}
+  </View>
 </View>
 
+{mode === "edit" && (
+  <View style={styles.statusInlineRow}>
+    <TouchableOpacity
+      style={styles.doneInlineBtn}
+      onPress={() =>
+        setDraft((prev) => ({
+          ...prev,
+          isDone: !prev.isDone,
+        }))
+      }
+      activeOpacity={0.75}
+    >
+      <View
+        style={[
+          styles.smallCheckbox,
+          draft.isDone && styles.smallCheckboxChecked,
+        ]}
+      >
+        {draft.isDone && <Text style={styles.smallCheckmark}>✓</Text>}
+      </View>
+
+      <Text style={styles.statusInlineText}>
+        {t("asset.markAsDone") || "Mark as done"}
+      </Text>
+    </TouchableOpacity>
+
+    <View style={styles.statusDivider} />
+
+    <View style={styles.presentInlineGroup}>
+      <Text style={styles.statusInlineText}>
+        {t("asset.assetIsPresent") || "Asset is present"}
+      </Text>
+
+      <TouchableOpacity
+        style={styles.smallRadioOption}
+        onPress={() =>
+          setDraft((prev) => ({
+            ...prev,
+            isPresent: true,
+          }))
+        }
+        activeOpacity={0.75}
+      >
+        <Ionicons
+          name={draft.isPresent ? "radio-button-on" : "radio-button-off"}
+          size={15}
+          color={ACC}
+        />
+        <Text style={styles.smallRadioText}>
+          {t("common.yes") || "Yes"}
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.smallRadioOption}
+        onPress={() =>
+          setDraft((prev) => ({
+            ...prev,
+            isPresent: false,
+          }))
+        }
+        activeOpacity={0.75}
+      >
+        <Ionicons
+          name={!draft.isPresent ? "radio-button-on" : "radio-button-off"}
+          size={15}
+          color={ACC}
+        />
+        <Text style={styles.smallRadioText}>
+          {t("common.no") || "No"}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  </View>
+)}
+
+  <Text style={styles.helper}>
+    {t("asset.imagesSelected", { count: draft.images.length })}
+  </Text>
+
+  {draft.images.length > 0 && (
+    <View style={styles.previewGrid}>
+      {draft.images.map((img, index) => {
+        const imageUri = img.uri || img.url;
+        if (!imageUri) return null;
+
+        return (
+          <View
+            key={`${imageUri}-${index}`}
+            style={[
+              styles.previewItem,
+              {
+                width: previewSize,
+                height: previewSize,
+              },
+            ]}
+          >
+            <Image source={{ uri: imageUri }} style={styles.previewImage} />
+
+            <TouchableOpacity
+              style={styles.removeBadge}
+              onPress={() => removeImage(index)}
+            >
+              <Text style={styles.removeBadgeText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        );
+      })}
+    </View>
+  )}
 
 
-                        <Text style={styles.helper}>
-                          {t("asset.voiceNotesAdded", {
-                            count: draft.voiceNotes?.length || 0,
-                          })}
-                        </Text>
-
-                        {(draft.voiceNotes || []).map((note, index) => {
-                          const noteUri = note.uri || note.url || "";
-
-                          const isRemote = noteUri.startsWith("http") || noteUri.startsWith("//");
-                          const canPlay = !!noteUri && !isRemote;
-
-                          return (
-                            <View
-                              key={`${noteUri}-${index}`}
-                              style={styles.voiceItem}
-                            >
-                              <View style={styles.voiceActionsLeft}>
-                                <TouchableOpacity
-                                  onPress={() => removeVoiceNote(index)}
-                                  activeOpacity={0.7}
-                                >
-                                  <MaterialIcons
-                                    name="delete-outline"
-                                    size={20}
-                                    color="#ff6b6b"
-                                  />
-                                </TouchableOpacity>
-                              </View>
-
-                              <View style={styles.voiceTextContainer}>
-                                <Text
-                                  style={styles.voiceText}
-                                  numberOfLines={1}
-                                >
-                                  {note.name ||
-                                    t("asset.voiceNoteNumber", {
-                                      number: index + 1,
-                                    })}
-                                  {isRemote && (
-                                    <Text style={styles.voiceRemoteText}>
-                                      {" "}
-                                      ({t("asset.saved")})
-                                    </Text>
-                                  )}
-                                </Text>
-                              </View>
-
-                              <View style={styles.voiceActionsRight}>
-                                {canPlay && (
-                                  <TouchableOpacity
-                                    onPress={() =>
-                                      playVoiceNote(noteUri, index)
-                                    }
-                                    activeOpacity={0.7}
-                                  >
-                                    <MaterialIcons
-                                      name={
-                                        playingIndex === index
-                                          ? "pause-circle-filled"
-                                          : "play-circle-filled"
-                                      }
-                                      size={24}
-                                      color={ACC}
-                                    />
-                                  </TouchableOpacity>
-                                )}
-                              </View>
-                            </View>
-                          );
-                        })}
-                      </>
-                    )}
+</>
                   </ScrollView>
 
 <View style={styles.footer}>
-  <View style={styles.footerSide}>
-    {step > 1 && (
-      <TouchableOpacity
-        style={styles.secondaryBtn}
-        onPress={back}
-        activeOpacity={0.8}
-      >
-        <Text style={styles.secondaryText}>{t("asset.back")}</Text>
-      </TouchableOpacity>
-    )}
-  </View>
+  <TouchableOpacity
+    style={[styles.footerIconBtn, styles.footerCameraBtn]}
+    onPress={openPhotoCamera}
+    activeOpacity={0.85}
+  >
+    <MaterialIcons name="photo-camera" size={18} color="#fff" />
+    <Text style={styles.footerIconBtnText}>{t("asset.openCamera")}</Text>
+  </TouchableOpacity>
 
-  <View style={styles.footerSideRight}>
-    {step < totalSteps ? (
-      <TouchableOpacity
-        style={[styles.primaryBtn, styles.nextBtn]}
-        onPress={next}
-        activeOpacity={0.85}
-      >
-        <Text style={styles.primaryText}>{t("asset.next")}</Text>
-      </TouchableOpacity>
-    ) : (
-      <TouchableOpacity
-  style={[styles.primaryBtn, styles.nextBtn, submitting && { opacity: 0.6 }]}
-  onPress={handleFinish}
-  disabled={submitting}
->
-  <Text style={styles.primaryText}>
-    {submitting
-      ? t("asset.saving") || "Saving..."
-      : mode === "edit"
-      ? t("asset.saveChanges")
-      : t("asset.finish")}
-  </Text>
-</TouchableOpacity>
-    )}
-  </View>
+  <TouchableOpacity
+    style={styles.footerIconBtn}
+    onPress={pickImagesFromLibrary}
+    activeOpacity={0.85}
+  >
+    <Ionicons name="image-outline" size={18} color={TEXT} />
+    <Text style={styles.footerIconBtnTextDark}>
+      {t("asset.uploadFromPhone")}
+    </Text>
+  </TouchableOpacity>
+
+  {/* <TouchableOpacity
+    style={styles.footerIconBtn}
+    onPress={openScanCamera}
+    activeOpacity={0.85}
+  >
+    <Ionicons name="scan-outline" size={18} color={TEXT} />
+    <Text style={styles.footerIconBtnTextDark}>
+      {t("asset.scanText") || "Scan"}
+    </Text>
+  </TouchableOpacity> */}
+
+  <TouchableOpacity
+    style={[styles.primaryBtn, styles.finishBtn, submitting && { opacity: 0.6 }]}
+    onPress={handleFinish}
+    disabled={submitting}
+  >
+    <Text style={styles.primaryText}>
+      {submitting
+        ? t("asset.saving") || "Saving..."
+        : mode === "edit"
+        ? t("asset.saveChanges")
+        : t("asset.finish")}
+    </Text>
+  </TouchableOpacity>
 </View>
 
 
@@ -1412,13 +1336,7 @@ radioOption: {
   flex: 1,
   flexDirection: "row",
   alignItems: "center",
-  gap: 8,
-  backgroundColor: SURFACE,
-  borderWidth: 1,
-  borderColor: BORDER,
-  borderRadius: 12,
-  paddingHorizontal: 12,
-  paddingVertical: 10,
+  gap: 1,
 },
 
 radioText: {
@@ -1484,6 +1402,393 @@ notesBox: {
   padding: 10,
   marginBottom: 8,
 },
+
+
+
+titleRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 6,
+  marginBottom: 6,
+},
+
+categoryBadge: {
+  backgroundColor: SOFT,
+  borderRadius: 999,
+  paddingHorizontal: 8,
+  paddingVertical: 3,
+  borderWidth: 1,
+  borderColor: BORDER,
+},
+
+categoryBadgeText: {
+  color: TEXT,
+  fontSize: 10,
+  fontWeight: "800",
+},
+
+voiceCompactRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 8,
+  backgroundColor: SURFACE,
+  borderWidth: 1,
+  borderColor: BORDER,
+  borderRadius: 14,
+  paddingHorizontal: 10,
+  paddingVertical: 8,
+  marginBottom: 8,
+},
+
+voiceIconBtn: {
+  width: 34,
+  height: 34,
+  borderRadius: 17,
+  backgroundColor: ACC,
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+voiceRecordingBtn: {
+  backgroundColor: "#FF4444",
+},
+
+voiceCompactText: {
+  flex: 1,
+  color: TEXT,
+  fontSize: 12,
+  fontWeight: "700",
+},
+
+voiceSmallAction: {
+  width: 34,
+  height: 34,
+  borderRadius: 17,
+  backgroundColor: "#ffffff",
+  borderWidth: 1,
+  borderColor: BORDER,
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+
+compactInput: {
+  minHeight: 40,
+  paddingVertical: 8,
+  marginBottom: 8,
+},
+
+topQuickRow: {
+  flexDirection: "row",
+  gap: 10,
+  alignItems: "flex-start",
+},
+
+quantityBox: {
+  width: 125,
+},
+
+quantityControl: {
+  height: 40,
+  flexDirection: "row",
+  alignItems: "center",
+  backgroundColor: SURFACE,
+  borderWidth: 1,
+  borderColor: BORDER,
+  borderRadius: 14,
+  overflow: "hidden",
+},
+
+quantityIconBtn: {
+  width: 36,
+  height: "100%",
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+quantityInput: {
+  flex: 1,
+  height: "100%",
+  textAlign: "center",
+  color: TEXT,
+  fontSize: 14,
+  fontWeight: "700",
+},
+
+categoryHeaderRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+  marginTop: 4,
+  marginBottom: 6,
+},
+
+addTypeBtn: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 4,
+  backgroundColor: SOFT,
+  borderRadius: 999,
+  paddingHorizontal: 10,
+  paddingVertical: 6,
+},
+
+addTypeText: {
+  color: TEXT,
+  fontSize: 11,
+  fontWeight: "700",
+},
+
+categoryChipRow: {
+  flexDirection: "row",
+  gap: 8,
+  marginBottom: 10,
+},
+
+categoryChip: {
+  flex: 1,
+  minHeight: 42,
+  borderRadius: 14,
+  borderWidth: 1,
+  borderColor: BORDER,
+  backgroundColor: SURFACE,
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 8,
+},
+
+categoryChipActive: {
+  backgroundColor: ACC,
+  borderColor: ACC,
+},
+
+categoryChipText: {
+  color: TEXT,
+  fontSize: 13,
+  fontWeight: "800",
+},
+
+categoryChipTextActive: {
+  color: "#ffffff",
+},
+
+customTypeRow: {
+  flexDirection: "row",
+  gap: 8,
+  alignItems: "center",
+  marginBottom: 8,
+},
+
+addTypeSaveBtn: {
+  backgroundColor: ACC,
+  minHeight: 40,
+  paddingHorizontal: 14,
+  borderRadius: 12,
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+vehicleGrid: {
+  flexDirection: "row",
+  flexWrap: "wrap",
+  gap: 4,
+},
+
+vehicleField: {
+  width: "48%",
+},
+
+recordDoneRow: {
+  flexDirection: "row",
+  gap: 8,
+  alignItems: "center",
+  marginBottom: 8,
+},
+
+footer: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 6,
+  width: "100%",
+  marginTop: 10,
+  paddingTop: 8,
+  borderTopWidth: 1,
+  borderTopColor: BORDER,
+},
+
+footerIconBtn: {
+  flex: 1,
+  minHeight: 44,
+  borderRadius: 12,
+  borderWidth: 1,
+  borderColor: BORDER,
+  backgroundColor: SURFACE,
+  alignItems: "center",
+  justifyContent: "center",
+  paddingHorizontal: 6,
+},
+
+footerCameraBtn: {
+  backgroundColor: ACC,
+  borderColor: ACC,
+},
+
+footerIconBtnText: {
+  color: "#ffffff",
+  fontSize: 9,
+  fontWeight: "700",
+  marginTop: 2,
+  textAlign: "center",
+},
+
+footerIconBtnTextDark: {
+  color: TEXT,
+  fontSize: 9,
+  fontWeight: "700",
+  marginTop: 2,
+  textAlign: "center",
+},
+
+finishBtn: {
+  flex: 1,
+  minHeight: 44,
+  paddingHorizontal: 8,
+},
+
+
+
+
+addTypeHeaderBtn: {
+  width: 24,
+  height: 24,
+  borderRadius: 12,
+  backgroundColor: SURFACE,
+  borderWidth: 1,
+  borderColor: BORDER,
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+headerTypeInputRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 3,
+  marginTop: 2,
+  marginBottom: 3,
+},
+
+headerTypeInput: {
+  flex: 1,
+  height: 36,
+  borderRadius: 12,
+  backgroundColor: SURFACE,
+  borderWidth: 1,
+  borderColor: BORDER,
+  paddingHorizontal: 10,
+  color: TEXT,
+  fontSize: 12,
+},
+
+headerTypeSaveBtn: {
+  height: 36,
+  paddingHorizontal: 12,
+  borderRadius: 12,
+  backgroundColor: ACC,
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+headerTypeSaveText: {
+  color: "#ffffff",
+  fontSize: 12,
+  fontWeight: "800",
+},
+
+
+
+
+
+statusInlineRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 8,
+  backgroundColor: SURFACE,
+  borderWidth: 1,
+  borderColor: BORDER,
+  borderRadius: 12,
+  paddingHorizontal: 8,
+  paddingVertical: 7,
+  marginBottom: 8,
+},
+
+doneInlineBtn: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 5,
+  flexShrink: 0,
+},
+
+presentInlineGroup: {
+  flex: 1,
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "flex-end",
+  gap: 5,
+},
+
+statusInlineText: {
+  color: TEXT,
+  fontSize: 10,
+  fontWeight: "700",
+},
+
+smallCheckbox: {
+  width: 16,
+  height: 16,
+  borderRadius: 4,
+  borderWidth: 1,
+  borderColor: ACC,
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundColor: "#ffffff",
+},
+
+smallCheckboxChecked: {
+  backgroundColor: ACC,
+},
+
+smallCheckmark: {
+  color: "#ffffff",
+  fontSize: 10,
+  fontWeight: "900",
+  lineHeight: 12,
+},
+
+
+
+smallRadioOption: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 2,
+},
+
+smallRadioText: {
+  color: TEXT,
+  fontSize: 10,
+  fontWeight: "700",
+},
+
+
+
+
+statusDivider: {
+  width: 1,
+  height: 18,
+  backgroundColor: BORDER,
+},
+
+
 
 notesInput: {
   flex: 1,
@@ -1647,11 +1952,11 @@ notesCheckText: {
     borderWidth: 1,
     borderColor: BORDER,
     borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
     color: TEXT,
-    marginBottom: 12,
-    fontSize: 14,
+    marginBottom: 8,
+    fontSize: 11,
   },
 
   inputDisabled: {
@@ -1694,12 +1999,12 @@ notesCheckText: {
     flex: 1,
   },
 
-  previewGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 12,
-  },
+ previewGrid: {
+  flexDirection: "row",
+  flexWrap: "wrap",
+  gap: 6,
+  marginTop: 6,
+},
 
   previewItem: {
     borderRadius: 12,
@@ -1791,8 +2096,8 @@ notesCheckText: {
 
   fieldLabel: {
     color: MUTED,
-    fontSize: 12,
-    marginBottom: 6,
+    fontSize: 10,
+    marginBottom: 2,
     fontWeight: "500",
   },
 
@@ -1805,14 +2110,6 @@ notesCheckText: {
     marginBottom: 12,
   },
 
-footer: {
-  flexDirection: "row",
-  justifyContent: "space-between",
-  alignItems: "center",
-  width: "100%",
-  marginTop: 14,
-  paddingTop: 6,
-},
 
   footerSide: {
     flex: 1,
