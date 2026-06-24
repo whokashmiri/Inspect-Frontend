@@ -413,6 +413,13 @@ const setImageLoading = (key: string, loading: boolean) => {
   }
 };
 
+
+const currentYear = new Date().getFullYear();
+
+const manufactureYears = Array.from(
+  { length: currentYear - 1979 },
+  (_, index) => String(currentYear - index)
+);
   
 
   const playVoiceNote = async (uri: string, index: number) => {
@@ -956,18 +963,28 @@ const setImageLoading = (key: string, loading: boolean) => {
       </View>
 
       <View style={styles.vehicleField}>
-        <Text style={styles.fieldLabel}>{t("asset.manufactureYear")}</Text>
-        <TextInput
-          placeholder={t("asset.manufactureYear")}
-          placeholderTextColor="#767B91"
-          value={draft.manufactureYear}
-          keyboardType="numeric"
-          onChangeText={(text) =>
-            setDraft((prev) => ({ ...prev, manufactureYear: text }))
-          }
-          style={[styles.input, styles.compactInput]}
-        />
-      </View>
+  <Text style={styles.fieldLabel}>{t("asset.manufactureYear")}</Text>
+
+  <View style={styles.vehicleYearPickerWrap}>
+    <Picker
+      selectedValue={draft.manufactureYear || ""}
+      onValueChange={(value) =>
+        setDraft((prev) => ({
+          ...prev,
+          manufactureYear: value,
+        }))
+      }
+      dropdownIconColor="#2A324B"
+      style={styles.vehicleYearPicker}
+      itemStyle={styles.vehicleYearPickerItem}
+    >
+      <Picker.Item label="Year" value="" />
+      {manufactureYears.map((year) => (
+        <Picker.Item key={year} label={year} value={year} />
+      ))}
+    </Picker>
+  </View>
+</View>
 
       <View style={styles.vehicleField}>
         <Text style={styles.fieldLabel}>{t("asset.kilometersDriven")}</Text>
@@ -1919,8 +1936,8 @@ categoryBadge: {
 
 categoryBadgeText: {
   color: TEXT,
-  fontSize: 10,
-  fontWeight: "800",
+  fontSize: 8,
+  fontWeight: "300",
 },
 
 voiceCompactRow: {
@@ -2083,7 +2100,7 @@ conditionBox: {
 },
 
 compactPickerWrap: {
-  height: 44,
+  height: 40,
   borderRadius: 14,
   backgroundColor: SURFACE,
   borderWidth: 1,
@@ -2091,18 +2108,17 @@ compactPickerWrap: {
   overflow: "hidden",
   justifyContent: "center",
 },
-
 compactPicker: {
-  height: Platform.OS === "android" ? 50 : 44,
+  height: Platform.OS === "android" ? 55 : 44,
   color: TEXT,
-  fontSize: 11,
-  transform: Platform.OS === "android" ? [{ scale: 0.92 }] : undefined,
-  marginLeft: Platform.OS === "android" ? -8 : 0,
-  marginRight: Platform.OS === "android" ? -8 : 0,
+  fontSize: 8,
+  transform: Platform.OS === "android" ? [{ scale: 0.80 }] : undefined,
+  marginLeft: Platform.OS === "android" ? -10 : 0,
+  marginRight: Platform.OS === "android" ? -10 : 0,
 },
 
 compactPickerItem: {
-  fontSize: 11,
+  fontSize: 8,
   color: TEXT,
 },
 
@@ -2197,6 +2213,30 @@ addTypeSaveBtn: {
   borderRadius: 12,
   alignItems: "center",
   justifyContent: "center",
+},
+
+vehicleYearPickerWrap: {
+  height: 40,
+  borderRadius: 14,
+  backgroundColor: SURFACE,
+  borderWidth: 1,
+  borderColor: BORDER,
+  overflow: "hidden",
+  justifyContent: "center",
+},
+
+vehicleYearPicker: {
+  height: Platform.OS === "android" ? 55 : 40,
+  color: TEXT,
+  fontSize: 8,
+  transform: Platform.OS === "android" ? [{ scale: 0.80 }] : undefined,
+  marginLeft: Platform.OS === "android" ? -10 : 0,
+  marginRight: Platform.OS === "android" ? -10 : 0,
+},
+
+vehicleYearPickerItem: {
+  fontSize: 10,
+  color: TEXT,
 },
 
 vehicleGrid: {
