@@ -594,7 +594,10 @@ const setImageLoading = (key: string, loading: boolean) => {
       </Text>
     </View>
 
- <View style={styles.assetTypeChooseWrap}>
+
+
+
+ {/* <View style={styles.assetTypeChooseWrap}>
   <View style={styles.assetTypeChooseControl}>
     <TouchableOpacity
       style={styles.assetTypeChooseBtn}
@@ -657,8 +660,120 @@ const setImageLoading = (key: string, loading: boolean) => {
       ))}
     </View>
   )}
-</View>
+</View> */}
+
+
   </View>
+
+  
+    <View style={styles.assetTypeFieldWrap}>
+  <Text style={styles.fieldLabel}>Asset type</Text>
+
+  <View style={styles.assetTypeInputLikeWrap}>
+    <TouchableOpacity
+      style={styles.assetTypeInputChoose}
+      onPress={() => {
+        setAssetTypeDropdownOpen((prev) => !prev);
+        setShowCustomTypeInput(false);
+      }}
+      activeOpacity={0.85}
+    >
+      <Text style={styles.assetTypeInputText} numberOfLines={1}>
+        {customAssetType && customAssetType !== "Vehicle" && customAssetType !== "Other"
+          ? customAssetType
+          : "Choose"}
+      </Text>
+
+      <Ionicons
+        name={assetTypeDropdownOpen ? "chevron-up" : "chevron-down"}
+        size={16}
+        color={TEXT}
+      />
+    </TouchableOpacity>
+
+    <View style={styles.assetTypeInputDivider} />
+
+    <TouchableOpacity
+      style={styles.assetTypeInputPlus}
+      onPress={() => {
+        setShowCustomTypeInput((prev) => !prev);
+        setAssetTypeDropdownOpen(false);
+      }}
+      activeOpacity={0.85}
+    >
+      <Ionicons name="add" size={18} color={TEXT} />
+    </TouchableOpacity>
+  </View>
+
+  {assetTypeDropdownOpen && (
+    <View style={styles.assetTypeDropdownMenuFull}>
+      {projectAssetTypes.map((type) => (
+        <TouchableOpacity
+          key={type}
+          style={styles.addTypeDropdownOption}
+          onPress={() => {
+            setDraft((prev) => ({
+              ...prev,
+              assetType: "Other",
+              rawData: {
+                ...((prev as any).rawData || {}),
+                customAssetType: type,
+              },
+            } as any));
+
+            setAssetTypeDropdownOpen(false);
+            setShowCustomTypeInput(false);
+          }}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.addTypeDropdownOptionText}>{type}</Text>
+
+          {customAssetType === type && (
+            <Ionicons name="checkmark" size={16} color={ACC} />
+          )}
+        </TouchableOpacity>
+      ))}
+    </View>
+  )}
+</View>
+ 
+
+  {!!customTypeInput && (
+    <View style={styles.customTypeRow}>
+      <TextInput
+        placeholder="Example: Sofa, Chair, TV"
+        placeholderTextColor="#767B91"
+        value={customAssetType === "Vehicle" || customAssetType === "Other" ? "" : customAssetType}
+        onChangeText={updateCustomAssetType}
+        style={[styles.input, styles.compactInput, { flex: 1 }]}
+      />
+
+      <TouchableOpacity
+        style={styles.addTypeSaveBtn}
+        onPress={() => {
+          const value = String((draft as any).rawData?.customAssetType || "").trim();
+
+          if (!value) {
+            showSnackbar("Please enter asset type", "error");
+            return;
+          }
+
+          setDraft((prev) => ({
+            ...prev,
+            assetType: "Other",
+            rawData: {
+              ...((prev as any).rawData || {}),
+              customAssetType: value,
+            },
+          } as any));
+
+          setCustomTypeInput("");
+        }}
+      >
+        <Text style={styles.primaryText}>Add</Text>
+      </TouchableOpacity>
+    </View>
+  )}
 
   {showCustomTypeInput && (
     <View style={styles.headerTypeInputRow}>
@@ -730,117 +845,87 @@ const setImageLoading = (key: string, loading: boolean) => {
                   >
                   <>
   <View style={styles.topQuickRow}>
-    <View style={{ flex: 1 }}>
-      <Text style={styles.fieldLabel}>Asset name</Text>
-      <TextInput
-        ref={firstInputRef}
-        placeholder={t("asset.assetName")}
-        placeholderTextColor="#767B91"
-        value={draft.name}
-        onChangeText={(text) => {
-          if (!disableAssetName) {
-            setDraft((prev) => ({ ...prev, name: text }));
-          }
-        }}
-        editable={!disableAssetName}
-        selectTextOnFocus={!disableAssetName}
-        style={[
-          styles.input,
-          styles.compactInput,
-          disableAssetName && styles.inputDisabled,
-        ]}
-        returnKeyType="done"
-      />
-    </View>
+  <View style={{ flex: 1 }}>
+    <Text style={styles.fieldLabel}>Asset name</Text>
 
-    <View style={styles.quantityBox}>
-      <Text style={styles.fieldLabel}>Quantity</Text>
-
-      <View style={styles.quantityControl}>
-        <TouchableOpacity
-          style={styles.quantityIconBtn}
-          onPress={() => updateQuantity(Number(getQuantity()) - 1)}
-        >
-          <Ionicons name="remove" size={18} color={TEXT} />
-        </TouchableOpacity>
-
-        <TextInput
-          value={getQuantity()}
-          onChangeText={updateQuantity}
-          keyboardType="numeric"
-          style={styles.quantityInput}
-        />
-
-        <TouchableOpacity
-          style={styles.quantityIconBtn}
-          onPress={() => updateQuantity(Number(getQuantity()) + 1)}
-        >
-          <Ionicons name="add" size={18} color={TEXT} />
-        </TouchableOpacity>
-      </View>
-    </View>
+    <TextInput
+      ref={firstInputRef}
+      placeholder={t("asset.assetName")}
+      placeholderTextColor="#767B91"
+      value={draft.name}
+      onChangeText={(text) => {
+        if (!disableAssetName) {
+          setDraft((prev) => ({ ...prev, name: text }));
+        }
+      }}
+      editable={!disableAssetName}
+      selectTextOnFocus={!disableAssetName}
+      style={[
+        styles.input,
+        styles.compactInput,
+        disableAssetName && styles.inputDisabled,
+      ]}
+      returnKeyType="done"
+    />
   </View>
+</View>
 
   
 
- 
 
-  {!!customTypeInput && (
-    <View style={styles.customTypeRow}>
+
+ <View style={styles.conditionQuantityRow}>
+  <View style={styles.conditionBox}>
+    <Text style={styles.fieldLabel}>{t("asset.condition")}</Text>
+
+    <View style={styles.compactPickerWrap}>
+  <Picker
+    selectedValue={draft.condition}
+    onValueChange={(value) =>
+      setDraft((prev) => ({
+        ...prev,
+        condition: value,
+      }))
+    }
+    dropdownIconColor="#2A324B"
+    style={styles.compactPicker}
+    itemStyle={styles.compactPickerItem}
+  >
+    <Picker.Item label={t("asset.conditionGood")} value="Good" />
+    <Picker.Item label={t("asset.conditionNew")} value="New" />
+    <Picker.Item label={t("asset.conditionUsed")} value="Used" />
+    <Picker.Item label={t("asset.conditionDamaged")} value="Damaged" />
+  </Picker>
+</View>
+  </View>
+
+  <View style={styles.quantityBox}>
+    <Text style={styles.fieldLabel}>Quantity</Text>
+
+    <View style={styles.quantityControl}>
+      <TouchableOpacity
+        style={styles.quantityIconBtn}
+        onPress={() => updateQuantity(Number(getQuantity()) - 1)}
+      >
+        <Ionicons name="remove" size={16} color={TEXT} />
+      </TouchableOpacity>
+
       <TextInput
-        placeholder="Example: Sofa, Chair, TV"
-        placeholderTextColor="#767B91"
-        value={customAssetType === "Vehicle" || customAssetType === "Other" ? "" : customAssetType}
-        onChangeText={updateCustomAssetType}
-        style={[styles.input, styles.compactInput, { flex: 1 }]}
+        value={getQuantity()}
+        onChangeText={updateQuantity}
+        keyboardType="numeric"
+        style={styles.quantityInput}
       />
 
       <TouchableOpacity
-        style={styles.addTypeSaveBtn}
-        onPress={() => {
-          const value = String((draft as any).rawData?.customAssetType || "").trim();
-
-          if (!value) {
-            showSnackbar("Please enter asset type", "error");
-            return;
-          }
-
-          setDraft((prev) => ({
-            ...prev,
-            assetType: "Other",
-            rawData: {
-              ...((prev as any).rawData || {}),
-              customAssetType: value,
-            },
-          } as any));
-
-          setCustomTypeInput("");
-        }}
+        style={styles.quantityIconBtn}
+        onPress={() => updateQuantity(Number(getQuantity()) + 1)}
       >
-        <Text style={styles.primaryText}>Add</Text>
+        <Ionicons name="add" size={16} color={TEXT} />
       </TouchableOpacity>
     </View>
-  )}
-
-  <Text style={styles.fieldLabel}>{t("asset.condition")}</Text>
-  <View style={styles.pickerWrap}>
-    <Picker
-      selectedValue={draft.condition}
-      onValueChange={(value) =>
-        setDraft((prev) => ({
-          ...prev,
-          condition: value,
-        }))
-      }
-      dropdownIconColor="#2A324B"
-      style={styles.picker}
-    >
-      <Picker.Item label={t("asset.conditionGood")} value="Good" />
-      <Picker.Item label={t("asset.conditionNew")} value="New" />
-      <Picker.Item label={t("asset.conditionUsed")} value="Used" />
-      <Picker.Item label={t("asset.conditionDamaged")} value="Damaged" />
-    </Picker>
   </View>
+</View>
 
   {isVehicle && (
     <View style={styles.vehicleGrid}>
@@ -1907,7 +1992,7 @@ topQuickRow: {
 },
 
 quantityBox: {
-  width: 125,
+  width: 105,
 },
 
 quantityControl: {
@@ -1921,8 +2006,108 @@ quantityControl: {
   overflow: "hidden",
 },
 
+assetTypeFieldWrap: {
+  position: "relative",
+  zIndex: 999,
+  marginBottom: 8,
+},
+
+assetTypeInputLikeWrap: {
+  height: 40,
+  borderRadius: 14,
+  backgroundColor: SURFACE,
+  borderWidth: 1,
+  borderColor: BORDER,
+  flexDirection: "row",
+  alignItems: "center",
+  overflow: "visible",
+},
+
+assetTypeInputChoose: {
+  flex: 1,
+  height: "100%",
+  paddingHorizontal: 12,
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+},
+
+assetTypeInputText: {
+  flex: 1,
+  color: TEXT,
+  fontSize: 13,
+  fontWeight: "700",
+},
+
+assetTypeInputDivider: {
+  width: 1,
+  height: 22,
+  backgroundColor: BORDER,
+},
+
+assetTypeInputPlus: {
+  width: 42,
+  height: "100%",
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+assetTypeDropdownMenuFull: {
+  position: "absolute",
+  top: 62,
+  left: 0,
+  right: 0,
+  backgroundColor: "#ffffff",
+  borderWidth: 1,
+  borderColor: BORDER,
+  borderRadius: 14,
+  paddingVertical: 5,
+  zIndex: 9999,
+  elevation: 12,
+  shadowColor: "#000",
+  shadowOffset: { width: 0, height: 8 },
+  shadowOpacity: 0.15,
+  shadowRadius: 12,
+},
+
+conditionQuantityRow: {
+  flexDirection: "row",
+  alignItems: "flex-start",
+  gap: 8,
+  marginBottom: 8,
+},
+
+conditionBox: {
+  flex: 1.2,
+},
+
+compactPickerWrap: {
+  height: 44,
+  borderRadius: 14,
+  backgroundColor: SURFACE,
+  borderWidth: 1,
+  borderColor: BORDER,
+  overflow: "hidden",
+  justifyContent: "center",
+},
+
+compactPicker: {
+  height: Platform.OS === "android" ? 50 : 44,
+  color: TEXT,
+  fontSize: 11,
+  transform: Platform.OS === "android" ? [{ scale: 0.92 }] : undefined,
+  marginLeft: Platform.OS === "android" ? -8 : 0,
+  marginRight: Platform.OS === "android" ? -8 : 0,
+},
+
+compactPickerItem: {
+  fontSize: 11,
+  color: TEXT,
+},
+
+
 quantityIconBtn: {
-  width: 36,
+  width: 32,
   height: "100%",
   alignItems: "center",
   justifyContent: "center",
@@ -1933,9 +2118,11 @@ quantityInput: {
   height: "100%",
   textAlign: "center",
   color: TEXT,
-  fontSize: 14,
+  fontSize: 13,
   fontWeight: "700",
 },
+
+
 
 categoryHeaderRow: {
   flexDirection: "row",
@@ -2253,9 +2440,9 @@ notesCheckText: {
 
   label: {
     color: TEXT,
-    fontSize: 12,
-    marginBottom: 10,
-    fontWeight: "500",
+    fontSize: 8,
+    marginBottom: 5,
+    fontWeight: "300",
   },
 
   row: {
@@ -2393,9 +2580,9 @@ notesCheckText: {
     backgroundColor: SURFACE,
     borderWidth: 1,
     borderColor: BORDER,
-    borderRadius: 14,
-    marginBottom: 12,
-    height: 48,
+    borderRadius: 10,
+    marginBottom: 7,
+    height: 40,
   },
 
   picker: {
@@ -2404,7 +2591,8 @@ notesCheckText: {
     width: "100%",
     overflow: "hidden",
     marginLeft: 0,
-    marginTop: Platform.OS === "android" ? -4 : 0,
+    marginTop: Platform.OS === "android" ? -6 : 0,
+    marginBottom: Platform.OS === "android" ? -6 : 0,
   },
 
   footerRTL: {
