@@ -15,6 +15,7 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
   LayoutChangeEvent,
+  ActivityIndicator,
   StyleSheet
 } from "react-native";
 import { Picker } from "@react-native-picker/picker";
@@ -118,6 +119,8 @@ const modalMinHeight = height * 0.88;
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
 
+  const [imageLoadingMap, setImageLoadingMap] = useState<Record<string, boolean>>({});
+
  
 
   const [draft, setDraft] = useState<AssetDraft>(
@@ -136,6 +139,7 @@ const modalMinHeight = height * 0.88;
   if (visible) {
     setStep(1);
     setDraft(getInitialDraft(initialData));
+    setImageLoadingMap({});
     setIsRecording(false);
     setCameraMode("photos");
     setSubmitting(false);
@@ -324,6 +328,47 @@ const getShortVoiceName = () => {
      showSnackbar(t("asset.unablePickImages"), "error");
     }
   };
+
+
+  const vehiclePreviewSlots = [
+  {
+    key: "front",
+    label: "Front",
+    icon: "car-sport-outline",
+  },
+  {
+    key: "left",
+    label: "Left Side",
+    icon: "arrow-back-circle-outline",
+  },
+  {
+    key: "right",
+    label: "Right Side",
+    icon: "arrow-forward-circle-outline",
+  },
+  {
+    key: "back",
+    label: "Back",
+    icon: "return-down-back-outline",
+  },
+  {
+    key: "other",
+    label: "Other",
+    icon: "images-outline",
+  },
+] as const;
+
+
+const getImageKey = (uri: string, index: number) => {
+  return `${uri}-${index}`;
+};
+
+const setImageLoading = (key: string, loading: boolean) => {
+  setImageLoadingMap((prev) => ({
+    ...prev,
+    [key]: loading,
+  }));
+};
 
   const startRecording = async () => {
     try {
@@ -1014,19 +1059,143 @@ const getShortVoiceName = () => {
   </View>
 )}
 
-  <Text style={styles.helper}>
-    {t("asset.imagesSelected", { count: draft.images.length })}
-  </Text>
+<Text style={styles.helper}>
+  {isVehicle
+    ? `Vehicle photos ${draft.images.length}/5`
+    : t("asset.imagesSelected", { count: draft.images.length })}
+</Text>
 
-  {draft.images.length > 0 && (
+{isVehicle ? (
+  <View style={styles.vehiclePreviewGrid}>
+    {vehiclePreviewSlots.map((slot, index) => {
+      const img = draft.images[index];
+      const imageUri = img?.uri || img?.url;
+      const imageKey = imageUri ? getImageKey(imageUri, index) : slot.key;
+      const isImageLoading = imageUri
+        ? imageLoadingMap[imageKey] !== false
+        : false;
+
+      return (
+        <TouchableOpacity
+          key={slot.key}
+          style={[
+            styles.vehiclePreviewItem,
+            {
+              width: previewSize,
+              height: previewSize + 18,
+            },
+          ]}
+          onPress={openPhotoCamera}
+          activeOpacity={0.85}
+        >
+          <View style={styles.vehiclePreviewBox}>
+            {imageUri ? (
+              <>
+                <Image
+                  source={{ uri: imageUri }}
+                  style={[
+                    styles.previewImage,
+                    isImageLoading && styles.previewImageLoading,
+                  ]}
+                  resizeMode="cover"
+                  fadeDuration={150}
+                  onLoadStart={() => setImageLoading(imageKey, true)}
+                  onLoadEnd={() => setImageLoading(imageKey, false)}
+                  onError={() => setImageLoading(imageKey, false)}
+                />
+
+                {isImageLoading && (
+                  <View style={styles.imageLoaderOverlay}>
+                    <ActivityIndicator size="small" color="#ffffff" />
+                  </View>
+                )}
+
+                <TouchableOpacity
+                  style={styles.removeBadge}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    removeImage(index);
+                  }}
+                >
+                  <Text style={styles.removeBadgeText}>✕</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <View style={styles.vehiclePlaceholderContent}>
+                <Ionicons name={slot.icon as any} size={20} color={MUTED} />
+                <Ionicons name="add-circle" size={13} color={ACC} />
+              </View>
+            )}
+          </View>
+
+          <Text style={styles.vehiclePreviewLabel} numberOfLines={1}>
+            {slot.label}
+          </Text>
+        </TouchableOpacity>
+      );
+    })}
+
+    {draft.images.slice(5).map((img, extraIndex) => {
+      const realIndex = extraIndex + 5;
+      const imageUri = img.uri || img.url;
+      if (!imageUri) return null;
+
+      const imageKey = getImageKey(imageUri, realIndex);
+      const isImageLoading = imageLoadingMap[imageKey] !== false;
+
+      return (
+        <View
+          key={imageKey}
+          style={[
+            styles.previewItem,
+            {
+              width: previewSize,
+              height: previewSize,
+            },
+          ]}
+        >
+          <Image
+            source={{ uri: imageUri }}
+            style={[
+              styles.previewImage,
+              isImageLoading && styles.previewImageLoading,
+            ]}
+            resizeMode="cover"
+            fadeDuration={150}
+            onLoadStart={() => setImageLoading(imageKey, true)}
+            onLoadEnd={() => setImageLoading(imageKey, false)}
+            onError={() => setImageLoading(imageKey, false)}
+          />
+
+          {isImageLoading && (
+            <View style={styles.imageLoaderOverlay}>
+              <ActivityIndicator size="small" color="#ffffff" />
+            </View>
+          )}
+
+          <TouchableOpacity
+            style={styles.removeBadge}
+            onPress={() => removeImage(realIndex)}
+          >
+            <Text style={styles.removeBadgeText}>✕</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    })}
+  </View>
+) : (
+  draft.images.length > 0 && (
     <View style={styles.previewGrid}>
       {draft.images.map((img, index) => {
         const imageUri = img.uri || img.url;
         if (!imageUri) return null;
 
+        const imageKey = getImageKey(imageUri, index);
+        const isImageLoading = imageLoadingMap[imageKey] !== false;
+
         return (
           <View
-            key={`${imageUri}-${index}`}
+            key={imageKey}
             style={[
               styles.previewItem,
               {
@@ -1035,7 +1204,24 @@ const getShortVoiceName = () => {
               },
             ]}
           >
-            <Image source={{ uri: imageUri }} style={styles.previewImage} />
+            <Image
+              source={{ uri: imageUri }}
+              style={[
+                styles.previewImage,
+                isImageLoading && styles.previewImageLoading,
+              ]}
+              resizeMode="cover"
+              fadeDuration={150}
+              onLoadStart={() => setImageLoading(imageKey, true)}
+              onLoadEnd={() => setImageLoading(imageKey, false)}
+              onError={() => setImageLoading(imageKey, false)}
+            />
+
+            {isImageLoading && (
+              <View style={styles.imageLoaderOverlay}>
+                <ActivityIndicator size="small" color="#ffffff" />
+              </View>
+            )}
 
             <TouchableOpacity
               style={styles.removeBadge}
@@ -1047,8 +1233,8 @@ const getShortVoiceName = () => {
         );
       })}
     </View>
-  )}
-
+  )
+)}
 
 </>
                   </ScrollView>
@@ -1425,6 +1611,50 @@ assetTypeChooseDivider: {
   backgroundColor: BORDER,
 },
 
+
+
+vehiclePreviewGrid: {
+  flexDirection: "row",
+  flexWrap: "wrap",
+  gap: 6,
+  marginTop: 6,
+  marginBottom: 8,
+},
+
+vehiclePreviewItem: {
+  alignItems: "center",
+  justifyContent: "flex-start",
+},
+
+vehiclePreviewBox: {
+  width: "100%",
+  aspectRatio: 1,
+  borderRadius: 10,
+  borderWidth: 1,
+  borderColor: BORDER,
+  backgroundColor: SURFACE,
+  overflow: "hidden",
+  alignItems: "center",
+  justifyContent: "center",
+  position: "relative",
+},
+
+vehiclePlaceholderContent: {
+  flex: 1,
+  width: "100%",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 2,
+},
+
+vehiclePreviewLabel: {
+  marginTop: 3,
+  color: TEXT,
+  fontSize: 8,
+  fontWeight: "800",
+  textAlign: "center",
+},
+
 assetTypePlusBtn: {
   width: 30,
   height: "100%",
@@ -1432,6 +1662,14 @@ assetTypePlusBtn: {
   justifyContent: "center",
   backgroundColor:ACC
 },
+
+
+
+
+previewImageLoading: {
+  opacity: 0.35,
+},
+
 
 
 
@@ -1610,6 +1848,18 @@ voiceCompactRow: {
   paddingHorizontal: 10,
   paddingVertical: 8,
   marginBottom: 8,
+},
+
+imageLoaderOverlay: {
+  position: "absolute",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundColor: "rgba(42,50,75,0.35)",
+  zIndex: 5,
 },
 
 voiceIconBtn: {
