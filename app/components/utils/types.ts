@@ -8,7 +8,7 @@ export type UploadFileInput = {
 };
 
 export type AssetCondition = "" | "New" | "Used" | "Damaged" | "Good";
-export type AssetType = "Vehicle" | "Other";
+export type AssetType = "Vehicle" | "Other"  ;
 
 export type AssetMediaInput = {
   uri?: string;

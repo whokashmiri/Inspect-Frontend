@@ -24,7 +24,7 @@ import { Audio } from "expo-av";
 import {Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import AssetCameraModal from "./AssetCameraModal";
-import { AssetDraft, AssetMediaInput } from "./utils/types";
+import { AssetDraft, AssetMediaInput, AssetType } from "./utils/types";
 import { AudioModule, RecordingPresets, useAudioRecorder } from "expo-audio";
 
 type CameraMode = "photos" | "scan";
@@ -55,8 +55,8 @@ const getInitialDraft = (
   kilometersDriven: initialData?.kilometersDriven || "",
   isPresent: initialData?.isPresent ?? true,
   isDone: initialData?.isDone ?? true,
-  hasNotes: initialData?.hasNotes ?? false,
   notes: initialData?.notes || "",
+  hasNotes: !!initialData?.notes?.trim(),
 });
 
 export default function CreateAssetWizardModal({
@@ -75,7 +75,7 @@ export default function CreateAssetWizardModal({
   const [step, setStep] = useState(1);
   const [cameraOpen, setCameraOpen] = useState(false);
 const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
-  const [notesModalVisible, setNotesModalVisible] = useState(false);
+ 
 
   const [submitting, setSubmitting] = useState(false);
 
@@ -217,7 +217,7 @@ const projectAssetTypes = [
   "AC",
   "Bed",
 ];
-const currentCategory =
+const currentCategory:AssetType =
   String(draft.assetType || "").toLowerCase() === "vehicle"
     ? "Vehicle"
     : "Other";
@@ -243,16 +243,23 @@ const getShortVoiceName = () => {
     fieldPositions.current[key] = e.nativeEvent.layout.y;
   };
 
-  const scrollToField = (key: string) => {
-    const y = fieldPositions.current[key] ?? 0;
+const scrollToField = (key: string) => {
+  const y = fieldPositions.current[key] ?? 0;
 
-    setTimeout(() => {
-      scrollRef.current?.scrollTo({
-        y: Math.max(0, y - 24),
-        animated: true,
-      });
-    }, 120);
-  };
+  setTimeout(() => {
+    scrollRef.current?.scrollTo({
+      y: Math.max(0, y - 80),
+      animated: true,
+    });
+  }, 80);
+
+  setTimeout(() => {
+    scrollRef.current?.scrollTo({
+      y: Math.max(0, y - 80),
+      animated: true,
+    });
+  }, 320);
+};
 
   const totalSteps = 3;
 
@@ -510,7 +517,7 @@ const manufactureYears = Array.from(
     onClose();
   };
 
-  const handleFinish = async () => {
+const handleFinish = async () => {
   if (submitting) return;
 
   if (!draft.name?.trim()) {
@@ -544,10 +551,18 @@ const manufactureYears = Array.from(
     return;
   }
 
+  const cleanedNotes = (draft.notes || "").trim();
+
+  const cleanDraft = {
+    ...draft,
+    notes: cleanedNotes || undefined,
+    hasNotes: cleanedNotes.length > 0,
+  };
+
   setSubmitting(true);
 
   try {
-    await onSubmit(draft);
+    await onSubmit(cleanDraft);
     await handleClose();
   } catch (error: any) {
     setSubmitting(false);
@@ -557,7 +572,6 @@ const manufactureYears = Array.from(
     );
   }
 };
-
   return (
     <>
       <Modal
@@ -570,8 +584,8 @@ const manufactureYears = Array.from(
           <View style={styles.overlay}>
             <KeyboardAvoidingView
               style={styles.keyboardWrap}
-               behavior={Platform.OS === "ios" ? "padding" : "position"}
-                keyboardVerticalOffset={Platform.OS === "ios" ? 20 : 0}
+               behavior={Platform.OS === "ios" ? "padding" : "height"}
+               keyboardVerticalOffset={Platform.OS === "ios" ? 20 : 0}
               enabled={true}
             >
               <TouchableWithoutFeedback>
@@ -600,75 +614,6 @@ const manufactureYears = Array.from(
         {displayCategory}
       </Text>
     </View>
-
-
-
-
- {/* <View style={styles.assetTypeChooseWrap}>
-  <View style={styles.assetTypeChooseControl}>
-    <TouchableOpacity
-      style={styles.assetTypeChooseBtn}
-      onPress={() => {
-        setAssetTypeDropdownOpen((prev) => !prev);
-        setShowCustomTypeInput(false);
-      }}
-      activeOpacity={0.85}
-    >
-      <Text style={styles.assetTypeChooseText}>Choose</Text>
-
-      <Ionicons
-        name={assetTypeDropdownOpen ? "chevron-up" : "chevron-down"}
-        size={13}
-        color={TEXT}
-      />
-    </TouchableOpacity>
-
-    <View style={styles.assetTypeChooseDivider} />
-
-    <TouchableOpacity
-      style={styles.assetTypePlusBtn}
-      onPress={() => {
-        setShowCustomTypeInput((prev) => !prev);
-        setAssetTypeDropdownOpen(false);
-      }}
-      activeOpacity={0.85}
-    >
-      <Ionicons name="add" size={16} color={SURFACE} />
-    </TouchableOpacity>
-  </View>
-
-  {assetTypeDropdownOpen && (
-    <View style={styles.addTypeDropdownMenu}>
-      {projectAssetTypes.map((type) => (
-        <TouchableOpacity
-          key={type}
-          style={styles.addTypeDropdownOption}
-          onPress={() => {
-            setDraft((prev) => ({
-              ...prev,
-              assetType: "Other",
-              rawData: {
-                ...((prev as any).rawData || {}),
-                customAssetType: type,
-              },
-            } as any));
-
-            setAssetTypeDropdownOpen(false);
-            setShowCustomTypeInput(false);
-          }}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.addTypeDropdownOptionText}>{type}</Text>
-
-          {customAssetType === type && (
-            <Ionicons name="checkmark" size={16} color={ACC} />
-          )}
-        </TouchableOpacity>
-      ))}
-    </View>
-  )}
-</View> */}
-
 
   </View>
 
@@ -852,7 +797,7 @@ const manufactureYears = Array.from(
                   >
                   <>
   <View style={styles.topQuickRow}>
-  <View style={{ flex: 1 }}>
+ <View style={{ flex: 1 }} onLayout={setFieldPosition("name")}>
     <Text style={styles.fieldLabel}>Asset name</Text>
 
     <TextInput
@@ -860,22 +805,51 @@ const manufactureYears = Array.from(
       placeholder={t("asset.assetName")}
       placeholderTextColor="#767B91"
       value={draft.name}
-      onChangeText={(text) => {
-        if (!disableAssetName) {
-          setDraft((prev) => ({ ...prev, name: text }));
-        }
-      }}
-      editable={!disableAssetName}
-      selectTextOnFocus={!disableAssetName}
+     onChangeText={(text) => {
+  setDraft((prev) => ({
+    ...prev,
+    name: text,
+  }));
+}}
+      editable
+      selectTextOnFocus
       style={[
         styles.input,
         styles.compactInput,
         disableAssetName && styles.inputDisabled,
       ]}
       returnKeyType="done"
+      onFocus={() => scrollToField("name")}
     />
   </View>
 </View>
+
+
+
+
+<View style={styles.notesInputWrap}>
+  <Text style={styles.fieldLabel}>Notes</Text>
+
+  <TextInput
+    placeholder="Type notes here..."
+    placeholderTextColor="#767B91"
+    value={draft.notes || ""}
+    onChangeText={(text) => {
+      const hasNotes = text.trim().length > 0;
+
+      setDraft((prev) => ({
+        ...prev,
+        notes: text,
+        hasNotes,
+      }));
+    }}
+    style={styles.notesTextArea}
+    multiline
+    textAlignVertical="top"
+  />
+</View>
+
+
 
   
 
@@ -1001,36 +975,6 @@ const manufactureYears = Array.from(
       </View>
     </View>
   )}
-
-  <TouchableOpacity
-    style={styles.notesCheckRow}
-    onPress={() => {
-      if (draft.hasNotes) {
-        setNotesModalVisible(true);
-        return;
-      }
-
-      setDraft((prev) => ({ ...prev, hasNotes: true }));
-      setNotesModalVisible(true);
-    }}
-    activeOpacity={0.8}
-  >
-    <Ionicons
-      name={draft.hasNotes ? "checkbox" : "square-outline"}
-      size={18}
-      color="#2A324B"
-    />
-
-    <View style={styles.notesTextWrap}>
-      <Text style={styles.notesCheckText}>Add Notes</Text>
-
-      {!!draft.notes?.trim() && (
-        <Text style={styles.notesPreview} numberOfLines={1}>
-          {draft.notes.trim()}
-        </Text>
-      )}
-    </View>
-  </TouchableOpacity>
 
 <View style={styles.recordDoneRow}>
   <View style={styles.voiceCompactRow}>
@@ -1430,25 +1374,7 @@ const manufactureYears = Array.from(
   }}
 />
 
-      <NotesModal
-        visible={notesModalVisible}
-        notes={draft.notes || ""}
-        onSave={(notes) => {
-          setDraft((prev) => ({ ...prev, notes }));
-          setNotesModalVisible(false);
-        }}
-        onCancel={() => {
-  if (!draft.notes?.trim()) {
-    setDraft((prev) => ({
-      ...prev,
-      hasNotes: false,
-      notes: "",
-    }));
-  }
 
-  setNotesModalVisible(false);
-}}
-      />
 
 
       {snackbar && (
@@ -1893,6 +1819,25 @@ notesRemoveText: {
   color: "#ff6b6b",
   fontSize: 12,
   fontWeight: "700",
+},
+
+
+notesInputWrap: {
+  marginBottom: 8,
+},
+
+notesTextArea: {
+  minHeight: 54,
+  maxHeight: 80,
+  backgroundColor: SURFACE,
+  borderWidth: 1,
+  borderColor: BORDER,
+  borderRadius: 12,
+  paddingHorizontal: 10,
+  paddingVertical: 8,
+  color: TEXT,
+  fontSize: 12,
+  fontWeight: "600",
 },
 
 notesModalCard: {

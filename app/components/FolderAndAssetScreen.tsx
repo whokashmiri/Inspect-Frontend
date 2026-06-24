@@ -73,7 +73,7 @@ type Props = {
 };
 
 
-const NUM_COLUMNS = 3;
+const NUM_COLUMNS = 2;
 const FLAT_COLUMNS = 1;
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const HORIZONTAL_PADDING = 10;
@@ -464,6 +464,11 @@ const collectRawDataValuesForKey = useCallback(
   },
   [projectId, downloadedOffline, isOnline]
 );
+
+
+
+
+
 
   const runAdvancedSearch = useCallback(
     async (page = 1, append = false) => {
