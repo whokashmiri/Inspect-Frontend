@@ -1000,7 +1000,7 @@ const setImageLoading = (key: string, loading: boolean) => {
   >
     <Ionicons
       name={draft.hasNotes ? "checkbox" : "square-outline"}
-      size={22}
+      size={18}
       color="#2A324B"
     />
 
@@ -1027,7 +1027,7 @@ const setImageLoading = (key: string, loading: boolean) => {
     >
       <Ionicons
         name={isRecording ? "stop" : "mic-outline"}
-        size={19}
+        size={18}
         color="#ffffff"
       />
     </TouchableOpacity>
@@ -1046,7 +1046,7 @@ const setImageLoading = (key: string, loading: boolean) => {
       >
         <Ionicons
           name={playingIndex === 0 ? "pause-circle" : "play-circle"}
-          size={24}
+          size={18}
           color={ACC}
         />
       </TouchableOpacity>
@@ -1062,7 +1062,7 @@ const setImageLoading = (key: string, loading: boolean) => {
         onPress={() => removeVoiceNote(0)}
         activeOpacity={0.85}
       >
-        <Ionicons name="trash-outline" size={21} color="#FF4444" />
+        <Ionicons name="trash-outline" size={18} color="#FF4444" />
       </TouchableOpacity>
     )}
   </View>
@@ -1810,12 +1810,13 @@ snackbarInfo: {
   },
 
   closeBtn: {
-    width: 36,
-    height: 36,
+    width: 30,
+    height: 30,
     borderRadius: 12,
     backgroundColor: SURFACE,
     borderWidth: 1,
     borderColor: BORDER,
+    marginBottom: 10,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1931,8 +1932,8 @@ voiceCompactRow: {
   borderColor: BORDER,
   borderRadius: 14,
   paddingHorizontal: 10,
-  paddingVertical: 8,
-  marginBottom: 8,
+  paddingVertical: 5,
+  marginBottom: 5,
 },
 
 imageLoaderOverlay: {
@@ -1948,8 +1949,8 @@ imageLoaderOverlay: {
 },
 
 voiceIconBtn: {
-  width: 34,
-  height: 34,
+  width: 30,
+  height: 30,
   borderRadius: 17,
   backgroundColor: ACC,
   alignItems: "center",
@@ -1964,7 +1965,7 @@ voiceCompactText: {
   flex: 1,
   color: TEXT,
   fontSize: 12,
-  fontWeight: "700",
+  fontWeight: "600",
 },
 
 voiceSmallAction: {
@@ -2417,7 +2418,7 @@ modalActions: {
 
 notesCheckText: {
   color: TEXT,
-  fontSize: 14,
+  fontSize: 12,
   fontWeight: "600",
 },
 
