@@ -578,7 +578,7 @@ const getShortVoiceName = () => {
       }}
       activeOpacity={0.85}
     >
-      <Ionicons name="add" size={16} color={TEXT} />
+      <Ionicons name="add" size={16} color={SURFACE} />
     </TouchableOpacity>
   </View>
 
@@ -1430,6 +1430,7 @@ assetTypePlusBtn: {
   height: "100%",
   alignItems: "center",
   justifyContent: "center",
+  backgroundColor:ACC
 },
 
 
