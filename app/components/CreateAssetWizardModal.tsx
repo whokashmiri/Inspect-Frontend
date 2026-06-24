@@ -202,8 +202,17 @@ const updateCustomAssetType = (value: string) => {
   } as any));
 };
 
+const [assetTypeDropdownOpen, setAssetTypeDropdownOpen] = useState(false);
 const [showCustomTypeInput, setShowCustomTypeInput] = useState(false);
 
+const projectAssetTypes = [
+  "Sofa",
+  "Chair",
+  "TV",
+  "Table",
+  "AC",
+  "Bed",
+];
 const currentCategory =
   String(draft.assetType || "").toLowerCase() === "vehicle"
     ? "Vehicle"
@@ -540,13 +549,70 @@ const getShortVoiceName = () => {
       </Text>
     </View>
 
+ <View style={styles.assetTypeChooseWrap}>
+  <View style={styles.assetTypeChooseControl}>
     <TouchableOpacity
-      style={styles.addTypeHeaderBtn}
-      onPress={() => setShowCustomTypeInput((prev) => !prev)}
+      style={styles.assetTypeChooseBtn}
+      onPress={() => {
+        setAssetTypeDropdownOpen((prev) => !prev);
+        setShowCustomTypeInput(false);
+      }}
+      activeOpacity={0.85}
+    >
+      <Text style={styles.assetTypeChooseText}>Choose</Text>
+
+      <Ionicons
+        name={assetTypeDropdownOpen ? "chevron-up" : "chevron-down"}
+        size={13}
+        color={TEXT}
+      />
+    </TouchableOpacity>
+
+    <View style={styles.assetTypeChooseDivider} />
+
+    <TouchableOpacity
+      style={styles.assetTypePlusBtn}
+      onPress={() => {
+        setShowCustomTypeInput((prev) => !prev);
+        setAssetTypeDropdownOpen(false);
+      }}
       activeOpacity={0.85}
     >
       <Ionicons name="add" size={16} color={TEXT} />
     </TouchableOpacity>
+  </View>
+
+  {assetTypeDropdownOpen && (
+    <View style={styles.addTypeDropdownMenu}>
+      {projectAssetTypes.map((type) => (
+        <TouchableOpacity
+          key={type}
+          style={styles.addTypeDropdownOption}
+          onPress={() => {
+            setDraft((prev) => ({
+              ...prev,
+              assetType: "Other",
+              rawData: {
+                ...((prev as any).rawData || {}),
+                customAssetType: type,
+              },
+            } as any));
+
+            setAssetTypeDropdownOpen(false);
+            setShowCustomTypeInput(false);
+          }}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.addTypeDropdownOptionText}>{type}</Text>
+
+          {customAssetType === type && (
+            <Ionicons name="checkmark" size={16} color={ACC} />
+          )}
+        </TouchableOpacity>
+      ))}
+    </View>
+  )}
+</View>
   </View>
 
   {showCustomTypeInput && (
@@ -585,6 +651,7 @@ const getShortVoiceName = () => {
           } as any));
 
           setShowCustomTypeInput(false);
+          setAssetTypeDropdownOpen(false);
         }}
         activeOpacity={0.85}
       >
@@ -1264,6 +1331,110 @@ modalCardSmall: {
   scrollView: {
     flex: 1,
   },
+
+
+  addTypeDropdownWrap: {
+  position: "relative",
+  zIndex: 999,
+},
+
+addTypeDropdownMenu: {
+  position: "absolute",
+  top: 30,
+  right: 0,
+  width: 175,
+  maxHeight: 230,
+  backgroundColor: "#ffffff",
+  borderWidth: 1,
+  borderColor: BORDER,
+  borderRadius: 14,
+  paddingVertical: 6,
+  zIndex: 9999,
+  elevation: 12,
+  shadowColor: "#000",
+  shadowOffset: { width: 0, height: 8 },
+  shadowOpacity: 0.15,
+  shadowRadius: 12,
+},
+
+addTypeDropdownTitle: {
+  color: MUTED,
+  fontSize: 11,
+  fontWeight: "800",
+  paddingHorizontal: 10,
+  paddingBottom: 6,
+  borderBottomWidth: 1,
+  borderBottomColor: BORDER,
+  marginBottom: 4,
+},
+
+addTypeDropdownOption: {
+  minHeight: 36,
+  paddingHorizontal: 10,
+  paddingVertical: 8,
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 8,
+},
+
+addTypeDropdownOptionText: {
+  flex: 1,
+  color: TEXT,
+  fontSize: 12,
+  fontWeight: "700",
+},
+
+assetTypeChooseWrap: {
+  position: "relative",
+  zIndex: 999,
+},
+
+assetTypeChooseControl: {
+  height: 28,
+  minWidth: 106,
+  borderRadius: 999,
+  backgroundColor: SOFT,
+  borderWidth: 1,
+  borderColor: BORDER,
+  flexDirection: "row",
+  alignItems: "center",
+  overflow: "hidden",
+},
+
+assetTypeChooseBtn: {
+  flex: 1,
+  height: "100%",
+  paddingLeft: 9,
+  paddingRight: 5,
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 3,
+},
+
+assetTypeChooseText: {
+  color: TEXT,
+  fontSize: 10,
+  fontWeight: "800",
+},
+
+assetTypeChooseDivider: {
+  width: 1,
+  height: 16,
+  backgroundColor: BORDER,
+},
+
+assetTypePlusBtn: {
+  width: 30,
+  height: "100%",
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+
+
+
 
 snackbar: {
   position: "absolute",
