@@ -42,22 +42,46 @@ type Props = {
 
 const getInitialDraft = (
   initialData?: Partial<AssetDraft>
-): AssetDraft => ({
-  images: initialData?.images || [],
-  name: initialData?.name || "",
-  writtenDescription: initialData?.writtenDescription || "",
-  voiceNotes: initialData?.voiceNotes?.slice(0, 1) || [],
-  condition: initialData?.condition || "Good",
-  assetType: initialData?.assetType || "Other",
-  brand: initialData?.brand || "",
-  model: initialData?.model || "",
-  manufactureYear: initialData?.manufactureYear || "",
-  kilometersDriven: initialData?.kilometersDriven || "",
-  isPresent: initialData?.isPresent ?? true,
-  isDone: initialData?.isDone ?? true,
-  notes: initialData?.notes || "",
-  hasNotes: !!initialData?.notes?.trim(),
-});
+): AssetDraft => {
+  const rawData = ((initialData as any)?.rawData || {}) as Record<string, any>;
+
+  const quantity =
+    (initialData as any)?.quantity ??
+    rawData.quantity ??
+    1;
+
+  const subAssetType =
+    (initialData as any)?.subAssetType ??
+    rawData.subAssetType ??
+    rawData.subAssetType ??
+    "";
+
+  return {
+    images: initialData?.images || [],
+    name: initialData?.name || "",
+    writtenDescription: "",
+    voiceNotes: initialData?.voiceNotes?.slice(0, 1) || [],
+    condition: initialData?.condition || "Good",
+    assetType: initialData?.assetType || "Other",
+
+    brand: initialData?.brand || "",
+    model: initialData?.model || "",
+    manufactureYear: initialData?.manufactureYear || "",
+    kilometersDriven: initialData?.kilometersDriven || "",
+
+    isPresent: initialData?.isPresent ?? true,
+    isDone: initialData?.isDone ?? true,
+
+    notes: initialData?.notes || "",
+    hasNotes: !!initialData?.notes?.trim(),
+
+    rawData: {
+      ...rawData,
+      quantity,
+      subAssetType,
+    },
+  } as any;
+};
 
 export default function CreateAssetWizardModal({
   visible,
@@ -168,7 +192,7 @@ const modalMinHeight = height * 0.88;
 }, [width, modalWidth]);
 
 const didAutoOpenCameraRef = useRef(false);
-const [customTypeInput, setCustomTypeInput] = useState("");
+
 
 const getQuantity = () => {
   const rawQuantity =
@@ -176,19 +200,26 @@ const getQuantity = () => {
     (draft as any).rawData?.quantity ??
     1;
 
-  return String(rawQuantity);
+  const quantity = Number(rawQuantity);
+
+  if (!Number.isFinite(quantity) || quantity < 1) {
+    return "1";
+  }
+
+  return String(Math.floor(quantity));
 };
 
 const updateQuantity = (nextValue: number | string) => {
   const cleaned =
     typeof nextValue === "number"
       ? nextValue
-      : Number(String(nextValue).replace(/[^0-9]/g, "") || 0);
+      : Number(String(nextValue).replace(/[^0-9]/g, "") || 1);
 
-  const quantity = Math.max(0, cleaned);
+  const quantity = Math.max(1, cleaned);
 
   setDraft((prev) => ({
     ...prev,
+    quantity,
     rawData: {
       ...((prev as any).rawData || {}),
       quantity,
@@ -196,12 +227,13 @@ const updateQuantity = (nextValue: number | string) => {
   } as any));
 };
 
-const updateCustomAssetType = (value: string) => {
+const updateSubAssetType = (value: string) => {
   setDraft((prev) => ({
     ...prev,
+    subAssetType: value,
     rawData: {
       ...((prev as any).rawData || {}),
-      customAssetType: value,
+      subAssetType: value,
     },
   } as any));
 };
@@ -224,14 +256,18 @@ const currentCategory:AssetType =
 
 const isVehicle = currentCategory === "Vehicle";
 
-const customAssetType = String(
-  (draft as any).rawData?.customAssetType || currentCategory
+const subAssetType = String(
+  (draft as any).subAssetType ||
+    (draft as any).rawData?.subAssetType ||
+    (draft as any).rawData?.subAssetType ||
+    ""
 ).trim();
 
 const displayCategory =
-  customAssetType && customAssetType !== currentCategory
-    ? `${currentCategory} • ${customAssetType}`
+  subAssetType && subAssetType !== currentCategory
+    ? `${currentCategory} • ${subAssetType}`
     : currentCategory;
+
 
 const getShortVoiceName = () => {
   if (isRecording) return "Recording...";
@@ -553,11 +589,29 @@ const handleFinish = async () => {
 
   const cleanedNotes = (draft.notes || "").trim();
 
-  const cleanDraft = {
-    ...draft,
-    notes: cleanedNotes || undefined,
-    hasNotes: cleanedNotes.length > 0,
-  };
+const finalQuantity = Number(getQuantity());
+
+const finalSubAssetType = String(
+  (draft as any).subAssetType ||
+    (draft as any).rawData?.subAssetType ||
+    ""
+).trim();
+
+const cleanDraft: AssetDraft = {
+  ...draft,
+
+  notes: cleanedNotes || undefined,
+  hasNotes: cleanedNotes.length > 0,
+
+  quantity: Math.max(1, finalQuantity),
+  subAssetType: finalSubAssetType || undefined,
+
+  rawData: {
+    ...((draft as any).rawData || {}),
+    quantity: Math.max(1, finalQuantity),
+    subAssetType: finalSubAssetType || undefined,
+  },
+} as any;
 
   setSubmitting(true);
 
@@ -631,9 +685,7 @@ const handleFinish = async () => {
       activeOpacity={0.85}
     >
       <Text style={styles.assetTypeInputText} numberOfLines={1}>
-        {customAssetType && customAssetType !== "Vehicle" && customAssetType !== "Other"
-          ? customAssetType
-          : "Choose"}
+        {subAssetType ? subAssetType : "Choose"}
       </Text>
 
       <Ionicons
@@ -665,13 +717,14 @@ const handleFinish = async () => {
           style={styles.addTypeDropdownOption}
           onPress={() => {
             setDraft((prev) => ({
-              ...prev,
-              assetType: "Other",
-              rawData: {
-                ...((prev as any).rawData || {}),
-                customAssetType: type,
-              },
-            } as any));
+  ...prev,
+  assetType: currentCategory,
+  subAssetType: type,
+  rawData: {
+    ...((prev as any).rawData || {}),
+    subAssetType: type,
+  },
+} as any));
 
             setAssetTypeDropdownOpen(false);
             setShowCustomTypeInput(false);
@@ -680,7 +733,7 @@ const handleFinish = async () => {
         >
           <Text style={styles.addTypeDropdownOptionText}>{type}</Text>
 
-          {customAssetType === type && (
+          {subAssetType === type && (
             <Ionicons name="checkmark" size={16} color={ACC} />
           )}
         </TouchableOpacity>
@@ -690,54 +743,15 @@ const handleFinish = async () => {
 </View>
  
 
-  {!!customTypeInput && (
-    <View style={styles.customTypeRow}>
-      <TextInput
-        placeholder="Example: Sofa, Chair, TV"
-        placeholderTextColor="#767B91"
-        value={customAssetType === "Vehicle" || customAssetType === "Other" ? "" : customAssetType}
-        onChangeText={updateCustomAssetType}
-        style={[styles.input, styles.compactInput, { flex: 1 }]}
-      />
-
-      <TouchableOpacity
-        style={styles.addTypeSaveBtn}
-        onPress={() => {
-          const value = String((draft as any).rawData?.customAssetType || "").trim();
-
-          if (!value) {
-            showSnackbar("Please enter asset type", "error");
-            return;
-          }
-
-          setDraft((prev) => ({
-            ...prev,
-            assetType: "Other",
-            rawData: {
-              ...((prev as any).rawData || {}),
-              customAssetType: value,
-            },
-          } as any));
-
-          setCustomTypeInput("");
-        }}
-      >
-        <Text style={styles.primaryText}>Add</Text>
-      </TouchableOpacity>
-    </View>
-  )}
+ 
 
   {showCustomTypeInput && (
     <View style={styles.headerTypeInputRow}>
       <TextInput
         placeholder="Asset type e.g. Sofa, Chair, TV"
         placeholderTextColor="#767B91"
-        value={
-          customAssetType === "Vehicle" || customAssetType === "Other"
-            ? ""
-            : customAssetType
-        }
-        onChangeText={updateCustomAssetType}
+        value={subAssetType}
+        onChangeText={updateSubAssetType}
         style={styles.headerTypeInput}
       />
 
@@ -745,8 +759,10 @@ const handleFinish = async () => {
         style={styles.headerTypeSaveBtn}
         onPress={() => {
           const value = String(
-            (draft as any).rawData?.customAssetType || ""
-          ).trim();
+  (draft as any).subAssetType ||
+    (draft as any).rawData?.subAssetType ||
+    ""
+).trim();
 
           if (!value) {
             showSnackbar("Please enter asset type", "error");
@@ -758,7 +774,7 @@ const handleFinish = async () => {
             assetType: "Other",
             rawData: {
               ...((prev as any).rawData || {}),
-              customAssetType: value,
+              subAssetType: value,
             },
           } as any));
 

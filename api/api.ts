@@ -686,10 +686,11 @@ export interface AssetVoiceNoteItem {
   createdAt: string;
 }
 
+
+
 export interface AssetItem {
   id: string;
   name: string;
-  writtenDescription: string | null;
 
   // old: folderId
   parent: string | null;
@@ -698,10 +699,18 @@ export interface AssetItem {
   createdAt: string;
   updatedAt: string;
   code: string | null;
+
   rawData: Record<string, any> | null;
 
   condition: "" | "New" | "Used" | "Damaged" | "Good" | null;
+
+  // Main category
   assetType: "vehicle" | "other";
+
+  // Sofa, Chair, TV, AC, etc.
+  subAssetType: string | null;
+
+  quantity: number;
 
   brand: string | null;
   model: string | null;
@@ -745,6 +754,9 @@ export interface GetAssetByCodeResponse {
 export interface UpdateAssetResponse {
   asset: AssetItem;
 }
+export interface SubAssetTypesResponse {
+  subAssetTypes: string[];
+}
 
 export interface UploadFileInput {
   uri: string;
@@ -785,6 +797,51 @@ const normalizeAssetType = (
   return String(assetType).toLowerCase() === "vehicle" ? "vehicle" : "other";
 };
 
+const normalizeQuantity = (value?: number | string | null): number | undefined => {
+  if (value === undefined || value === null || value === "") return undefined;
+
+  const numberValue = Number(value);
+
+  if (!Number.isFinite(numberValue) || numberValue < 1) {
+    return undefined;
+  }
+
+  return Math.floor(numberValue);
+};
+
+const normalizeSubAssetType = (value?: string | null): string | undefined => {
+  const text = String(value || "").trim();
+  return text || undefined;
+};
+
+const normalizeRawData = (rawData?: Record<string, any> | null) => {
+  return rawData && typeof rawData === "object" && !Array.isArray(rawData)
+    ? rawData
+    : {};
+};
+
+const getPayloadQuantity = (payload: {
+  quantity?: number | string | null;
+  rawData?: Record<string, any> | null;
+}) => {
+  const rawData = normalizeRawData(payload.rawData);
+
+  return normalizeQuantity(payload.quantity ?? rawData.quantity);
+};
+
+const getPayloadSubAssetType = (payload: {
+  subAssetType?: string | null;
+  rawData?: Record<string, any> | null;
+}) => {
+  const rawData = normalizeRawData(payload.rawData);
+
+  return normalizeSubAssetType(
+    payload.subAssetType ??
+      rawData.subAssetType ??
+      rawData.customAssetType
+  );
+};
+
 export const projectContentApi = {
   createFolder: (payload: {
     projectId: string;
@@ -799,26 +856,42 @@ export const projectContentApi = {
       },
     }),
 
-  createAsset: async (payload: {
-    projectId: string;
-    name: string;
-    writtenDescription?: string | null;
-    parent?: string | null;
-    folderId?: string | null;
-    images?: AssetMediaInput[];
-    voiceNotes?: AssetMediaInput[];
-    condition?: "" | "New" | "Used" | "Damaged" | "Good" | null;
-    assetType?: "vehicle" | "other" | "Vehicle" | "Other";
-    brand?: string | null;
-    model?: string | null;
-    code?: string | null;
-    manufactureYear?: string | null;
-    kilometersDriven?: string | null;
-    isDone?: boolean;
-    isPresent?: boolean;
-    hasNotes?: boolean;
-    notes?: string | null;
-  }) => {
+
+getProjectSubAssetTypes: (projectId: string) =>
+  request<SubAssetTypesResponse>(
+    `/projects/${projectId}/sub-asset-types`,
+    {
+      method: "GET",
+    }
+  ),
+
+ createAsset: async (payload: {
+  projectId: string;
+  name: string;
+  parent?: string | null;
+  folderId?: string | null;
+
+  rawData?: Record<string, any> | null;
+  subAssetType?: string | null;
+  quantity?: number | string | null;
+
+  images?: AssetMediaInput[];
+  voiceNotes?: AssetMediaInput[];
+
+  condition?: "" | "New" | "Used" | "Damaged" | "Good" | null;
+  assetType?: "vehicle" | "other" | "Vehicle" | "Other";
+
+  brand?: string | null;
+  model?: string | null;
+  code?: string | null;
+  manufactureYear?: string | null;
+  kilometersDriven?: string | null;
+
+  isDone?: boolean;
+  isPresent?: boolean;
+
+  notes?: string | null;
+}) => {
     const localMedia = getLocalUploadFiles(payload.images);
     const localImages = localMedia.filter((file) => !isVideoFile(file));
     const localVideos = localMedia.filter(isVideoFile);
@@ -862,28 +935,47 @@ export const projectContentApi = {
     const resolvedParentSubProjectId =
       payload.parent ?? payload.folderId ?? null;
 
+      const rawData = normalizeRawData(payload.rawData);
+
+const quantity = getPayloadQuantity(payload);
+const subAssetType = getPayloadSubAssetType(payload);
+
+const finalRawData = {
+  ...rawData,
+  ...(quantity !== undefined ? { quantity } : {}),
+  ...(subAssetType !== undefined ? { subAssetType } : {}),
+};
+
     return request<CreateAssetResponse>(
       `/projects/${payload.projectId}/assets`,
       {
         method: "POST",
+       
         body: {
-          name: payload.name,
-          writtenDescription: payload.writtenDescription?.trim() || null,
-          parent: resolvedParentSubProjectId,
-          condition: payload.condition || undefined,
-          assetType: normalizeAssetType(payload.assetType) ?? "other",
-          brand: payload.brand?.trim() || null,
-          model: payload.model?.trim() || null,
-          code: payload.code?.trim() || null,
-          manufactureYear: payload.manufactureYear?.trim() || null,
-          kilometersDriven: payload.kilometersDriven?.trim() || null,
-          isDone: payload.isDone ?? false,
-          isPresent: payload.isPresent ?? true,
-          hasNotes: payload.hasNotes ?? false,
-          notes: payload.notes ?? null,
-          images: [...existingMedia, ...uploadedImages, ...uploadedVideos],
-          voiceNotes: uploadedVoiceNotes,
-        },
+  name: payload.name,
+  parent: resolvedParentSubProjectId,
+
+  condition: payload.condition || undefined,
+  assetType: normalizeAssetType(payload.assetType) ?? "other",
+
+  subAssetType,
+  quantity,
+  rawData: finalRawData,
+
+  brand: payload.brand?.trim() || null,
+  model: payload.model?.trim() || null,
+  code: payload.code?.trim() || null,
+  manufactureYear: payload.manufactureYear?.trim() || null,
+  kilometersDriven: payload.kilometersDriven?.trim() || null,
+
+  isDone: payload.isDone ?? false,
+  isPresent: payload.isPresent ?? true,
+
+  notes: payload.notes?.trim() || null,
+
+  images: [...existingMedia, ...uploadedImages, ...uploadedVideos],
+  voiceNotes: uploadedVoiceNotes,
+},
       }
     );
   },
@@ -936,25 +1028,32 @@ export const projectContentApi = {
       body: { isDone },
     }),
 
-  updateAsset: async (payload: {
-    assetId: string;
-    projectId: string;
-    name?: string | null;
-    writtenDescription?: string | null;
-    images?: AssetMediaInput[];
-    voiceNotes?: AssetMediaInput[];
-    condition?: "" | "New" | "Used" | "Damaged" | "Good" | null;
-    assetType?: "vehicle" | "other" | "Vehicle" | "Other";
-    brand?: string | null;
-    model?: string | null;
-    code?: string | null;
-    manufactureYear?: string | null;
-    kilometersDriven?: string | null;
-    hasNotes?: boolean;
-    notes?: string | null;
-    isDone?: boolean;
-    isPresent?: boolean;
-  }) => {
+ updateAsset: async (payload: {
+  assetId: string;
+  projectId: string;
+  name?: string | null;
+
+  rawData?: Record<string, any> | null;
+  subAssetType?: string | null;
+  quantity?: number | string | null;
+
+  images?: AssetMediaInput[];
+  voiceNotes?: AssetMediaInput[];
+
+  condition?: "" | "New" | "Used" | "Damaged" | "Good" | null;
+  assetType?: "vehicle" | "other" | "Vehicle" | "Other";
+
+  brand?: string | null;
+  model?: string | null;
+  code?: string | null;
+  manufactureYear?: string | null;
+  kilometersDriven?: string | null;
+
+  notes?: string | null;
+
+  isDone?: boolean;
+  isPresent?: boolean;
+}) => {
 
     const localMedia = getLocalUploadFiles(payload.images);
     const localImages = localMedia.filter((file) => !isVideoFile(file));
@@ -996,25 +1095,43 @@ export const projectContentApi = {
       2
     );
 
+    const rawData = normalizeRawData(payload.rawData);
+
+const quantity = getPayloadQuantity(payload);
+const subAssetType = getPayloadSubAssetType(payload);
+
+const finalRawData = {
+  ...rawData,
+  ...(quantity !== undefined ? { quantity } : {}),
+  ...(subAssetType !== undefined ? { subAssetType } : {}),
+};
+
     return request<UpdateAssetResponse>(`/projects/assets/${payload.assetId}`, {
       method: "PATCH",
-      body: {
-        name: payload.name,
-        writtenDescription: payload.writtenDescription,
-        condition: payload.condition || undefined,
-        assetType: normalizeAssetType(payload.assetType),
-        brand: payload.brand,
-        model: payload.model,
-        code: payload.code,
-        manufactureYear: payload.manufactureYear,
-        kilometersDriven: payload.kilometersDriven,
-        hasNotes: payload.hasNotes,
-        notes: payload.notes,
-        isDone: payload.isDone,
-        isPresent: payload.isPresent,
-        images: [...existingMedia, ...uploadedImages, ...uploadedVideos],
-        voiceNotes: uploadedVoiceNotes,
-      },
+     body: {
+  name: payload.name,
+
+  condition: payload.condition || undefined,
+  assetType: normalizeAssetType(payload.assetType),
+
+  subAssetType,
+  quantity,
+  rawData: finalRawData,
+
+  brand: payload.brand,
+  model: payload.model,
+  code: payload.code,
+  manufactureYear: payload.manufactureYear,
+  kilometersDriven: payload.kilometersDriven,
+
+  notes: payload.notes,
+
+  isDone: payload.isDone,
+  isPresent: payload.isPresent,
+
+  images: [...existingMedia, ...uploadedImages, ...uploadedVideos],
+  voiceNotes: uploadedVoiceNotes,
+},
     });
   },
 
@@ -1022,6 +1139,8 @@ export const projectContentApi = {
     request<DeleteAssetResponse>(`/projects/assets/${assetId}`, {
       method: "DELETE",
     }),
+
+ 
 
 
   advancedGetRawDataKeys: (projectId: string) => {

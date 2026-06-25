@@ -272,8 +272,11 @@ const handleBackPress = async () => {
   const adminRootFolderIdRef = useRef<string | null>(null);
   const downloadCheckCompletedRef = useRef(false);
 
-   const assetWizardInputRef = useRef<TextInput>(null);
-   const autoSyncLockRef = useRef(false);
+  const assetWizardInputRef = useRef<TextInput>(null);
+  const autoSyncLockRef = useRef(false);
+
+  const quantitySaveTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const quantitySavingRef = useRef<Record<string, boolean>>({});
 
 
   const openFolderModal = () => {
@@ -404,6 +407,12 @@ useEffect(() => {
       }
     };
   }, []);
+
+  useEffect(() => {
+  return () => {
+    Object.values(quantitySaveTimersRef.current).forEach(clearTimeout);
+  };
+}, []);
 
   const showSnackbar = (
     message: string,
@@ -937,12 +946,37 @@ useEffect(() => {
   const buildLocalAsset = (draft: AssetDraft): AssetItem => {
     const normalizedAssetType = normalizeAssetType(draft.assetType as any);
     const isVehicle = normalizedAssetType === "vehicle";
+
+    const rawData = ((draft as any).rawData || {}) as Record<string, any>;
+
+const quantityValue = Number(
+  (draft as any).quantity ?? rawData.quantity ?? 1
+);
+
+const quantity =
+  Number.isFinite(quantityValue) && quantityValue > 0
+    ? Math.floor(quantityValue)
+    : 1;
+
+const subAssetType = String(
+  (draft as any).subAssetType ??
+    rawData.subAssetType ??
+    rawData.customAssetType ??
+    ""
+).trim();
+
+const notesText = String(draft.notes || "").trim();
     return {
       id: `offline_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
       name: draft.name,
-      writtenDescription: draft.writtenDescription || null,
       parent: currentFolderId ?? null,
-      rawData: (draft as any).rawData ?? {},
+      quantity,
+subAssetType: subAssetType || null,
+rawData: {
+  ...rawData,
+  quantity,
+  subAssetType: subAssetType || null,
+},
       projectId,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -954,8 +988,8 @@ useEffect(() => {
       manufactureYear: isVehicle ? draft.manufactureYear || null : null,
       kilometersDriven: isVehicle ? draft.kilometersDriven || null : null,
       isDone: draft.isDone ?? false,
-      hasNotes:draft.hasNotes ?? false,
-      notes: draft.notes || null,
+      hasNotes: notesText.length > 0,
+      notes: notesText || null,
       isPresent: draft.isPresent ?? true,
       createdBy: { id: "offline-user", fullName: "You", email: "" },
      images: normalizeLocalMedia(draft.images || []),
@@ -987,27 +1021,55 @@ useEffect(() => {
     const normalizedAssetType = normalizeAssetType(draft.assetType as any);
     const isVehicle = normalizedAssetType === "vehicle";
 
-    const payload = {
-      clientMutationId,
-      projectId,
-      name: draft.name,
-      writtenDescription: draft.writtenDescription || null,
-      parent: currentFolderId || undefined,
-      rawData: (draft as any).rawData ?? {},
-      images: newImages,
-      voiceNotes: newVoiceNotes,
-      condition: draft.condition || null,
-      code: draft.code || null,
-      assetType: normalizedAssetType,
-      brand: isVehicle ? draft.brand || null : null,
-      model: isVehicle ? draft.model || null : null,
-      hasNotes: draft.hasNotes ?? false,
-      notes: draft.notes || null,
-      manufactureYear: isVehicle ? draft.manufactureYear || null : null,
-      kilometersDriven: isVehicle ? draft.kilometersDriven || null : null,
-      isDone: draft.isDone ?? false,
-      isPresent: draft.isPresent ?? true,
-    };
+    const rawData = ((draft as any).rawData || {}) as Record<string, any>;
+
+const quantity = Number((draft as any).quantity ?? rawData.quantity ?? 1);
+
+const subAssetType = String(
+  (draft as any).subAssetType ??
+    rawData.subAssetType ??
+    rawData.customAssetType ??
+    ""
+).trim();
+
+   const safeQuantity =
+  Number.isFinite(quantity) && quantity > 0 ? Math.floor(quantity) : 1;
+
+const finalRawData = {
+  ...rawData,
+  quantity: safeQuantity,
+  subAssetType: subAssetType || null,
+};
+
+const notesText = String(draft.notes || "").trim();
+
+const payload = {
+  clientMutationId,
+  projectId,
+  name: draft.name,
+  parent: currentFolderId || undefined,
+
+  images: newImages,
+  voiceNotes: newVoiceNotes,
+
+  condition: draft.condition || null,
+  code: draft.code || null,
+  assetType: normalizedAssetType,
+
+  subAssetType: subAssetType || null,
+  quantity: safeQuantity,
+  rawData: finalRawData,
+
+  brand: isVehicle ? draft.brand || null : null,
+  model: isVehicle ? draft.model || null : null,
+  manufactureYear: isVehicle ? draft.manufactureYear || null : null,
+  kilometersDriven: isVehicle ? draft.kilometersDriven || null : null,
+
+  notes: notesText || null,
+
+  isDone: draft.isDone ?? false,
+  isPresent: draft.isPresent ?? true,
+};
 
     const result = await safeApiCall(
       () => projectContentApi.createAsset(payload),
@@ -1087,28 +1149,59 @@ useEffect(() => {
     );
     const normalizedAssetType = normalizeAssetType(draft.assetType as any);
     const isVehicle = normalizedAssetType === "vehicle";
-    const payload = {
-      assetId: editingAsset.id,
-      projectId,
-      name: draft.name,
-      writtenDescription: draft.writtenDescription || null,
-      images: newImages,
-      voiceNotes: newVoiceNotes,
-      rawData: (draft as any).rawData ?? {},
-      code: draft.code || null,
-      condition: draft.condition || null,
-      assetType: normalizedAssetType,
-      brand: isVehicle ? draft.brand || null : null,
-      model: isVehicle ? draft.model || null : null,
 
-      hasNotes:draft.hasNotes ?? false,
-      notes: draft.notes || null,
 
-      manufactureYear: isVehicle ? draft.manufactureYear || null : null,
-      kilometersDriven: isVehicle ? draft.kilometersDriven || null : null,
-      isDone: draft.isDone ?? false,
-      isPresent: draft.isPresent ?? true,
-    };
+    const rawData = ((draft as any).rawData || {}) as Record<string, any>;
+
+const quantityValue = Number(
+  (draft as any).quantity ?? rawData.quantity ?? 1
+);
+
+const safeQuantity =
+  Number.isFinite(quantityValue) && quantityValue > 0
+    ? Math.floor(quantityValue)
+    : 1;
+
+const subAssetType = String(
+  (draft as any).subAssetType ??
+    rawData.subAssetType ??
+    rawData.customAssetType ??
+    ""
+).trim();
+
+const finalRawData = {
+  ...rawData,
+  quantity: safeQuantity,
+  subAssetType: subAssetType || null,
+};
+
+const notesText = String(draft.notes || "").trim();
+   const payload = {
+  assetId: editingAsset.id,
+  projectId,
+  name: draft.name,
+
+  images: newImages,
+  voiceNotes: newVoiceNotes,
+
+  condition: draft.condition || null,
+  code: draft.code || null,
+  assetType: normalizedAssetType,
+
+  subAssetType: subAssetType || null,
+  quantity: safeQuantity,
+  rawData: finalRawData,
+
+  brand: isVehicle ? draft.brand || null : null,
+  model: isVehicle ? draft.model || null : null,
+  manufactureYear: isVehicle ? draft.manufactureYear || null : null,
+  kilometersDriven: isVehicle ? draft.kilometersDriven || null : null,
+
+  notes: notesText || null,
+
+  isDone: draft.isDone ?? false,
+  isPresent: draft.isPresent ?? true,
+};
     const result = await safeApiCall(
       () => projectContentApi.updateAsset(payload),
       payload,
@@ -1122,17 +1215,18 @@ useEffect(() => {
         const updatedOfflineAsset: AssetItem = {
           ...existingOfflineAsset,
           name: draft.name,
-          writtenDescription: draft.writtenDescription || null,
-          rawData: (draft as any).rawData ?? (existingOfflineAsset as any).rawData ?? {},
+          quantity: safeQuantity,
+          subAssetType: subAssetType || null,
+          rawData: finalRawData,
+          hasNotes: notesText.length > 0,
+          notes: notesText || null,
           condition: draft.condition || null,
           code: draft.code ?? existingOfflineAsset.code ?? null,
           assetType: normalizedAssetType,
           brand: isVehicle ? draft.brand || null : null,
           model: isVehicle ? draft.model || null : null,
 
-          hasNotes:draft.hasNotes ?? false,
-          notes: draft.notes || null,
-
+          
           manufactureYear: isVehicle ? draft.manufactureYear || null : null,
           kilometersDriven: isVehicle ? draft.kilometersDriven || null : null,
           isDone: draft.isDone ?? existingOfflineAsset.isDone,
@@ -1360,11 +1454,163 @@ const isAssetSynced = (asset: AssetItem) => {
 };
 
 
+const getAssetQuantity = (asset: AssetItem) => {
+  const value =
+    (asset as any).quantity ??
+    (asset as any).rawData?.quantity ??
+    1;
+
+  const quantity = Number(value);
+
+  if (!Number.isFinite(quantity) || quantity < 1) {
+    return 1;
+  }
+
+  return Math.floor(quantity);
+};
+
+const buildQuantityPayload = (asset: AssetItem, quantity: number) => {
+  const safeQuantity = Math.max(1, Math.floor(quantity || 1));
+  const rawData = ((asset as any).rawData || {}) as Record<string, any>;
+
+  const subAssetType = String(
+    (asset as any).subAssetType ??
+      rawData.subAssetType ??
+      rawData.customAssetType ??
+      ""
+  ).trim();
+
+  return {
+    assetId: asset.id,
+    projectId,
+    quantity: safeQuantity,
+    subAssetType: subAssetType || null,
+    rawData: {
+      ...rawData,
+      quantity: safeQuantity,
+      subAssetType: subAssetType || null,
+    },
+  };
+};
+
 const generateAssetName = (category: "Vehicle" | "Other") => {
   const prefix = category === "Vehicle" ? "Vehicle" : "Asset";
   const number = Math.floor(Math.random() * 999) + 1;
 
   return `${prefix} ${String(number).padStart(3, "0")}`;
+};
+
+
+const saveQuantityDebounced = (asset: AssetItem, nextQuantity: number) => {
+  const assetId = asset.id;
+
+  if (quantitySaveTimersRef.current[assetId]) {
+    clearTimeout(quantitySaveTimersRef.current[assetId]);
+  }
+
+  quantitySaveTimersRef.current[assetId] = setTimeout(async () => {
+    if (quantitySavingRef.current[assetId]) return;
+
+    quantitySavingRef.current[assetId] = true;
+
+    try {
+      const latestAsset =
+        assets.find((item) => item.id === assetId) || asset;
+
+      const quantity = getAssetQuantity(latestAsset);
+      const payload = buildQuantityPayload(latestAsset, quantity);
+
+      setUploadingAssetIds((prev) =>
+        prev.includes(assetId) ? prev : [...prev, assetId]
+      );
+
+      const result = await safeApiCall(
+        () => projectContentApi.updateAsset(payload),
+        payload,
+        { type: "updateAsset", projectId }
+      );
+
+      await refreshPendingCount();
+
+      if ("offline" in result) {
+        setUnsyncedAssetIds((prev) =>
+          prev.includes(assetId) ? prev : [...prev, assetId]
+        );
+
+        if (downloadedOffline) {
+          await upsertOfflineAsset({
+            ...latestAsset,
+            quantity,
+            rawData: payload.rawData,
+            updatedAt: new Date().toISOString(),
+          } as any);
+        }
+
+        return;
+      }
+
+      setAssets((prev) =>
+        prev.map((item) =>
+          item.id === assetId ? { ...item, ...result.asset } : item
+        )
+      );
+
+      if (downloadedOffline) {
+        await upsertOfflineAsset(result.asset);
+      }
+    } catch (error: any) {
+      showSnackbar(error?.message || "Could not update quantity", "error");
+
+      await loadContents(currentFolderId);
+    } finally {
+      quantitySavingRef.current[assetId] = false;
+
+      setUploadingAssetIds((prev) => prev.filter((id) => id !== assetId));
+    }
+  }, 600);
+};
+
+const changeAssetQuantity = (
+  asset: AssetItem,
+  direction: "increase" | "decrease"
+) => {
+  const currentQuantity = getAssetQuantity(asset);
+
+  const nextQuantity =
+    direction === "increase"
+      ? currentQuantity + 1
+      : Math.max(1, currentQuantity - 1);
+
+  if (nextQuantity === currentQuantity) return;
+
+  const rawData = ((asset as any).rawData || {}) as Record<string, any>;
+
+  setAssets((prev) =>
+    prev.map((item) =>
+      item.id === asset.id
+        ? {
+            ...item,
+            quantity: nextQuantity,
+            rawData: {
+              ...rawData,
+              quantity: nextQuantity,
+            },
+          }
+        : item
+    )
+  );
+
+  saveQuantityDebounced(
+    {
+      ...asset,
+      quantity: nextQuantity,
+      rawData: {
+        ...rawData,
+        quantity: nextQuantity,
+      },
+    } as any,
+    nextQuantity
+  );
 };
 
 const openCreateAssetByCategory = (category: "Vehicle" | "Other") => {
@@ -1377,10 +1623,12 @@ const openCreateAssetByCategory = (category: "Vehicle" | "Other") => {
     condition: "Good",
     isPresent: true,
     isDone: true,
-    rawData: {
-      quantity: 1,
-      customAssetType: category,
-    },
+    quantity: 1,
+subAssetType: category === "Vehicle" ? "Vehicle" : "",
+rawData: {
+  quantity: 1,
+  subAssetType: category === "Vehicle" ? "Vehicle" : "",
+},
   } as any);
 
   setAssetCategoryModalVisible(false);
@@ -1828,6 +2076,40 @@ const openCreateAssetByCategory = (category: "Vehicle" | "Other") => {
           <Ionicons name="eye-outline" size={14} color="#fff" />
         </TouchableOpacity>
       )}
+
+      <View style={styles.assetQuantityControl}>
+  <TouchableOpacity
+    style={styles.assetQuantityBtn}
+    onPress={(e) => {
+      e.stopPropagation();
+      changeAssetQuantity(item, "decrease");
+    }}
+    activeOpacity={0.8}
+    disabled={getAssetQuantity(item) <= 1 || isAssetUploading(item)}
+  >
+    <Ionicons
+      name="remove"
+      size={12}
+      color={getAssetQuantity(item) <= 1 ? "#9CA3AF" : TEXT}
+    />
+  </TouchableOpacity>
+
+  <Text style={styles.assetQuantityText}>
+    {getAssetQuantity(item)}
+  </Text>
+
+  <TouchableOpacity
+    style={styles.assetQuantityBtn}
+    onPress={(e) => {
+      e.stopPropagation();
+      changeAssetQuantity(item, "increase");
+    }}
+    activeOpacity={0.8}
+    disabled={isAssetUploading(item)}
+  >
+    <Ionicons name="add" size={12} color={TEXT} />
+  </TouchableOpacity>
+</View>
 
       <View style={styles.syncTickBadge}>
         {isAssetUploading(item) ? (
@@ -2454,6 +2736,36 @@ videoPlayer: {
   width: "100%",
   height: "100%",
   backgroundColor: "#000",
+},
+
+assetQuantityControl: {
+  position: "absolute",
+  bottom: 6,
+  right: 32,
+  height: 22,
+  borderRadius: 11,
+  backgroundColor: "rgba(247,197,159,0.96)",
+  borderWidth: 1,
+  borderColor: "rgba(42,50,75,0.18)",
+  flexDirection: "row",
+  alignItems: "center",
+  overflow: "hidden",
+  zIndex: 16,
+},
+
+assetQuantityBtn: {
+  width: 22,
+  height: 22,
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+assetQuantityText: {
+  minWidth: 20,
+  textAlign: "center",
+  color: TEXT,
+  fontSize: 10,
+  fontWeight: "900",
 },
   filterBtn: {
   flex: 1,
