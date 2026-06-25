@@ -1491,34 +1491,32 @@ const styles = StyleSheet.create({
   alignItems: "center",       // horizontal center
   },
 
-  keyboardWrap: {
-  
-    width: "100%",
-    justifyContent: "center",
-    alignItems: "center",
-  },
+keyboardWrap: {
+  width: "100%",
+  flex: 1,
+  justifyContent: "center",
+  alignItems: "center",
+},
 
-  modalCard: {
+modalCard: {
   backgroundColor: "#ffffff",
   borderWidth: 1,
   borderColor: BORDER,
   borderRadius: 24,
   padding: 16,
   alignSelf: "center",
-  flex: 0,          // ← ADD THIS so it doesn't expand unboundedly
-  flexShrink: 1,    // ← ADD THIS so it can shrink when keyboard appears
+  flexShrink: 1,
+  overflow: "visible",
+},
 
-  ...Platform.select({
-    ios: {
-      shadowColor: "#000",
-      shadowOpacity: 0.12,
-      shadowRadius: 12,
-      shadowOffset: { width: 0, height: 6 },
-    },
-    android: {
-      elevation: 8,
-    },
-  }),
+scrollView: {
+  flex: 1,
+  width: "100%",
+},
+
+scrollContent: {
+  paddingBottom: 100,
+  flexGrow: 1,
 },
 
 modalCardSmall: {
@@ -1542,9 +1540,6 @@ modalCardSmall: {
   }),
 },
 
-  scrollView: {
-    flex: 1,
-  },
 
 
   addTypeDropdownWrap: {
@@ -1734,10 +1729,7 @@ snackbarInfo: {
   backgroundColor: MUTED,
 },
 
-  scrollContent: {
-    paddingBottom: 24,
-    flexGrow: 1,
-  },
+
 
   header: {
     flexDirection: "row",
