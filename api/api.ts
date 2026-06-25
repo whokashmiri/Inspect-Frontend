@@ -859,7 +859,7 @@ export const projectContentApi = {
 
 getProjectSubAssetTypes: (projectId: string) =>
   request<SubAssetTypesResponse>(
-    `/projects/${projectId}/sub-asset-types`,
+    `/projects/${projectId}/assets/sub-asset-types`,
     {
       method: "GET",
     }

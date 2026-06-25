@@ -38,23 +38,47 @@ type Props = {
   initialData?: Partial<AssetDraft>;
   disableAssetName?: boolean;
   firstInputRef?: RefObject<TextInput | null>;
+
+   subAssetTypes?: string[];
+};
+
+
+const cleanAssetRawData = (rawData?: Record<string, any> | null) => {
+  const source =
+    rawData && typeof rawData === "object" && !Array.isArray(rawData)
+      ? { ...rawData }
+      : {};
+
+  delete source.quantity;
+  delete source.subAssetType;
+  delete source.customAssetType;
+
+  return source;
+};
+
+const formatSubAssetTypeLabel = (value: string) => {
+  const text = String(value || "").trim();
+
+  if (!text) return "";
+
+  return text
+    .split(" ")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 };
 
 const getInitialDraft = (
   initialData?: Partial<AssetDraft>
 ): AssetDraft => {
-  const rawData = ((initialData as any)?.rawData || {}) as Record<string, any>;
+  const rawData = cleanAssetRawData(
+    ((initialData as any)?.rawData || {}) as Record<string, any>
+  );
 
-  const quantity =
-    (initialData as any)?.quantity ??
-    rawData.quantity ??
-    1;
+  const quantity = (initialData as any)?.quantity ?? 1;
 
-  const subAssetType =
-    (initialData as any)?.subAssetType ??
-    rawData.subAssetType ??
-    rawData.subAssetType ??
-    "";
+  const subAssetType = String(
+    (initialData as any)?.subAssetType || ""
+  ).trim();
 
   return {
     images: initialData?.images || [],
@@ -75,13 +99,12 @@ const getInitialDraft = (
     notes: initialData?.notes || "",
     hasNotes: !!initialData?.notes?.trim(),
 
-    rawData: {
-      ...rawData,
-      quantity,
-      subAssetType,
-    },
+    quantity,
+    subAssetType,
+
+    rawData,
   } as any;
-};
+};;
 
 export default function CreateAssetWizardModal({
   visible,
@@ -91,6 +114,7 @@ export default function CreateAssetWizardModal({
   initialData,
   disableAssetName = false,
   firstInputRef,
+  subAssetTypes = [],
 
 }: Props) {
   const { t, i18n } = useTranslation();
@@ -215,53 +239,56 @@ const updateQuantity = (nextValue: number | string) => {
       ? nextValue
       : Number(String(nextValue).replace(/[^0-9]/g, "") || 1);
 
-  const quantity = Math.max(1, cleaned);
+  const quantity = Math.max(1, Math.floor(cleaned));
 
   setDraft((prev) => ({
     ...prev,
     quantity,
-    rawData: {
-      ...((prev as any).rawData || {}),
-      quantity,
-    },
+    rawData: cleanAssetRawData((prev as any).rawData),
   } as any));
 };
 
 const updateSubAssetType = (value: string) => {
+  const normalized = String(value || "").trim().toLowerCase();
+
   setDraft((prev) => ({
     ...prev,
-    subAssetType: value,
-    rawData: {
-      ...((prev as any).rawData || {}),
-      subAssetType: value,
-    },
+    subAssetType: normalized,
+    rawData: cleanAssetRawData((prev as any).rawData),
   } as any));
-};
+};;
 
 const [assetTypeDropdownOpen, setAssetTypeDropdownOpen] = useState(false);
 const [showCustomTypeInput, setShowCustomTypeInput] = useState(false);
 
-const projectAssetTypes = [
-  "Sofa",
-  "Chair",
-  "TV",
-  "Table",
-  "AC",
-  "Bed",
-];
+const projectAssetTypes = useMemo(() => {
+  const unique = new Map<string, string>();
+
+  subAssetTypes.forEach((item) => {
+    const value = String(item || "").trim().toLowerCase();
+    if (value) unique.set(value, value);
+  });
+
+  const current = String((draft as any).subAssetType || "")
+    .trim()
+    .toLowerCase();
+
+  if (current) {
+    unique.set(current, current);
+  }
+
+  return Array.from(unique.values()).sort((a, b) => a.localeCompare(b));
+}, [subAssetTypes, (draft as any).subAssetType]);
 const currentCategory:AssetType =
   String(draft.assetType || "").toLowerCase() === "vehicle"
-    ? "Vehicle"
-    : "Other";
+    ? "vehicle"
+    : "other";
 
-const isVehicle = currentCategory === "Vehicle";
+const isVehicle = currentCategory === "vehicle";
 
-const subAssetType = String(
-  (draft as any).subAssetType ||
-    (draft as any).rawData?.subAssetType ||
-    (draft as any).rawData?.subAssetType ||
-    ""
-).trim();
+const subAssetType = String((draft as any).subAssetType || "")
+  .trim()
+  .toLowerCase();
 
 const displayCategory =
   subAssetType && subAssetType !== currentCategory
@@ -591,11 +618,9 @@ const handleFinish = async () => {
 
 const finalQuantity = Number(getQuantity());
 
-const finalSubAssetType = String(
-  (draft as any).subAssetType ||
-    (draft as any).rawData?.subAssetType ||
-    ""
-).trim();
+const finalSubAssetType = String((draft as any).subAssetType || "")
+  .trim()
+  .toLowerCase();
 
 const cleanDraft: AssetDraft = {
   ...draft,
@@ -606,13 +631,8 @@ const cleanDraft: AssetDraft = {
   quantity: Math.max(1, finalQuantity),
   subAssetType: finalSubAssetType || undefined,
 
-  rawData: {
-    ...((draft as any).rawData || {}),
-    quantity: Math.max(1, finalQuantity),
-    subAssetType: finalSubAssetType || undefined,
-  },
+  rawData: cleanAssetRawData((draft as any).rawData),
 } as any;
-
   setSubmitting(true);
 
   try {
@@ -684,9 +704,9 @@ const cleanDraft: AssetDraft = {
       }}
       activeOpacity={0.85}
     >
-      <Text style={styles.assetTypeInputText} numberOfLines={1}>
-        {subAssetType ? subAssetType : "Choose"}
-      </Text>
+     <Text style={styles.assetTypeInputText} numberOfLines={1}>
+  {subAssetType ? formatSubAssetTypeLabel(subAssetType) : "Choose"}
+</Text>
 
       <Ionicons
         name={assetTypeDropdownOpen ? "chevron-up" : "chevron-down"}
@@ -711,33 +731,42 @@ const cleanDraft: AssetDraft = {
 
   {assetTypeDropdownOpen && (
     <View style={styles.assetTypeDropdownMenuFull}>
-      {projectAssetTypes.map((type) => (
-        <TouchableOpacity
-          key={type}
-          style={styles.addTypeDropdownOption}
-          onPress={() => {
-            setDraft((prev) => ({
-  ...prev,
-  assetType: currentCategory,
-  subAssetType: type,
-  rawData: {
-    ...((prev as any).rawData || {}),
-    subAssetType: type,
-  },
-} as any));
+  
 
-            setAssetTypeDropdownOpen(false);
-            setShowCustomTypeInput(false);
-          }}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.addTypeDropdownOptionText}>{type}</Text>
+  {projectAssetTypes.length === 0 ? (
+  <View style={styles.addTypeDropdownOption}>
+    <Text style={styles.addTypeDropdownOptionText}>
+      No sub asset types yet
+    </Text>
+  </View>
+) : (
+  projectAssetTypes.map((type) => (
+    <TouchableOpacity
+      key={type}
+      style={styles.addTypeDropdownOption}
+      onPress={() => {
+        setDraft((prev) => ({
+          ...prev,
+          assetType: currentCategory,
+          subAssetType: type,
+          rawData: cleanAssetRawData((prev as any).rawData),
+        } as any));
 
-          {subAssetType === type && (
-            <Ionicons name="checkmark" size={16} color={ACC} />
-          )}
-        </TouchableOpacity>
-      ))}
+        setAssetTypeDropdownOpen(false);
+        setShowCustomTypeInput(false);
+      }}
+      activeOpacity={0.85}
+    >
+      <Text style={styles.addTypeDropdownOptionText}>
+        {formatSubAssetTypeLabel(type)}
+      </Text>
+
+      {subAssetType === type && (
+        <Ionicons name="checkmark" size={16} color={ACC} />
+      )}
+    </TouchableOpacity>
+  ))
+)}
     </View>
   )}
 </View>
@@ -758,25 +787,21 @@ const cleanDraft: AssetDraft = {
       <TouchableOpacity
         style={styles.headerTypeSaveBtn}
         onPress={() => {
-          const value = String(
-  (draft as any).subAssetType ||
-    (draft as any).rawData?.subAssetType ||
-    ""
-).trim();
+const value = String((draft as any).subAssetType || "")
+  .trim()
+  .toLowerCase();
 
           if (!value) {
             showSnackbar("Please enter asset type", "error");
             return;
           }
 
-          setDraft((prev) => ({
-            ...prev,
-            assetType: "Other",
-            rawData: {
-              ...((prev as any).rawData || {}),
-              subAssetType: value,
-            },
-          } as any));
+setDraft((prev) => ({
+  ...prev,
+  assetType: currentCategory,
+  subAssetType: value,
+  rawData: cleanAssetRawData((prev as any).rawData),
+} as any));
 
           setShowCustomTypeInput(false);
           setAssetTypeDropdownOpen(false);

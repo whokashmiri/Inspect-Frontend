@@ -146,6 +146,8 @@ const [mediaViewerVisible, setMediaViewerVisible] = useState(false);
 const [viewerMedia, setViewerMedia] = useState<any[]>([]);
 const [activeMediaIndex, setActiveMediaIndex] = useState(0);
 
+const [projectSubAssetTypes, setProjectSubAssetTypes] = useState<string[]>([]);
+
 
 const closeMediaViewer = () => {
   setMediaViewerVisible(false);
@@ -163,6 +165,9 @@ const closeMediaViewer = () => {
       return acc[part];
     }, rawData);
   };
+
+
+
 
   const rawDataValueMatches = (value: any, search: string): boolean => {
     if (value === null || value === undefined) return false;
@@ -218,13 +223,16 @@ const getAssetImagesOnly = (asset: AssetItem) => {
     return keys;
   };
 
-  const getRawDataValue = (rawData: any, key: string) => {
-    if (!rawData || !key) return null;
-    return key.split(".").reduce((acc, k) => {
-      if (acc === null || acc === undefined) return null;
-      return acc[k];
-    }, rawData);
-  };
+const getRawDataValue = (rawData: any, key: string) => {
+  const cleanedRawData = cleanAssetRawData(rawData);
+
+  if (!cleanedRawData || !key) return null;
+
+  return key.split(".").reduce((acc, k) => {
+    if (acc === null || acc === undefined) return null;
+    return acc[k];
+  }, cleanedRawData);
+};
 
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const SEARCH_PAGE_SIZE = 15;
@@ -344,7 +352,9 @@ const handleBackPress = async () => {
         if (shouldUseOfflineCache) {
           const keys = await getOfflineRawDataKeys(projectId);
           if (shouldUseOfflineCache) {
-            setRawDataKeys(keys);
+            setRawDataKeys(
+  keys.filter((key: string) => !RAW_DATA_SYSTEM_KEYS.has(key))
+);
             return;
           }
           const scanFolder = async (parentId: string | null) => {
@@ -357,11 +367,19 @@ const handleBackPress = async () => {
             }
           };
           await scanFolder(null);
-          setRawDataKeys(Array.from(keys).sort());
+          setRawDataKeys(
+  Array.from(keys)
+    .filter((key) => !RAW_DATA_SYSTEM_KEYS.has(key))
+    .sort()
+);
           return;
         }
         const result = await projectContentApi.advancedGetRawDataKeys(projectId);
-        setRawDataKeys(result.keys || []);
+        setRawDataKeys(
+  (result.keys || []).filter(
+    (key: string) => !RAW_DATA_SYSTEM_KEYS.has(key)
+  )
+);
       } catch (error) {
         console.warn("RAW DATA KEYS ERROR:", error);
       }
@@ -431,6 +449,30 @@ useEffect(() => {
 }, []);
 
 
+const loadProjectSubAssetTypes = useCallback(async () => {
+  if (projectId.startsWith("offline_")) return;
+
+  try {
+    const result = await projectContentApi.getProjectSubAssetTypes(projectId);
+
+    const unique = Array.from(
+      new Set(
+        (result.subAssetTypes || [])
+          .map((item) => String(item || "").trim().toLowerCase())
+          .filter(Boolean)
+      )
+    ).sort((a, b) => a.localeCompare(b));
+
+    setProjectSubAssetTypes(unique);
+  } catch (error) {
+    console.warn("SUB ASSET TYPES ERROR:", error);
+  }
+}, [projectId]);
+
+useEffect(() => {
+  loadProjectSubAssetTypes();
+}, [loadProjectSubAssetTypes]);
+
 const collectRawDataValuesForKey = useCallback(
   async (key: string) => {
     const values = new Set<string>();
@@ -443,7 +485,10 @@ const collectRawDataValuesForKey = useCallback(
         const data = await getOfflineContents(projectId, parentId);
 
         for (const asset of data.assets || []) {
-          const value = getNestedRawDataValue((asset as any).rawData, key);
+          const value = getNestedRawDataValue(
+  cleanAssetRawData((asset as any).rawData),
+  key
+);
 
           if (
             value !== null &&
@@ -506,7 +551,10 @@ let matchedAssets = allAssets.filter((asset: any) => {
   const matchesSelectedFilters =
     selectedRawDataFilters.length === 0 ||
     selectedRawDataFilters.every(({ key, value }) => {
-      const rawValue = getNestedRawDataValue(asset.rawData, key);
+      const rawValue = getNestedRawDataValue(
+  cleanAssetRawData(asset.rawData),
+  key
+);
 
       if (rawValue === null || rawValue === undefined) return false;
 
@@ -517,7 +565,7 @@ let matchedAssets = allAssets.filter((asset: any) => {
   const matchesSearch =
     !query ||
     rawDataValueMatches(asset.name, query) ||
-    rawDataValueMatches(asset.rawData, query);
+    rawDataValueMatches(cleanAssetRawData(asset.rawData), query);
 
   return matchesSelectedFilters && matchesSearch;
 });
@@ -932,6 +980,25 @@ useEffect(() => {
     return String(value || "").toLowerCase() === "vehicle" ? "vehicle" : "other";
   };
 
+  const RAW_DATA_SYSTEM_KEYS = new Set([
+  "quantity",
+  "subAssetType",
+  "customAssetType",
+]);
+
+const cleanAssetRawData = (rawData?: Record<string, any> | null) => {
+  const source =
+    rawData && typeof rawData === "object" && !Array.isArray(rawData)
+      ? { ...rawData }
+      : {};
+
+  RAW_DATA_SYSTEM_KEYS.forEach((key) => {
+    delete source[key];
+  });
+
+  return source;
+};
+
   const normalizeLocalMedia = (items: any[] = []) => {
   return items.map((item, index) => ({
     ...item,
@@ -947,7 +1014,7 @@ useEffect(() => {
     const normalizedAssetType = normalizeAssetType(draft.assetType as any);
     const isVehicle = normalizedAssetType === "vehicle";
 
-    const rawData = ((draft as any).rawData || {}) as Record<string, any>;
+    const rawData = cleanAssetRawData((draft as any).rawData);
 
 const quantityValue = Number(
   (draft as any).quantity ?? rawData.quantity ?? 1
@@ -970,13 +1037,9 @@ const notesText = String(draft.notes || "").trim();
       id: `offline_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
       name: draft.name,
       parent: currentFolderId ?? null,
-      quantity,
+quantity,
 subAssetType: subAssetType || null,
-rawData: {
-  ...rawData,
-  quantity,
-  subAssetType: subAssetType || null,
-},
+rawData,
       projectId,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -1021,25 +1084,18 @@ rawData: {
     const normalizedAssetType = normalizeAssetType(draft.assetType as any);
     const isVehicle = normalizedAssetType === "vehicle";
 
-    const rawData = ((draft as any).rawData || {}) as Record<string, any>;
+    const rawData = cleanAssetRawData((draft as any).rawData);
 
-const quantity = Number((draft as any).quantity ?? rawData.quantity ?? 1);
+    const quantity = Number((draft as any).quantity ?? 1);
 
-const subAssetType = String(
-  (draft as any).subAssetType ??
-    rawData.subAssetType ??
-    rawData.customAssetType ??
-    ""
-).trim();
+const subAssetType = String((draft as any).subAssetType || "")
+  .trim()
+  .toLowerCase();
 
    const safeQuantity =
   Number.isFinite(quantity) && quantity > 0 ? Math.floor(quantity) : 1;
 
-const finalRawData = {
-  ...rawData,
-  quantity: safeQuantity,
-  subAssetType: subAssetType || null,
-};
+const finalRawData = rawData;
 
 const notesText = String(draft.notes || "").trim();
 
@@ -1102,7 +1158,7 @@ const payload = {
       if (downloadedOffline) {
         await upsertOfflineAsset({ ...optimisticAsset, id: localId });
       }
-
+      await loadProjectSubAssetTypes();
       showSnackbar(result.message, "info");
       return;
     }
@@ -1124,6 +1180,7 @@ const payload = {
     if (downloadedOffline) {
       await upsertOfflineAsset(result.asset);
     }
+    await loadProjectSubAssetTypes();
 
     showSnackbar(t("folderAssetScreen.snackbar.assetCreated"), "success");
   } catch (error: any) {
@@ -1151,29 +1208,20 @@ const payload = {
     const isVehicle = normalizedAssetType === "vehicle";
 
 
-    const rawData = ((draft as any).rawData || {}) as Record<string, any>;
+    const rawData = cleanAssetRawData((draft as any).rawData);
 
-const quantityValue = Number(
-  (draft as any).quantity ?? rawData.quantity ?? 1
-);
+const quantityValue = Number((draft as any).quantity ?? 1);
 
 const safeQuantity =
   Number.isFinite(quantityValue) && quantityValue > 0
     ? Math.floor(quantityValue)
     : 1;
 
-const subAssetType = String(
-  (draft as any).subAssetType ??
-    rawData.subAssetType ??
-    rawData.customAssetType ??
-    ""
-).trim();
+const subAssetType = String((draft as any).subAssetType || "")
+  .trim()
+  .toLowerCase();
 
-const finalRawData = {
-  ...rawData,
-  quantity: safeQuantity,
-  subAssetType: subAssetType || null,
-};
+const finalRawData = rawData;
 
 const notesText = String(draft.notes || "").trim();
    const payload = {
@@ -1241,6 +1289,7 @@ const notesText = String(draft.notes || "").trim();
       showSnackbar(result.message, "info");
     } else {
       if (downloadedOffline) await upsertOfflineAsset(result.asset);
+       await loadProjectSubAssetTypes();
       showSnackbar(t("folderAssetScreen.snackbar.assetUpdated"), "success");
     }
      setUploadingAssetIds((prev) => prev.filter((id) => id !== editingAsset.id));
@@ -1455,10 +1504,7 @@ const isAssetSynced = (asset: AssetItem) => {
 
 
 const getAssetQuantity = (asset: AssetItem) => {
-  const value =
-    (asset as any).quantity ??
-    (asset as any).rawData?.quantity ??
-    1;
+  const value = (asset as any).quantity ?? 1;
 
   const quantity = Number(value);
 
@@ -1471,25 +1517,18 @@ const getAssetQuantity = (asset: AssetItem) => {
 
 const buildQuantityPayload = (asset: AssetItem, quantity: number) => {
   const safeQuantity = Math.max(1, Math.floor(quantity || 1));
-  const rawData = ((asset as any).rawData || {}) as Record<string, any>;
+  const rawData = cleanAssetRawData((asset as any).rawData);
 
-  const subAssetType = String(
-    (asset as any).subAssetType ??
-      rawData.subAssetType ??
-      rawData.customAssetType ??
-      ""
-  ).trim();
+  const subAssetType = String((asset as any).subAssetType || "")
+    .trim()
+    .toLowerCase();
 
   return {
     assetId: asset.id,
     projectId,
     quantity: safeQuantity,
     subAssetType: subAssetType || null,
-    rawData: {
-      ...rawData,
-      quantity: safeQuantity,
-      subAssetType: subAssetType || null,
-    },
+    rawData,
   };
 };
 
@@ -1539,11 +1578,11 @@ const saveQuantityDebounced = (asset: AssetItem, nextQuantity: number) => {
 
         if (downloadedOffline) {
           await upsertOfflineAsset({
-            ...latestAsset,
-            quantity,
-            rawData: payload.rawData,
-            updatedAt: new Date().toISOString(),
-          } as any);
+  ...latestAsset,
+  quantity,
+  rawData: cleanAssetRawData(payload.rawData),
+  updatedAt: new Date().toISOString(),
+} as any);
         }
 
         return;
@@ -1583,34 +1622,28 @@ const changeAssetQuantity = (
 
   if (nextQuantity === currentQuantity) return;
 
-  const rawData = ((asset as any).rawData || {}) as Record<string, any>;
+  const rawData = cleanAssetRawData((asset as any).rawData);
 
-  setAssets((prev) =>
-    prev.map((item) =>
-      item.id === asset.id
-        ? {
-            ...item,
-            quantity: nextQuantity,
-            rawData: {
-              ...rawData,
-              quantity: nextQuantity,
-            },
-          }
-        : item
-    )
-  );
+setAssets((prev) =>
+  prev.map((item) =>
+    item.id === asset.id
+      ? {
+          ...item,
+          quantity: nextQuantity,
+          rawData,
+        }
+      : item
+  )
+);
 
-  saveQuantityDebounced(
-    {
-      ...asset,
-      quantity: nextQuantity,
-      rawData: {
-        ...rawData,
-        quantity: nextQuantity,
-      },
-    } as any,
-    nextQuantity
-  );
+ saveQuantityDebounced(
+  {
+    ...asset,
+    quantity: nextQuantity,
+    rawData,
+  } as any,
+  nextQuantity
+);
 };
 
 const openCreateAssetByCategory = (category: "Vehicle" | "Other") => {
@@ -1624,11 +1657,8 @@ const openCreateAssetByCategory = (category: "Vehicle" | "Other") => {
     isPresent: true,
     isDone: true,
     quantity: 1,
-subAssetType: category === "Vehicle" ? "Vehicle" : "",
-rawData: {
-  quantity: 1,
-  subAssetType: category === "Vehicle" ? "Vehicle" : "",
-},
+    subAssetType: "",
+    rawData: {},
   } as any);
 
   setAssetCategoryModalVisible(false);
@@ -2624,17 +2654,16 @@ rawData: {
 </Modal>
 
         {/* ── Asset wizard modal ── */}
-        <CreateAssetWizardModal
-          firstInputRef={assetWizardInputRef}
-          disableAssetName={!!editingAsset && !canEditAssetName}
-          visible={assetModalVisible}
-          onClose={closeAssetModal}
-          onSubmit={(draft) => submitAssetInBackground(draft, !!editingAsset)}
-          mode={editingAsset ? "edit" : "create"}
-          initialData={
-  editingAsset ? mapAssetToDraft(editingAsset) : createAssetInitialData
-}
-        />
+     <CreateAssetWizardModal
+  firstInputRef={assetWizardInputRef}
+  disableAssetName={!!editingAsset && !canEditAssetName}
+  visible={assetModalVisible}
+  onClose={closeAssetModal}
+  onSubmit={(draft) => submitAssetInBackground(draft, !!editingAsset)}
+  mode={editingAsset ? "edit" : "create"}
+  initialData={editingAsset ? mapAssetToDraft(editingAsset) : createAssetInitialData}
+  subAssetTypes={projectSubAssetTypes}
+/>
 
         {/* ── Snackbar ── */}
         {snackbar && (
