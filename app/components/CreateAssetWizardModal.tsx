@@ -18,6 +18,11 @@ import {
   ActivityIndicator,
   StyleSheet
 } from "react-native";
+
+import {
+  vehicleBrands,
+  getVehicleModelsByBrand,
+} from "../data/vehicleCatalog";
 import { Picker } from "@react-native-picker/picker";
 import * as ImagePicker from "expo-image-picker";
 import { Audio } from "expo-av";
@@ -139,6 +144,9 @@ const snackbarTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const scrollRef = useRef<ScrollView>(null);
   const fieldPositions = useRef<Record<string, number>>({});
+
+  const [brandDropdownOpen, setBrandDropdownOpen] = useState(false);
+const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
 
 const showSnackbar = (
   message: string,
@@ -286,6 +294,14 @@ const currentCategory:AssetType =
 
 const isVehicle = currentCategory === "vehicle";
 
+const isVehicleAsset =
+  String((draft as any).assetType || "").toLowerCase() === "vehicle" ||
+  String((draft as any).assetType || "") === "Vehicle";
+
+const selectedBrand = String((draft as any).brand || "").trim();
+
+const availableVehicleModels = getVehicleModelsByBrand(selectedBrand);
+
 const subAssetType = String((draft as any).subAssetType || "")
   .trim()
   .toLowerCase();
@@ -364,6 +380,27 @@ const scrollToField = (key: string) => {
     showSnackbar("Scanned text added", "success");
   };
 
+
+  const selectVehicleBrand = (brand: string) => {
+  setDraft((prev) => ({
+    ...prev,
+    brand,
+    model: "",
+  }));
+
+  setBrandDropdownOpen(false);
+  setModelDropdownOpen(false);
+};
+
+const selectVehicleModel = (model: string) => {
+  setDraft((prev) => ({
+    ...prev,
+    model,
+  }));
+
+  setModelDropdownOpen(false);
+};
+
   const pickImagesFromLibrary = async () => {
     try {
       const permission =
@@ -403,24 +440,24 @@ const scrollToField = (key: string) => {
   const vehiclePreviewSlots = [
   {
     key: "front",
-    label: "Front",
+    label: "Car Plate",
     icon: "car-sport-outline",
   },
   {
     key: "left",
-    label: "Left Side",
-    icon: "arrow-back-circle-outline",
+    label: "Car Details",
+    icon: "document-text",
   },
   {
     key: "right",
-    label: "Right Side",
-    icon: "arrow-forward-circle-outline",
+    label: "Odometer",
+    icon: "speedometer-outline",
   },
-  {
-    key: "back",
-    label: "Back",
-    icon: "return-down-back-outline",
-  },
+  // {
+  //   key: "back",
+  //   label: "Back",
+  //   icon: "return-down-back-outline",
+  // },
   {
     key: "other",
     label: "Other",
@@ -690,7 +727,7 @@ const cleanDraft: AssetDraft = {
     </View>
 
   </View>
-
+{!isVehicleAsset && (
   
     <View style={styles.assetTypeFieldWrap}>
   <Text style={styles.fieldLabel}>Asset type</Text>
@@ -775,7 +812,7 @@ const cleanDraft: AssetDraft = {
 
   
 </View>
- 
+ )}
 
  
 
@@ -794,7 +831,7 @@ const cleanDraft: AssetDraft = {
         onPress={() => {
 const value = String((draft as any).subAssetType || "")
   .trim()
-  .toLowerCase();
+ ;
 
           if (!value) {
             showSnackbar("Please enter asset type", "error");
@@ -956,73 +993,210 @@ setDraft((prev) => ({
  
 </View>
 
-  {isVehicle && (
-    <View style={styles.vehicleGrid}>
-      <View style={styles.vehicleField}>
-        <Text style={styles.fieldLabel}>{t("asset.brand")}</Text>
-        <TextInput
-          placeholder={t("asset.brand")}
-          placeholderTextColor="#767B91"
-          value={draft.brand}
-          onChangeText={(text) =>
-            setDraft((prev) => ({ ...prev, brand: text }))
-          }
-          style={[styles.input, styles.compactInput]}
+{isVehicle && (
+  <View style={styles.vehicleGrid}>
+    <View style={[styles.vehicleField, styles.vehicleFieldDropdownTop]}>
+      <Text style={styles.fieldLabel}>{t("asset.brand")}</Text>
+
+      <TouchableOpacity
+        style={[styles.input, styles.compactInput, styles.vehicleDropdownInput]}
+        onPress={() => {
+          setBrandDropdownOpen((prev) => !prev);
+          setModelDropdownOpen(false);
+        }}
+        activeOpacity={0.85}
+      >
+        <Text
+          style={[
+            styles.vehicleDropdownText,
+            !draft.brand && styles.vehicleDropdownPlaceholder,
+          ]}
+          numberOfLines={1}
+        >
+          {draft.brand || t("asset.brand")}
+        </Text>
+
+        <Ionicons
+          name={brandDropdownOpen ? "chevron-up" : "chevron-down"}
+          size={16}
+          color="#2A324B"
         />
-      </View>
+      </TouchableOpacity>
 
-      <View style={styles.vehicleField}>
-        <Text style={styles.fieldLabel}>{t("asset.model")}</Text>
-        <TextInput
-          placeholder={t("asset.model")}
-          placeholderTextColor="#767B91"
-          value={draft.model}
-          onChangeText={(text) =>
-            setDraft((prev) => ({ ...prev, model: text }))
-          }
-          style={[styles.input, styles.compactInput]}
+
+
+    </View>
+
+   <View style={[styles.vehicleField, styles.vehicleFieldDropdownTop]}>
+      <Text style={styles.fieldLabel}>{t("asset.model")}</Text>
+
+      <TouchableOpacity
+        style={[
+          styles.input,
+          styles.compactInput,
+          styles.vehicleDropdownInput,
+          !draft.brand && styles.vehicleDropdownDisabled,
+        ]}
+        onPress={() => {
+          if (!draft.brand) return;
+          setModelDropdownOpen((prev) => !prev);
+          setBrandDropdownOpen(false);
+        }}
+        activeOpacity={0.85}
+        disabled={!draft.brand}
+      >
+        <Text
+          style={[
+            styles.vehicleDropdownText,
+            !draft.model && styles.vehicleDropdownPlaceholder,
+          ]}
+          numberOfLines={1}
+        >
+          {draft.model || (draft.brand ? t("asset.model") : "Choose brand first")}
+        </Text>
+
+        <Ionicons
+          name={modelDropdownOpen ? "chevron-up" : "chevron-down"}
+          size={16}
+          color={!draft.brand ? "#9CA3AF" : "#2A324B"}
         />
-      </View>
+      </TouchableOpacity>
 
-      <View style={styles.vehicleField}>
-  <Text style={styles.fieldLabel}>{t("asset.manufactureYear")}</Text>
 
-  <View style={styles.vehicleYearPickerWrap}>
-    <Picker
-      selectedValue={draft.manufactureYear || ""}
-      onValueChange={(value) =>
-        setDraft((prev) => ({
-          ...prev,
-          manufactureYear: value,
-        }))
-      }
-      dropdownIconColor="#2A324B"
-      style={styles.vehicleYearPicker}
-      itemStyle={styles.vehicleYearPickerItem}
-    >
-      <Picker.Item label="Year" value="" />
-      {manufactureYears.map((year) => (
-        <Picker.Item key={year} label={year} value={year} />
-      ))}
-    </Picker>
-  </View>
-</View>
+    </View>
 
-      <View style={styles.vehicleField}>
-        <Text style={styles.fieldLabel}>{t("asset.kilometersDriven")}</Text>
-        <TextInput
-          placeholder={t("asset.kilometersDriven")}
-          placeholderTextColor="#767B91"
-          value={draft.kilometersDriven}
-          keyboardType="numeric"
-          onChangeText={(text) =>
-            setDraft((prev) => ({ ...prev, kilometersDriven: text }))
+<View
+  pointerEvents={brandDropdownOpen || modelDropdownOpen ? "none" : "auto"}
+  style={styles.vehicleField}
+>
+      <Text style={styles.fieldLabel}>{t("asset.manufactureYear")}</Text>
+
+      <View style={styles.vehicleYearPickerWrap}>
+        <Picker
+          selectedValue={draft.manufactureYear || ""}
+          onValueChange={(value) =>
+            setDraft((prev) => ({
+              ...prev,
+              manufactureYear: value,
+            }))
           }
-          style={[styles.input, styles.compactInput]}
-        />
+          dropdownIconColor="#2A324B"
+          style={styles.vehicleYearPicker}
+          itemStyle={styles.vehicleYearPickerItem}
+        >
+          <Picker.Item label="Year" value="" />
+          {manufactureYears.map((year) => (
+            <Picker.Item key={year} label={year} value={year} />
+          ))}
+        </Picker>
       </View>
     </View>
-  )}
+
+<View
+  pointerEvents={brandDropdownOpen || modelDropdownOpen ? "none" : "auto"}
+  style={styles.vehicleField}
+>
+      <Text style={styles.fieldLabel}>{t("asset.kilometersDriven")}</Text>
+
+      <TextInput
+        placeholder={t("asset.kilometersDriven")}
+        placeholderTextColor="#767B91"
+        value={draft.kilometersDriven}
+        keyboardType="numeric"
+        onChangeText={(text) =>
+          setDraft((prev) => ({ ...prev, kilometersDriven: text }))
+        }
+        style={[styles.input, styles.compactInput]}
+      />
+    </View>
+  </View>
+)}
+
+
+{isVehicle && (
+  <Modal
+    visible={brandDropdownOpen || modelDropdownOpen}
+    transparent
+    animationType="fade"
+    onRequestClose={() => {
+      setBrandDropdownOpen(false);
+      setModelDropdownOpen(false);
+    }}
+  >
+    <TouchableWithoutFeedback
+      onPress={() => {
+        setBrandDropdownOpen(false);
+        setModelDropdownOpen(false);
+      }}
+    >
+      <View style={styles.vehicleSelectOverlay}>
+        <TouchableWithoutFeedback>
+          <View
+            style={[
+              styles.vehicleSelectCard,
+              {
+                maxHeight: Math.min(height * 0.55, 360),
+              },
+            ]}
+          >
+            <View style={styles.vehicleSelectHeader}>
+              <Text style={styles.vehicleSelectTitle}>
+                {brandDropdownOpen ? t("asset.brand") : t("asset.model")}
+              </Text>
+
+              <TouchableOpacity
+                onPress={() => {
+                  setBrandDropdownOpen(false);
+                  setModelDropdownOpen(false);
+                }}
+                style={styles.vehicleSelectCloseBtn}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="close" size={18} color="#2A324B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={styles.vehicleSelectScroll}
+              contentContainerStyle={styles.vehicleSelectScrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator
+            >
+              {(brandDropdownOpen ? vehicleBrands : availableVehicleModels).map(
+                (item) => {
+                  const isSelected = brandDropdownOpen
+                    ? draft.brand === item
+                    : draft.model === item;
+
+                  return (
+                    <TouchableOpacity
+                      key={item}
+                      style={styles.vehicleSelectOption}
+                      onPress={() => {
+                        if (brandDropdownOpen) {
+                          selectVehicleBrand(item);
+                        } else {
+                          selectVehicleModel(item);
+                        }
+                      }}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.vehicleSelectOptionText}>{item}</Text>
+
+                      {isSelected && (
+                        <Ionicons name="checkmark" size={18} color={ACC} />
+                      )}
+                    </TouchableOpacity>
+                  );
+                }
+              )}
+            </ScrollView>
+          </View>
+        </TouchableWithoutFeedback>
+      </View>
+    </TouchableWithoutFeedback>
+  </Modal>
+)}
 
 <View style={styles.recordDoneRow}>
   <View style={styles.voiceCompactRow}>
@@ -1727,6 +1901,78 @@ vehiclePreviewLabel: {
   textAlign: "center",
 },
 
+vehicleSelectOverlay: {
+  flex: 1,
+  backgroundColor: "rgba(0,0,0,0.18)",
+  alignItems: "center",
+  justifyContent: "center",
+  paddingHorizontal: 20,
+},
+
+vehicleSelectCard: {
+  width: "100%",
+  maxWidth: 420,
+  backgroundColor: "#ffffff",
+  borderRadius: 18,
+  overflow: "hidden",
+  elevation: 20,
+  shadowColor: "#000",
+  shadowOpacity: 0.16,
+  shadowRadius: 16,
+  shadowOffset: { width: 0, height: 8 },
+},
+
+vehicleSelectHeader: {
+  minHeight: 48,
+  paddingHorizontal: 14,
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+  borderBottomWidth: 1,
+  borderBottomColor: "rgba(42,50,75,0.08)",
+},
+
+vehicleSelectTitle: {
+  color: TEXT,
+  fontSize: 15,
+  fontWeight: "800",
+},
+
+vehicleSelectCloseBtn: {
+  width: 34,
+  height: 34,
+  borderRadius: 17,
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundColor: "#F3F4F6",
+},
+
+vehicleSelectScroll: {
+  width: "100%",
+},
+
+vehicleSelectScrollContent: {
+  paddingVertical: 4,
+},
+
+vehicleSelectOption: {
+  minHeight: 46,
+  paddingHorizontal: 14,
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+  borderBottomWidth: 1,
+  borderBottomColor: "rgba(42,50,75,0.06)",
+},
+
+vehicleSelectOptionText: {
+  flex: 1,
+  color: TEXT,
+  fontSize: 14,
+  fontWeight: "700",
+  marginRight: 10,
+},
+
 assetTypePlusBtn: {
   width: 30,
   height: "100%",
@@ -1811,6 +2057,46 @@ snackbarInfo: {
   flexDirection: "row",
   gap: 10,
   marginBottom: 12,
+},
+
+
+
+
+vehicleDropdownInput: {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+  paddingHorizontal: 12,
+},
+
+vehicleDropdownDisabled: {
+  backgroundColor: "#F3F4F6",
+  borderColor: "rgba(156,163,175,0.35)",
+},
+
+vehicleDropdownText: {
+  flex: 1,
+  color: TEXT,
+  fontSize: 13,
+  fontWeight: "700",
+  marginRight: 8,
+},
+
+vehicleDropdownPlaceholder: {
+  color: "#767B91",
+  fontWeight: "500",
+},
+
+
+
+vehicleFieldDropdownTop: {
+  zIndex: 30,
+  elevation: 30,
+},
+
+vehicleFieldDropdownMiddle: {
+  zIndex: 20,
+  elevation: 20,
 },
 
 radioOption: {
@@ -2236,10 +2522,14 @@ vehicleGrid: {
   flexDirection: "row",
   flexWrap: "wrap",
   gap: 4,
+  overflow: "visible",
+  zIndex: 10,
 },
 
 vehicleField: {
   width: "48%",
+  position: "relative",
+  zIndex: 1,
 },
 
 recordDoneRow: {
