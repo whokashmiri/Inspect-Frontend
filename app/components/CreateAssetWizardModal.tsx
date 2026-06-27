@@ -816,44 +816,7 @@ const cleanDraft: AssetDraft = {
 
  
 
-  {showCustomTypeInput && (
-    <View style={styles.headerTypeInputRow}>
-      <TextInput
-        placeholder="Asset type e.g. Sofa, Chair, TV"
-        placeholderTextColor="#767B91"
-        value={subAssetType}
-        onChangeText={updateSubAssetType}
-        style={styles.headerTypeInput}
-      />
 
-      <TouchableOpacity
-        style={styles.headerTypeSaveBtn}
-        onPress={() => {
-const value = String((draft as any).subAssetType || "")
-  .trim()
- ;
-
-          if (!value) {
-            showSnackbar("Please enter asset type", "error");
-            return;
-          }
-
-setDraft((prev) => ({
-  ...prev,
-  assetType: currentCategory,
-  subAssetType: value,
-  rawData: cleanAssetRawData((prev as any).rawData),
-} as any));
-
-          setShowCustomTypeInput(false);
-          setAssetTypeDropdownOpen(false);
-        }}
-        activeOpacity={0.85}
-      >
-        <Text style={styles.headerTypeSaveText}>Add</Text>
-      </TouchableOpacity>
-    </View>
-  )}
 </View>
 
  <View style={styles.quantityBox}>
@@ -1197,6 +1160,82 @@ setDraft((prev) => ({
     </TouchableWithoutFeedback>
   </Modal>
 )}
+
+<Modal
+  visible={showCustomTypeInput}
+  transparent
+  animationType="fade"
+  onRequestClose={() => setShowCustomTypeInput(false)}
+>
+  <TouchableWithoutFeedback onPress={() => setShowCustomTypeInput(false)}>
+    <View style={styles.vehicleSelectOverlay}>
+      <TouchableWithoutFeedback>
+        <View style={styles.addTypeModalCard}>
+          <View style={styles.vehicleSelectHeader}>
+            <Text style={styles.vehicleSelectTitle}>Add asset type</Text>
+            <TouchableOpacity
+              onPress={() => setShowCustomTypeInput(false)}
+              style={styles.vehicleSelectCloseBtn}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="close" size={18} color="#2A324B" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ padding: 14 }}>
+            <Text style={styles.fieldLabel}>Asset type</Text>
+            <TextInput
+              placeholder="e.g. Sofa, Chair, TV"
+              placeholderTextColor="#767B91"
+              value={String((draft as any).subAssetType || "")}
+onChangeText={(text) =>
+  setDraft((prev) => ({
+    ...prev,
+    subAssetType: text,
+    rawData: cleanAssetRawData((prev as any).rawData),
+  } as any))
+}
+              style={[styles.input, styles.compactInput, { marginBottom: 16 }]}
+              autoFocus
+            />
+
+            <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 8 }}>
+              <TouchableOpacity
+                style={styles.secondaryBtn}
+                onPress={() => setShowCustomTypeInput(false)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.secondaryText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.primaryBtn}
+                onPress={() => {
+                  const value = String((draft as any).subAssetType || "").trim();
+                  if (!value) {
+                    showSnackbar("Please enter asset type", "error");
+                    return;
+                  }
+                  setDraft((prev) => ({
+                    ...prev,
+                    assetType: currentCategory,
+                    subAssetType: value,
+                    rawData: cleanAssetRawData((prev as any).rawData),
+                  } as any));
+                  setShowCustomTypeInput(false);
+                  setAssetTypeDropdownOpen(false);
+                }}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.primaryText}>Add</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </TouchableWithoutFeedback>
+    </View>
+  </TouchableWithoutFeedback>
+</Modal>
 
 <View style={styles.recordDoneRow}>
   <View style={styles.voiceCompactRow}>
@@ -1990,7 +2029,18 @@ previewImageLoading: {
 
 
 
-
+addTypeModalCard: {
+  width: "100%",
+  maxWidth: 360,
+  backgroundColor: "#ffffff",
+  borderRadius: 18,
+  overflow: "hidden",
+  elevation: 20,
+  shadowColor: "#000",
+  shadowOpacity: 0.16,
+  shadowRadius: 16,
+  shadowOffset: { width: 0, height: 8 },
+},
 
 
 snackbar: {
