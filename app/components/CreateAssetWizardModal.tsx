@@ -767,8 +767,18 @@ const cleanDraft: AssetDraft = {
     </TouchableOpacity>
   ))
 )}
+
+
+
+
     </View>
+
+    
+
+
   )}
+
+  
 </View>
  
 
@@ -813,6 +823,34 @@ setDraft((prev) => ({
     </View>
   )}
 </View>
+
+ <View style={styles.quantityBox}>
+    <Text style={styles.fieldLabel}>Quantity</Text>
+
+    <View style={styles.quantityControl}>
+      <TouchableOpacity
+        style={styles.quantityIconBtn}
+        onPress={() => updateQuantity(Number(getQuantity()) - 1)}
+      >
+        <Ionicons name="remove" size={16} color={TEXT} />
+      </TouchableOpacity>
+
+      <TextInput
+        value={getQuantity()}
+        onChangeText={updateQuantity}
+        keyboardType="numeric"
+        style={styles.quantityInput}
+      />
+
+      <TouchableOpacity
+        style={styles.quantityIconBtn}
+        onPress={() => updateQuantity(Number(getQuantity()) + 1)}
+      >
+        <Ionicons name="add" size={16} color={TEXT} />
+      </TouchableOpacity>
+    </View>
+  </View>
+
 
                     <TouchableOpacity
                       onPress={handleClose}
@@ -921,32 +959,7 @@ setDraft((prev) => ({
 </View>
   </View>
 
-  <View style={styles.quantityBox}>
-    <Text style={styles.fieldLabel}>Quantity</Text>
-
-    <View style={styles.quantityControl}>
-      <TouchableOpacity
-        style={styles.quantityIconBtn}
-        onPress={() => updateQuantity(Number(getQuantity()) - 1)}
-      >
-        <Ionicons name="remove" size={16} color={TEXT} />
-      </TouchableOpacity>
-
-      <TextInput
-        value={getQuantity()}
-        onChangeText={updateQuantity}
-        keyboardType="numeric"
-        style={styles.quantityInput}
-      />
-
-      <TouchableOpacity
-        style={styles.quantityIconBtn}
-        onPress={() => updateQuantity(Number(getQuantity()) + 1)}
-      >
-        <Ionicons name="add" size={16} color={TEXT} />
-      </TouchableOpacity>
-    </View>
-  </View>
+ 
 </View>
 
   {isVehicle && (
@@ -1777,6 +1790,7 @@ snackbarInfo: {
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 2,
+    gap:5
   },
 
   title: {
@@ -1792,7 +1806,7 @@ snackbarInfo: {
     backgroundColor: SURFACE,
     borderWidth: 1,
     borderColor: BORDER,
-    marginBottom: 10,
+    marginBottom: 50,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1988,7 +2002,8 @@ topQuickRow: {
 },
 
 quantityBox: {
-  width: 105,
+  width: 90,
+  marginTop:20
 },
 
 quantityControl: {
