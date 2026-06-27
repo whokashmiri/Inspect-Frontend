@@ -299,7 +299,7 @@ const displayCategory =
 const getShortVoiceName = () => {
   if (isRecording) return "Recording...";
   if (!draft.voiceNotes?.[0]) return "Add voice";
-  return "Voice note";
+  return "Play your Voice note";
 };
 
   const setFieldPosition = (key: string) => (e: LayoutChangeEvent) => {
@@ -1048,21 +1048,22 @@ setDraft((prev) => ({
     </TouchableOpacity>
 
     {!!draft.voiceNotes?.[0] && !isRecording && (
-      <TouchableOpacity
-        style={styles.voiceSmallAction}
-        onPress={() => {
-          const note = draft.voiceNotes?.[0];
-          const uri = note?.uri || note?.url || "";
-          if (!uri) return;
+     <TouchableOpacity
+  style={[styles.voiceSmallAction, styles.voicePlayAction]}
+  onPress={() => {
+    const note = draft.voiceNotes?.[0];
+    const uri = note?.uri || note?.url || "";
+    if (!uri) return;
 
-          playVoiceNote(uri, 0);
-        }}
-        activeOpacity={0.85}
-      >
+    playVoiceNote(uri, 0);
+  }}
+  activeOpacity={0.85}
+>
         <Ionicons
           name={playingIndex === 0 ? "pause-circle" : "play-circle"}
           size={18}
           color={ACC}
+          // style= {styles.playVoiceIcon} 
         />
       </TouchableOpacity>
     )}
@@ -1978,14 +1979,19 @@ voiceCompactText: {
 },
 
 voiceSmallAction: {
-  width: 34,
-  height: 34,
+  width: 30,
+  height: 30,
   borderRadius: 17,
   backgroundColor: "#ffffff",
   borderWidth: 1,
   borderColor: BORDER,
   alignItems: "center",
   justifyContent: "center",
+  marginRight:15
+},
+
+voicePlayAction: {
+  marginLeft: 40,
 },
 
 
@@ -2804,6 +2810,8 @@ notesCheckText: {
     fontSize: 12,
     fontStyle: "italic",
   },
+
+
 
   isPresentRow: {
   flexDirection: "row",
