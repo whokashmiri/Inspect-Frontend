@@ -769,12 +769,7 @@ const cleanDraft: AssetDraft = {
 )}
 
 
-
-
     </View>
-
-    
-
 
   )}
 
@@ -901,6 +896,32 @@ setDraft((prev) => ({
       onFocus={() => scrollToField("name")}
     />
   </View>
+
+    <View style={styles.conditionBox}>
+    <Text style={styles.fieldLabel}>{t("asset.condition")}</Text>
+
+    <View style={styles.compactPickerWrap}>
+  <Picker
+    selectedValue={draft.condition}
+    onValueChange={(value) =>
+      setDraft((prev) => ({
+        ...prev,
+        condition: value,
+      }))
+    }
+    dropdownIconColor="#2A324B"
+    style={styles.compactPicker}
+    itemStyle={styles.compactPickerItem}
+  >
+    <Picker.Item label={t("asset.conditionGood")} value="Good" />
+    <Picker.Item label={t("asset.conditionNew")} value="New" />
+    <Picker.Item label={t("asset.conditionUsed")} value="Used" />
+    <Picker.Item label={t("asset.conditionDamaged")} value="Damaged" />
+  </Picker>
+</View>
+  </View>
+
+
 </View>
 
 
@@ -929,35 +950,8 @@ setDraft((prev) => ({
 </View>
 
 
-
-  
-
-
-
  <View style={styles.conditionQuantityRow}>
-  <View style={styles.conditionBox}>
-    <Text style={styles.fieldLabel}>{t("asset.condition")}</Text>
 
-    <View style={styles.compactPickerWrap}>
-  <Picker
-    selectedValue={draft.condition}
-    onValueChange={(value) =>
-      setDraft((prev) => ({
-        ...prev,
-        condition: value,
-      }))
-    }
-    dropdownIconColor="#2A324B"
-    style={styles.compactPicker}
-    itemStyle={styles.compactPickerItem}
-  >
-    <Picker.Item label={t("asset.conditionGood")} value="Good" />
-    <Picker.Item label={t("asset.conditionNew")} value="New" />
-    <Picker.Item label={t("asset.conditionUsed")} value="Used" />
-    <Picker.Item label={t("asset.conditionDamaged")} value="Damaged" />
-  </Picker>
-</View>
-  </View>
 
  
 </View>
@@ -2008,7 +2002,7 @@ topQuickRow: {
 },
 
 quantityBox: {
-  width: 90,
+  width: 80,
   marginTop:20
 },
 
@@ -2095,7 +2089,7 @@ conditionQuantityRow: {
 },
 
 conditionBox: {
-  flex: 1.2,
+  flex: 0.5,
 },
 
 compactPickerWrap: {
