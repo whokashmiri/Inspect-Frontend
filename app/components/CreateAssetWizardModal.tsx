@@ -727,124 +727,164 @@ const cleanDraft: AssetDraft = {
     </View>
 
   </View>
+
 {!isVehicleAsset && (
-  
-    <View style={styles.assetTypeFieldWrap}>
-  <Text style={styles.fieldLabel}>Asset type</Text>
+  <View style={styles.otherAssetControls}>
+    <View style={styles.assetTypeQuantityRow}>
+      <View style={styles.assetTypeFieldWrap}>
+        <Text style={styles.fieldLabel}>Asset type</Text>
 
-  <View style={styles.assetTypeInputLikeWrap}>
-    <TouchableOpacity
-      style={styles.assetTypeInputChoose}
-      onPress={() => {
-        setAssetTypeDropdownOpen((prev) => !prev);
-        setShowCustomTypeInput(false);
-      }}
-      activeOpacity={0.85}
-    >
-     <Text style={styles.assetTypeInputText} numberOfLines={1}>
-  {subAssetType ? formatSubAssetTypeLabel(subAssetType) : "Choose"}
-</Text>
+        <View style={styles.assetTypeInputLikeWrap}>
+          <TouchableOpacity
+            style={styles.assetTypeInputChoose}
+            onPress={() => {
+              setAssetTypeDropdownOpen((prev) => !prev);
+              setShowCustomTypeInput(false);
+            }}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.assetTypeInputText} numberOfLines={1}>
+              {subAssetType ? formatSubAssetTypeLabel(subAssetType) : "Choose"}
+            </Text>
 
-      <Ionicons
-        name={assetTypeDropdownOpen ? "chevron-up" : "chevron-down"}
-        size={16}
-        color={TEXT}
-      />
-    </TouchableOpacity>
+            <Ionicons
+              name={assetTypeDropdownOpen ? "chevron-up" : "chevron-down"}
+              size={16}
+              color={TEXT}
+            />
+          </TouchableOpacity>
 
-    <View style={styles.assetTypeInputDivider} />
+          <View style={styles.assetTypeInputDivider} />
 
-    <TouchableOpacity
-      style={styles.assetTypeInputPlus}
-      onPress={() => {
-        setShowCustomTypeInput((prev) => !prev);
-        setAssetTypeDropdownOpen(false);
-      }}
-      activeOpacity={0.85}
-    >
-      <Ionicons name="add" size={18} color={TEXT} />
-    </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.assetTypeInputPlus}
+            onPress={() => {
+              setShowCustomTypeInput((prev) => !prev);
+              setAssetTypeDropdownOpen(false);
+            }}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="add" size={18} color={TEXT} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <View style={styles.quantityFieldWrap}>
+        <Text style={styles.fieldLabel}>Quantity</Text>
+
+        <View style={styles.quantityControl}>
+          <TouchableOpacity
+            style={styles.quantityIconBtn}
+            onPress={() => updateQuantity(Number(getQuantity()) - 1)}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="remove" size={16} color={TEXT} />
+          </TouchableOpacity>
+
+          <TextInput
+            value={getQuantity()}
+            onChangeText={updateQuantity}
+            keyboardType="numeric"
+            style={styles.quantityInput}
+          />
+
+          <TouchableOpacity
+            style={styles.quantityIconBtn}
+            onPress={() => updateQuantity(Number(getQuantity()) + 1)}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="add" size={16} color={TEXT} />
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+
+    {assetTypeDropdownOpen && (
+      <View style={styles.assetTypeDropdownMenuFull}>
+        {projectAssetTypes.length === 0 ? (
+          <View style={styles.addTypeDropdownOption}>
+            <Text style={styles.addTypeDropdownOptionText}>
+              No sub asset types yet
+            </Text>
+          </View>
+        ) : (
+          projectAssetTypes.map((type) => (
+            <TouchableOpacity
+              key={type}
+              style={styles.addTypeDropdownOption}
+              onPress={() => {
+                setDraft((prev) => ({
+                  ...prev,
+                  assetType: currentCategory,
+                  subAssetType: type,
+                  rawData: cleanAssetRawData((prev as any).rawData),
+                } as any));
+
+                setAssetTypeDropdownOpen(false);
+                setShowCustomTypeInput(false);
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.addTypeDropdownOptionText}>
+                {formatSubAssetTypeLabel(type)}
+              </Text>
+
+              {subAssetType === type && (
+                <Ionicons name="checkmark" size={16} color={ACC} />
+              )}
+            </TouchableOpacity>
+          ))
+        )}
+      </View>
+    )}
+
+    {showCustomTypeInput && (
+      <View style={styles.headerTypeInputRow}>
+        <TextInput
+          placeholder="Asset type e.g. Sofa, Chair, TV"
+          placeholderTextColor="#767B91"
+          value={subAssetType}
+          onChangeText={updateSubAssetType}
+          style={styles.headerTypeInput}
+        />
+
+        <TouchableOpacity
+          style={styles.headerTypeSaveBtn}
+          onPress={() => {
+            const value = String((draft as any).subAssetType || "")
+              .trim()
+              .toLowerCase();
+
+            if (!value) {
+              showSnackbar("Please enter asset type", "error");
+              return;
+            }
+
+            setDraft((prev) => ({
+              ...prev,
+              assetType: currentCategory,
+              subAssetType: value,
+              rawData: cleanAssetRawData((prev as any).rawData),
+            } as any));
+
+            setShowCustomTypeInput(false);
+            setAssetTypeDropdownOpen(false);
+          }}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.headerTypeSaveText}>Add</Text>
+        </TouchableOpacity>
+      </View>
+    )}
   </View>
-
-  {assetTypeDropdownOpen && (
-    <View style={styles.assetTypeDropdownMenuFull}>
-  
-
-  {projectAssetTypes.length === 0 ? (
-  <View style={styles.addTypeDropdownOption}>
-    <Text style={styles.addTypeDropdownOptionText}>
-      No sub asset types yet
-    </Text>
-  </View>
-) : (
-  projectAssetTypes.map((type) => (
-    <TouchableOpacity
-      key={type}
-      style={styles.addTypeDropdownOption}
-      onPress={() => {
-        setDraft((prev) => ({
-          ...prev,
-          assetType: currentCategory,
-          subAssetType: type,
-          rawData: cleanAssetRawData((prev as any).rawData),
-        } as any));
-
-        setAssetTypeDropdownOpen(false);
-        setShowCustomTypeInput(false);
-      }}
-      activeOpacity={0.85}
-    >
-      <Text style={styles.addTypeDropdownOptionText}>
-        {formatSubAssetTypeLabel(type)}
-      </Text>
-
-      {subAssetType === type && (
-        <Ionicons name="checkmark" size={16} color={ACC} />
-      )}
-    </TouchableOpacity>
-  ))
 )}
 
-
-    </View>
-
-  )}
-
-  
-</View>
- )}
-
- 
+   
 
 
 </View>
 
- <View style={styles.quantityBox}>
-    <Text style={styles.fieldLabel}>Quantity</Text>
 
-    <View style={styles.quantityControl}>
-      <TouchableOpacity
-        style={styles.quantityIconBtn}
-        onPress={() => updateQuantity(Number(getQuantity()) - 1)}
-      >
-        <Ionicons name="remove" size={16} color={TEXT} />
-      </TouchableOpacity>
-
-      <TextInput
-        value={getQuantity()}
-        onChangeText={updateQuantity}
-        keyboardType="numeric"
-        style={styles.quantityInput}
-      />
-
-      <TouchableOpacity
-        style={styles.quantityIconBtn}
-        onPress={() => updateQuantity(Number(getQuantity()) + 1)}
-      >
-        <Ionicons name="add" size={16} color={TEXT} />
-      </TouchableOpacity>
-    </View>
-  </View>
 
 
                     <TouchableOpacity
@@ -1753,6 +1793,22 @@ const styles = StyleSheet.create({
   alignItems: "center",       // horizontal center
   },
 
+  assetTypeQuantityRow: {
+  flexDirection: "row",
+  alignItems: "flex-start",
+},
+
+assetTypeFieldWrap: {
+  flex: 1,
+  marginRight: 8,
+},
+
+quantityFieldWrap: {
+  width: 80,
+},
+
+
+
 keyboardWrap: {
   width: "100%",
   flex: 1,
@@ -1975,6 +2031,11 @@ vehicleSelectTitle: {
   color: TEXT,
   fontSize: 15,
   fontWeight: "800",
+},
+
+otherAssetControls: {
+  marginTop: 8,
+  gap: 8,
 },
 
 vehicleSelectCloseBtn: {
@@ -2338,8 +2399,8 @@ topQuickRow: {
 },
 
 quantityBox: {
-  width: 80,
-  marginTop:20
+  width: 70,
+  marginTop:10
 },
 
 quantityControl: {
@@ -2353,11 +2414,9 @@ quantityControl: {
   overflow: "hidden",
 },
 
-assetTypeFieldWrap: {
-  position: "relative",
-  zIndex: 999,
-  marginBottom: 8,
-},
+
+
+
 
 assetTypeInputLikeWrap: {
   height: 40,
