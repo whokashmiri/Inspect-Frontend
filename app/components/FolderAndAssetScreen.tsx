@@ -2030,11 +2030,17 @@ const openCreateAssetByCategory = (category: "Vehicle" | "Other") => {
                   
                     return (
   <View style={styles.gridItem}>
-    <TouchableOpacity
-      style={styles.gridCard}
-      onPress={() => openEditAsset(item)}
-      activeOpacity={0.85}
-    >
+  <TouchableOpacity
+  style={styles.gridCard}
+  onPress={() => {
+    if (getValidAssetMedia(item).length > 0) {
+      openAssetMediaViewer(item);   // has images/video -> view
+    } else {
+      openEditAsset(item);          // no media -> edit
+    }
+  }}
+  activeOpacity={0.85}
+>
       {getAssetImageUri(item) ? (
         <Image
           source={{ uri: getAssetImageUri(item)! }}
@@ -2107,39 +2113,41 @@ const openCreateAssetByCategory = (category: "Vehicle" | "Other") => {
         </TouchableOpacity>
       )}
 
-      <View style={styles.assetQuantityControl}>
-  <TouchableOpacity
-    style={styles.assetQuantityBtn}
-    onPress={(e) => {
-      e.stopPropagation();
-      changeAssetQuantity(item, "decrease");
-    }}
-    activeOpacity={0.8}
-    disabled={getAssetQuantity(item) <= 1 || isAssetUploading(item)}
-  >
-    <Ionicons
-      name="remove"
-      size={12}
-      color={getAssetQuantity(item) <= 1 ? "#9CA3AF" : TEXT}
-    />
-  </TouchableOpacity>
+{normalizeAssetType((item as any).assetType) !== "vehicle" && (
+  <View style={styles.assetQuantityControl}>
+    <TouchableOpacity
+      style={styles.assetQuantityBtn}
+      onPress={(e) => {
+        e.stopPropagation();
+        changeAssetQuantity(item, "decrease");
+      }}
+      activeOpacity={0.8}
+      disabled={getAssetQuantity(item) <= 1 || isAssetUploading(item)}
+    >
+      <Ionicons
+        name="remove"
+        size={20}
+        color={getAssetQuantity(item) <= 1 ? "#9CA3AF" : TEXT}
+      />
+    </TouchableOpacity>
 
-  <Text style={styles.assetQuantityText}>
-    {getAssetQuantity(item)}
-  </Text>
+    <Text style={styles.assetQuantityText}>
+      {getAssetQuantity(item)}
+    </Text>
 
-  <TouchableOpacity
-    style={styles.assetQuantityBtn}
-    onPress={(e) => {
-      e.stopPropagation();
-      changeAssetQuantity(item, "increase");
-    }}
-    activeOpacity={0.8}
-    disabled={isAssetUploading(item)}
-  >
-    <Ionicons name="add" size={12} color={TEXT} />
-  </TouchableOpacity>
-</View>
+    <TouchableOpacity
+      style={styles.assetQuantityBtn}
+      onPress={(e) => {
+        e.stopPropagation();
+        changeAssetQuantity(item, "increase");
+      }}
+      activeOpacity={0.8}
+      disabled={isAssetUploading(item)}
+    >
+      <Ionicons name="add" size={20} color={TEXT} />
+    </TouchableOpacity>
+  </View>
+)}
 
       <View style={styles.syncTickBadge}>
         {isAssetUploading(item) ? (
@@ -2209,21 +2217,21 @@ const openCreateAssetByCategory = (category: "Vehicle" | "Other") => {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.secondaryBtn}
- onPress={() => {
-  Keyboard.dismiss();
-  setEditingAsset(null);
-  setCreateAssetInitialData(undefined);
-  setAssetCategoryModalVisible(true);
-}}
+              onPress={() => {
+              Keyboard.dismiss();
+              setEditingAsset(null);
+              setCreateAssetInitialData(undefined);
+              setAssetCategoryModalVisible(true);
+              }}
               activeOpacity={0.85}
             >
 
               <MaterialIcons
-                                            name="photo-camera"
-                                            size={18}
-                                            color="#0a0909"
-                                            style={{ marginRight: 8 }}
-                                          />
+              name="photo-camera"
+              size={18}
+              color="#0a0909"
+              style={{ marginRight: 8 }}
+              />
               <Text style={styles.secondaryBtnText}>
                 {t("folderAssetScreen.actions.newAsset")}
               </Text>
@@ -2769,15 +2777,17 @@ videoPlayer: {
 
 assetQuantityControl: {
   position: "absolute",
-  bottom: 6,
-  right: 32,
-  height: 22,
+  top: 32,        // just below photoCountBadge (top: 6, ~22px tall)
+  bottom: 30,     // just above syncTickBadge (bottom: 6, 20px tall)
+  right: 6,
+  width: 32,
   borderRadius: 11,
   backgroundColor: "rgba(247,197,159,0.96)",
   borderWidth: 1,
   borderColor: "rgba(42,50,75,0.18)",
-  flexDirection: "row",
-  alignItems: "center",
+  flexDirection: "column",     // vertical stack now
+  alignItems: "center",          // align to right
+  justifyContent: "flex-start",
   overflow: "hidden",
   zIndex: 16,
 },
@@ -2785,8 +2795,11 @@ assetQuantityControl: {
 assetQuantityBtn: {
   width: 22,
   height: 22,
+  borderRadius: 11,
+  backgroundColor: "rgba(42,50,75,0.18)",
   alignItems: "center",
   justifyContent: "center",
+  marginTop:20,
 },
 
 assetQuantityText: {
@@ -2795,6 +2808,7 @@ assetQuantityText: {
   color: TEXT,
   fontSize: 10,
   fontWeight: "900",
+  marginTop:15,
 },
   filterBtn: {
   flex: 1,
