@@ -333,6 +333,9 @@ const handleBackPress = async () => {
   const [assetModalVisible, setAssetModalVisible] = useState(false);
   const [editingAsset, setEditingAsset] = useState<AssetItem | null>(null);
 
+  const [assetFlowLoading, setAssetFlowLoading] = useState(false);
+const [assetFlowLoadingText, setAssetFlowLoadingText] = useState("");
+
    const [autoOpenCameraForEdit, setAutoOpenCameraForEdit] = useState(false);
 
 
@@ -1202,29 +1205,47 @@ const payload = {
   }
 };
 
-const saveAndCreateNextAsset = async (draft: AssetDraft) => {
-  await createAssetAsync(draft);
-
+const saveAndCreateNextAsset = (draft: AssetDraft) => {
   const category =
     normalizeAssetType(draft.assetType as any) === "vehicle"
       ? "Vehicle"
       : "Other";
 
+  // Open next blank asset immediately
   setEditingAsset(null);
   setAutoOpenCameraForEdit(false);
   setCreateAssetInitialData(buildNewAssetInitialData(category));
 
-  setAssetModalVisible(false);
-
-  setTimeout(() => {
-    setAssetModalVisible(true);
+  requestAnimationFrame(() => {
     assetWizardInputRef.current?.focus?.();
-  }, 80);
+  });
+
+  // Save previous asset in the background
+  setPendingAssetSaveCount((count) => count + 1);
+
+  createAssetAsync(draft)
+    .catch((error: any) => {
+      showSnackbar(
+        error?.message || t("folderAssetScreen.snackbar.saveFailed"),
+        "error"
+      );
+    })
+    .finally(() => {
+      setPendingAssetSaveCount((count) => Math.max(0, count - 1));
+    });
 };
 
-  const updateAssetAsync = async (draft: AssetDraft) => {
-    if (!editingAsset) return;
-    setUploadingAssetIds((prev) => [...prev, editingAsset.id]);
+  const updateAssetAsync = async (
+  draft: AssetDraft,
+  assetToUpdate: AssetItem | null = editingAsset
+) => {
+  if (!assetToUpdate) return;
+
+  const targetAsset = assetToUpdate;
+
+  setUploadingAssetIds((prev) =>
+    prev.includes(targetAsset.id) ? prev : [...prev, targetAsset.id]
+  );
     const newImages = (draft.images || []).filter(
       (item: any) => !item.existing && item.uri && !item.uri.startsWith("http")
     );
@@ -1252,7 +1273,7 @@ const finalRawData = rawData;
 
 const notesText = String(draft.notes || "").trim();
    const payload = {
-  assetId: editingAsset.id,
+  assetId: targetAsset.id,
   projectId,
   name: draft.name,
 
@@ -1286,7 +1307,7 @@ const notesText = String(draft.notes || "").trim();
     if ("offline" in result) {
       if (downloadedOffline) {
         const existingOfflineAsset =
-          (await getOfflineAssetById(editingAsset.id)) ?? editingAsset;
+          (await getOfflineAssetById(targetAsset.id)) ?? targetAsset;
         const updatedOfflineAsset: AssetItem = {
           ...existingOfflineAsset,
           name: draft.name,
@@ -1319,7 +1340,7 @@ const notesText = String(draft.notes || "").trim();
        await loadProjectSubAssetTypes();
       showSnackbar(t("folderAssetScreen.snackbar.assetUpdated"), "success");
     }
-     setUploadingAssetIds((prev) => prev.filter((id) => id !== editingAsset.id));
+     setUploadingAssetIds((prev) => prev.filter((id) => id !== targetAsset.id));
     await loadContents(currentFolderId, { showSkeleton: true });
   };
 
@@ -1389,39 +1410,72 @@ const closeAssetModal = () => {
     return filtered;
   }, [assets, filter, searchQuery]);
 
-  const saveAndEditNextAsset = async (draft: AssetDraft) => {
+const saveAndEditNextAsset = async (draft: AssetDraft) => {
   if (!editingAsset) return;
 
-  const currentAssetId = editingAsset.id;
+  const currentAsset = editingAsset;
+  const currentAssetId = currentAsset.id;
 
-  await updateAssetAsync(draft);
+  setAssetFlowLoading(true);
+  setAssetFlowLoadingText("Loading next asset...");
 
-  const visibleAssets = filteredAssets.length > 0 ? filteredAssets : assets;
+  try {
+    const visibleAssets = filteredAssets.length > 0 ? filteredAssets : assets;
 
-  const currentIndex = visibleAssets.findIndex(
-    (asset) => asset.id === currentAssetId
-  );
+    const currentIndex = visibleAssets.findIndex(
+      (asset) => asset.id === currentAssetId
+    );
 
-  const nextAsset =
-    currentIndex >= 0 && currentIndex < visibleAssets.length - 1
-      ? visibleAssets[currentIndex + 1]
-      : visibleAssets[0];
+    const nextAsset =
+      currentIndex >= 0 && currentIndex < visibleAssets.length - 1
+        ? visibleAssets[currentIndex + 1]
+        : visibleAssets[0];
 
-  if (!nextAsset || nextAsset.id === currentAssetId) {
-    showSnackbar("Asset saved. No next asset found.", "success");
-    closeAssetModal();
-    return;
-  }
+    if (!nextAsset || nextAsset.id === currentAssetId) {
+      showSnackbar("Asset saved. No next asset found.", "success");
 
-  setAutoOpenCameraForEdit(false);
-  setCreateAssetInitialData(undefined);
+      // Save current in background even if no next asset
+      setPendingAssetSaveCount((count) => count + 1);
 
-  setAssetModalVisible(false);
+      updateAssetAsync(draft, currentAsset)
+        .catch((error: any) => {
+          showSnackbar(
+            error?.message || t("folderAssetScreen.snackbar.saveFailed"),
+            "error"
+          );
+        })
+        .finally(() => {
+          setPendingAssetSaveCount((count) => Math.max(0, count - 1));
+        });
 
-  setTimeout(() => {
+      closeAssetModal();
+      return;
+    }
+
+    // Move to next asset immediately
+    setAutoOpenCameraForEdit(false);
+    setCreateAssetInitialData(undefined);
     setEditingAsset(nextAsset);
-    setAssetModalVisible(true);
-  }, 120);
+
+    // Save previous asset in background
+    setPendingAssetSaveCount((count) => count + 1);
+
+    updateAssetAsync(draft)
+      .catch((error: any) => {
+        showSnackbar(
+          error?.message || t("folderAssetScreen.snackbar.saveFailed"),
+          "error"
+        );
+      })
+      .finally(() => {
+        setPendingAssetSaveCount((count) => Math.max(0, count - 1));
+      });
+  } finally {
+    setTimeout(() => {
+      setAssetFlowLoading(false);
+      setAssetFlowLoadingText("");
+    }, 250);
+  }
 };
 
   const items = useMemo(() => {
@@ -2786,6 +2840,17 @@ const openCreateAssetByCategory = (category: "Vehicle" | "Other") => {
   autoOpenCamera={autoOpenCameraForEdit}
 />
 
+{assetFlowLoading && (
+  <View style={styles.assetFlowLoadingOverlay}>
+    <View style={styles.assetFlowLoadingCard}>
+      <ActivityIndicator size="small" color="#ffffff" />
+      <Text style={styles.assetFlowLoadingText}>
+        {assetFlowLoadingText || "Loading..."}
+      </Text>
+    </View>
+  </View>
+)}
+
         {/* ── Snackbar ── */}
         {snackbar && (
           <View
@@ -2856,6 +2921,39 @@ assetCategoryTitle: {
   fontSize: 16,
   fontWeight: "800",
   marginBottom: 14,
+},
+
+
+assetFlowLoadingOverlay: {
+  position: "absolute",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundColor: "rgba(42,50,75,0.18)",
+  zIndex: 9998,
+  elevation: 30,
+},
+
+assetFlowLoadingCard: {
+  minWidth: 190,
+  minHeight: 54,
+  borderRadius: 16,
+  backgroundColor: "rgba(42,50,75,0.94)",
+  paddingHorizontal: 16,
+  paddingVertical: 12,
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 10,
+},
+
+assetFlowLoadingText: {
+  color: "#ffffff",
+  fontSize: 13,
+  fontWeight: "700",
 },
 
 assetCategoryOption: {
