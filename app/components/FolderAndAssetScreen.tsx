@@ -1202,6 +1202,26 @@ const payload = {
   }
 };
 
+const saveAndCreateNextAsset = async (draft: AssetDraft) => {
+  await createAssetAsync(draft);
+
+  const category =
+    normalizeAssetType(draft.assetType as any) === "vehicle"
+      ? "Vehicle"
+      : "Other";
+
+  setEditingAsset(null);
+  setAutoOpenCameraForEdit(false);
+  setCreateAssetInitialData(buildNewAssetInitialData(category));
+
+  setAssetModalVisible(false);
+
+  setTimeout(() => {
+    setAssetModalVisible(true);
+    assetWizardInputRef.current?.focus?.();
+  }, 80);
+};
+
   const updateAssetAsync = async (draft: AssetDraft) => {
     if (!editingAsset) return;
     setUploadingAssetIds((prev) => [...prev, editingAsset.id]);
@@ -1368,6 +1388,41 @@ const closeAssetModal = () => {
     }
     return filtered;
   }, [assets, filter, searchQuery]);
+
+  const saveAndEditNextAsset = async (draft: AssetDraft) => {
+  if (!editingAsset) return;
+
+  const currentAssetId = editingAsset.id;
+
+  await updateAssetAsync(draft);
+
+  const visibleAssets = filteredAssets.length > 0 ? filteredAssets : assets;
+
+  const currentIndex = visibleAssets.findIndex(
+    (asset) => asset.id === currentAssetId
+  );
+
+  const nextAsset =
+    currentIndex >= 0 && currentIndex < visibleAssets.length - 1
+      ? visibleAssets[currentIndex + 1]
+      : visibleAssets[0];
+
+  if (!nextAsset || nextAsset.id === currentAssetId) {
+    showSnackbar("Asset saved. No next asset found.", "success");
+    closeAssetModal();
+    return;
+  }
+
+  setAutoOpenCameraForEdit(false);
+  setCreateAssetInitialData(undefined);
+
+  setAssetModalVisible(false);
+
+  setTimeout(() => {
+    setEditingAsset(nextAsset);
+    setAssetModalVisible(true);
+  }, 120);
+};
 
   const items = useMemo(() => {
     const combined = [
@@ -1541,11 +1596,35 @@ const buildQuantityPayload = (asset: AssetItem, quantity: number) => {
   };
 };
 
+
+
 const generateAssetName = (category: "Vehicle" | "Other") => {
   const prefix = category === "Vehicle" ? "Vehicle" : "Asset";
   const number = Math.floor(Math.random() * 999) + 1;
 
   return `${prefix} ${String(number).padStart(3, "0")}`;
+};
+
+const buildNewAssetInitialData = (
+  category: "Vehicle" | "Other"
+): Partial<AssetDraft> => {
+  const normalizedAssetType =
+    category === "Vehicle" ? "vehicle" : "other";
+
+  return {
+    name: generateAssetName(category),
+    assetType: normalizedAssetType,
+    condition: "Good",
+    isPresent: true,
+    isDone: true,
+    quantity: 1,
+    subAssetType: "",
+    rawData: {},
+    images: [],
+    voiceNotes: [],
+    notes: "",
+    hasNotes: false,
+  };
 };
 
 
@@ -1561,11 +1640,18 @@ const saveQuantityDebounced = (asset: AssetItem, nextQuantity: number) => {
 
     quantitySavingRef.current[assetId] = true;
 
+    const quantity = Math.max(1, Math.floor(Number(nextQuantity) || 1));
+
     try {
-      const latestAsset =
+      const currentAsset =
         assets.find((item) => item.id === assetId) || asset;
 
-      const quantity = getAssetQuantity(latestAsset);
+      const latestAsset = {
+        ...currentAsset,
+        quantity,
+        rawData: cleanAssetRawData((currentAsset as any).rawData),
+      } as AssetItem;
+
       const payload = buildQuantityPayload(latestAsset, quantity);
 
       setUploadingAssetIds((prev) =>
@@ -1587,11 +1673,11 @@ const saveQuantityDebounced = (asset: AssetItem, nextQuantity: number) => {
 
         if (downloadedOffline) {
           await upsertOfflineAsset({
-  ...latestAsset,
-  quantity,
-  rawData: cleanAssetRawData(payload.rawData),
-  updatedAt: new Date().toISOString(),
-} as any);
+            ...latestAsset,
+            quantity,
+            rawData: cleanAssetRawData(payload.rawData),
+            updatedAt: new Date().toISOString(),
+          } as any);
         }
 
         return;
@@ -1599,12 +1685,23 @@ const saveQuantityDebounced = (asset: AssetItem, nextQuantity: number) => {
 
       setAssets((prev) =>
         prev.map((item) =>
-          item.id === assetId ? { ...item, ...result.asset } : item
+          item.id === assetId
+            ? {
+                ...item,
+                ...result.asset,
+                quantity,
+                rawData: cleanAssetRawData((result.asset as any).rawData),
+              }
+            : item
         )
       );
 
       if (downloadedOffline) {
-        await upsertOfflineAsset(result.asset);
+        await upsertOfflineAsset({
+          ...result.asset,
+          quantity,
+          rawData: cleanAssetRawData((result.asset as any).rawData),
+        });
       }
     } catch (error: any) {
       showSnackbar(error?.message || "Could not update quantity", "error");
@@ -1633,42 +1730,32 @@ const changeAssetQuantity = (
 
   const rawData = cleanAssetRawData((asset as any).rawData);
 
-setAssets((prev) =>
-  prev.map((item) =>
-    item.id === asset.id
-      ? {
-          ...item,
-          quantity: nextQuantity,
-          rawData,
-        }
-      : item
-  )
-);
-
- saveQuantityDebounced(
-  {
+  const nextAsset = {
     ...asset,
     quantity: nextQuantity,
     rawData,
-  } as any,
-  nextQuantity
-);
+  } as AssetItem;
+
+  setAssets((prev) =>
+    prev.map((item) =>
+      item.id === asset.id
+        ? {
+            ...item,
+            quantity: nextQuantity,
+            rawData,
+          }
+        : item
+    )
+  );
+
+  saveQuantityDebounced(nextAsset, nextQuantity);
 };
 
 const openCreateAssetByCategory = (category: "Vehicle" | "Other") => {
   Keyboard.dismiss();
 
   setEditingAsset(null);
-  setCreateAssetInitialData({
-    name: generateAssetName(category),
-    assetType: category,
-    condition: "Good",
-    isPresent: true,
-    isDone: true,
-    quantity: 1,
-    subAssetType: "",
-    rawData: {},
-  } as any);
+  setCreateAssetInitialData(buildNewAssetInitialData(category));
 
   setAssetCategoryModalVisible(false);
   setAssetModalVisible(true);
@@ -2685,12 +2772,14 @@ const openCreateAssetByCategory = (category: "Vehicle" | "Other") => {
 </Modal>
 
         {/* ── Asset wizard modal ── */}
-     <CreateAssetWizardModal
+<CreateAssetWizardModal
   firstInputRef={assetWizardInputRef}
   disableAssetName={!!editingAsset && !canEditAssetName}
   visible={assetModalVisible}
   onClose={closeAssetModal}
   onSubmit={(draft) => submitAssetInBackground(draft, !!editingAsset)}
+  onSaveAndCreate={saveAndCreateNextAsset}
+  onSaveAndNext={saveAndEditNextAsset}
   mode={editingAsset ? "edit" : "create"}
   initialData={editingAsset ? mapAssetToDraft(editingAsset) : createAssetInitialData}
   subAssetTypes={projectSubAssetTypes}
@@ -2804,7 +2893,7 @@ assetQuantityControl: {
   top: 32,        // just below photoCountBadge (top: 6, ~22px tall)
   bottom: 30,     // just above syncTickBadge (bottom: 6, 20px tall)
   right: 6,
-  width: 32,
+  width: 42,
   borderRadius: 11,
   backgroundColor: "rgba(247,197,159,0.96)",
   borderWidth: 1,

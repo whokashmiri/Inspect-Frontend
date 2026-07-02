@@ -45,6 +45,9 @@ type Props = {
   firstInputRef?: RefObject<TextInput | null>;
   subAssetTypes?: string[];
   autoOpenCamera?: boolean;
+
+  onSaveAndNext?: (draft: AssetDraft) => Promise<void> | void;
+  onSaveAndCreate?: (draft: AssetDraft) => Promise<void> | void;
 };
 
 
@@ -121,7 +124,8 @@ export default function CreateAssetWizardModal({
   firstInputRef,
   subAssetTypes = [],
   autoOpenCamera = false,
-
+  onSaveAndNext,
+  onSaveAndCreate,
 }: Props) {
   const { t, i18n } = useTranslation();
   const isRTL = i18n.language === "ar" || i18n.dir?.() === "rtl";
@@ -132,6 +136,8 @@ const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
  
 
   const [submitting, setSubmitting] = useState(false);
+
+  const [detailsExpanded, setDetailsExpanded] = useState(false);
 
 
   const [snackbar, setSnackbar] = useState<{
@@ -200,6 +206,7 @@ useEffect(() => {
     setIsRecording(false);
     setCameraMode("photos");
     setSubmitting(false);
+    setDetailsExpanded(false);
     didAutoOpenCameraRef.current = false;
 
     const shouldAutoOpenForCreate =
@@ -627,13 +634,52 @@ const manufactureYears = Array.from(
     onClose();
   };
 
-const handleFinish = async () => {
-  if (submitting) return;
-
+const buildCleanDraft = (): AssetDraft | null => {
   if (!draft.name?.trim()) {
     Alert.alert(t("common.validation"), t("asset.assetNameRequired"));
-    return;
+    return null;
   }
+
+  const cleanedNotes = (draft.notes || "").trim();
+
+  const finalQuantity = Number(getQuantity());
+
+  const finalSubAssetType = String((draft as any).subAssetType || "")
+    .trim()
+    .toLowerCase();
+
+  const isVehicleDraft =
+    String((draft as any).assetType || "").toLowerCase() === "vehicle";
+
+  const cleanDraft: AssetDraft = {
+    ...draft,
+
+    notes: cleanedNotes || undefined,
+    hasNotes: cleanedNotes.length > 0,
+
+    quantity: isVehicleDraft ? undefined : Math.max(1, finalQuantity),
+    subAssetType: isVehicleDraft ? undefined : finalSubAssetType || undefined,
+
+    brand: isVehicleDraft ? draft.brand || undefined : undefined,
+    model: isVehicleDraft ? draft.model || undefined : undefined,
+    manufactureYear: isVehicleDraft
+      ? draft.manufactureYear || undefined
+      : undefined,
+    kilometersDriven: isVehicleDraft
+      ? draft.kilometersDriven || undefined
+      : undefined,
+
+    rawData: cleanAssetRawData((draft as any).rawData),
+  } as any;
+
+  return cleanDraft;
+};
+
+const saveDraftWithAction = async (
+  action?: (draft: AssetDraft) => Promise<void> | void,
+  closeAfterSave = true
+) => {
+  if (submitting) return;
 
   if (isRecording) {
     Alert.alert(
@@ -645,7 +691,7 @@ const handleFinish = async () => {
           onPress: async () => {
             try {
               await stopRecording();
-              handleFinish();
+              saveDraftWithAction(action, closeAfterSave);
             } catch {
               Alert.alert(t("common.error"), t("asset.couldNotStopRecording"));
             }
@@ -661,30 +707,20 @@ const handleFinish = async () => {
     return;
   }
 
-  const cleanedNotes = (draft.notes || "").trim();
+  const cleanDraft = buildCleanDraft();
 
-const finalQuantity = Number(getQuantity());
+  if (!cleanDraft) return;
 
-const finalSubAssetType = String((draft as any).subAssetType || "")
-  .trim()
-  .toLowerCase();
-
-const cleanDraft: AssetDraft = {
-  ...draft,
-
-  notes: cleanedNotes || undefined,
-  hasNotes: cleanedNotes.length > 0,
-
-  quantity: Math.max(1, finalQuantity),
-  subAssetType: finalSubAssetType || undefined,
-
-  rawData: cleanAssetRawData((draft as any).rawData),
-} as any;
   setSubmitting(true);
 
   try {
-    await onSubmit(cleanDraft);
-    await handleClose();
+    await (action ? action(cleanDraft) : onSubmit(cleanDraft));
+
+    if (closeAfterSave) {
+      await handleClose();
+    } else {
+      setSubmitting(false);
+    }
   } catch (error: any) {
     setSubmitting(false);
     Alert.alert(
@@ -692,6 +728,19 @@ const cleanDraft: AssetDraft = {
       error?.message || t("asset.failedToSaveAsset")
     );
   }
+};
+
+const handleFinish = async () => {
+  await saveDraftWithAction(onSubmit);
+};
+
+const handleFooterSave = async () => {
+  if (mode === "edit") {
+    await saveDraftWithAction(onSaveAndNext || onSubmit, false);
+    return;
+  }
+
+  await saveDraftWithAction(onSaveAndCreate || onSubmit, false);
 };
   return (
     <>
@@ -920,8 +969,8 @@ const cleanDraft: AssetDraft = {
                     nestedScrollEnabled={true}
                   >
                   <>
-  <View style={styles.topQuickRow}>
- <View style={{ flex: 1 }} onLayout={setFieldPosition("name")}>
+<View style={styles.topQuickRow}>
+  <View style={{ flex: 1 }} onLayout={setFieldPosition("name")}>
     <Text style={styles.fieldLabel}>Asset name</Text>
 
     <TextInput
@@ -929,12 +978,12 @@ const cleanDraft: AssetDraft = {
       placeholder={t("asset.assetName")}
       placeholderTextColor="#767B91"
       value={draft.name}
-     onChangeText={(text) => {
-  setDraft((prev) => ({
-    ...prev,
-    name: text,
-  }));
-}}
+      onChangeText={(text) => {
+        setDraft((prev) => ({
+          ...prev,
+          name: text,
+        }));
+      }}
       editable
       selectTextOnFocus
       style={[
@@ -946,32 +995,43 @@ const cleanDraft: AssetDraft = {
       onFocus={() => scrollToField("name")}
     />
   </View>
-
-    <View style={styles.conditionBox}>
-    <Text style={styles.fieldLabel}>{t("asset.condition")}</Text>
-
-    <View style={styles.compactPickerWrap}>
-  <Picker
-    selectedValue={draft.condition}
-    onValueChange={(value) =>
-      setDraft((prev) => ({
-        ...prev,
-        condition: value,
-      }))
-    }
-    dropdownIconColor="#2A324B"
-    style={styles.compactPicker}
-    itemStyle={styles.compactPickerItem}
-  >
-    <Picker.Item label={t("asset.conditionGood")} value="Good" />
-    <Picker.Item label={t("asset.conditionNew")} value="New" />
-    <Picker.Item label={t("asset.conditionUsed")} value="Used" />
-    <Picker.Item label={t("asset.conditionDamaged")} value="Damaged" />
-  </Picker>
 </View>
+
+{!detailsExpanded && (
+  <TouchableOpacity
+    style={styles.addDetailsBtn}
+    onPress={() => setDetailsExpanded(true)}
+    activeOpacity={0.85}
+  >
+    <Ionicons name="add-circle-outline" size={15} color={ACC} />
+    <Text style={styles.addDetailsText}>Add details</Text>
+  </TouchableOpacity>
+)}
+
+{detailsExpanded && (
+  <>
+  <View style={styles.conditionBoxFull}>
+  <Text style={styles.fieldLabel}>{t("asset.condition")}</Text>
+
+  <View style={styles.compactPickerWrap}>
+    <Picker
+      selectedValue={draft.condition}
+      onValueChange={(value) =>
+        setDraft((prev) => ({
+          ...prev,
+          condition: value,
+        }))
+      }
+      dropdownIconColor="#2A324B"
+      style={styles.compactPicker}
+      itemStyle={styles.compactPickerItem}
+    >
+      <Picker.Item label={t("asset.conditionGood")} value="Good" />
+      <Picker.Item label={t("asset.conditionNew")} value="New" />
+      <Picker.Item label={t("asset.conditionUsed")} value="Used" />
+      <Picker.Item label={t("asset.conditionDamaged")} value="Damaged" />
+    </Picker>
   </View>
-
-
 </View>
 
 
@@ -1594,19 +1654,51 @@ onChangeText={(text) =>
   )
 )}
 
+
+  </>
+)}
 </>
                   </ScrollView>
 
 <View style={styles.footer}>
   <TouchableOpacity
-    style={[styles.footerIconBtn, styles.footerCameraBtn]}
-    onPress={openPhotoCamera}
-    activeOpacity={0.85}
-  >
-    <MaterialIcons name="photo-camera" size={18} color="#fff" />
-    <Text style={styles.footerIconBtnText}>{t("asset.openCamera")}</Text>
-  </TouchableOpacity>
+  style={[styles.footerIconBtn]}
+  onPress={openPhotoCamera}
+  activeOpacity={0.85}
+>
+  <MaterialIcons name="photo-camera" size={18} color="#fff" />
+  <Text style={styles.footerIconBtnText}>{t("asset.openCamera")}</Text>
+</TouchableOpacity>
 
+<TouchableOpacity
+  style={[styles.primaryBtn, styles.finishBtn, submitting && { opacity: 0.6 }]}
+  onPress={handleFooterSave}
+  disabled={submitting}
+>
+  <Text style={styles.primaryText}>
+    {submitting
+      ? t("asset.saving") || "Saving..."
+      : mode === "edit"
+      ? "Save and Next"
+      : "Save and Create"}
+  </Text>
+</TouchableOpacity>
+
+
+ {/* <TouchableOpacity
+  style={[styles.primaryBtn, styles.finishBtn, submitting && { opacity: 0.6 }]}
+  onPress={handleFooterSave}
+  disabled={submitting}
+>
+  <Text style={styles.primaryText}>
+    {submitting
+      ? t("asset.saving") || "Saving..."
+      : mode === "edit"
+      ? "Save and Next"
+      : "Save and Create"}
+  </Text>
+</TouchableOpacity> */}
+{/* 
   <TouchableOpacity
     style={styles.footerIconBtn}
     onPress={pickImagesFromLibrary}
@@ -1616,7 +1708,7 @@ onChangeText={(text) =>
     <Text style={styles.footerIconBtnTextDark}>
       {t("asset.uploadFromPhone")}
     </Text>
-  </TouchableOpacity>
+  </TouchableOpacity> */}
 
   {/* <TouchableOpacity
     style={styles.footerIconBtn}
@@ -2081,6 +2173,31 @@ vehicleSelectOptionText: {
   fontSize: 14,
   fontWeight: "700",
   marginRight: 10,
+},
+
+addDetailsBtn: {
+  flexDirection: "row",
+  alignItems: "center",
+  alignSelf: "flex-start",
+  gap: 5,
+  marginTop: 2,
+  marginBottom: 8,
+  paddingHorizontal: 8,
+  paddingVertical: 4,
+  borderRadius: 999,
+  backgroundColor: "rgba(247,197,159,0.45)",
+  borderWidth: 1,
+  borderColor: SOFT,
+},
+
+addDetailsText: {
+  color: TEXT,
+  fontSize: 10,
+  fontWeight: "700",
+},
+
+conditionBoxFull: {
+  marginBottom: 8,
 },
 
 assetTypePlusBtn: {
@@ -2670,20 +2787,21 @@ footer: {
 },
 
 footerIconBtn: {
-  flex: 1,
+  flex: 0.9,
   minHeight: 44,
   borderRadius: 12,
   borderWidth: 1,
   borderColor: BORDER,
-  backgroundColor: SURFACE,
+  backgroundColor: ACC,
   alignItems: "center",
   justifyContent: "center",
   paddingHorizontal: 6,
 },
 
-footerCameraBtn: {
-  backgroundColor: ACC,
-  borderColor: ACC,
+finishBtn: {
+  flex: 1.3,
+  minHeight: 44,
+  paddingHorizontal: 8,
 },
 
 footerIconBtnText: {
@@ -2702,11 +2820,6 @@ footerIconBtnTextDark: {
   textAlign: "center",
 },
 
-finishBtn: {
-  flex: 1,
-  minHeight: 44,
-  paddingHorizontal: 8,
-},
 
 
 

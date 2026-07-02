@@ -29,6 +29,8 @@ export type AssetDraft = {
   voiceNotes: AssetMediaInput[];
   condition?: AssetCondition;
   assetType?: AssetType;
+  quantity?: number;
+  subAssetType?: string;
   brand?: string;
   model?: string;
   manufactureYear?: string;
