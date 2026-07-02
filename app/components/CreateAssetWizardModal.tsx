@@ -174,8 +174,8 @@ const isSmallScreen = width < 380 || height < 700;
 const isTablet = width >= 768;
 
 const modalWidth = Math.min(width * 0.95, isTablet ? 720 : 520);
-const modalMaxHeight = height * 0.95;
-const modalMinHeight = height * 0.88;
+const modalMaxHeight = detailsExpanded ? height * 0.95 : height * 0.55;
+const modalMinHeight = detailsExpanded ? height * 0.88 : height * 0.45;
 
 
 
@@ -763,12 +763,13 @@ const handleFooterSave = async () => {
                   style={[
                     styles.modalCard,
                         {
-                        width: modalWidth,
-                        maxHeight: modalMaxHeight,
-                        minHeight: modalMinHeight,
-                        borderRadius: isSmallScreen ? 18 : 24,
-                        padding: isSmallScreen ? 12 : 16,
-                  },
+  width: modalWidth,
+  maxHeight: modalMaxHeight,
+  minHeight: modalMinHeight,
+  borderRadius: isSmallScreen ? 18 : 24,
+  padding: isSmallScreen ? 12 : 16,
+},
+!detailsExpanded && styles.modalCardCompact,
 
                   ]}
                 >
@@ -997,16 +998,20 @@ const handleFooterSave = async () => {
   </View>
 </View>
 
-{!detailsExpanded && (
-  <TouchableOpacity
-    style={styles.addDetailsBtn}
-    onPress={() => setDetailsExpanded(true)}
-    activeOpacity={0.85}
-  >
-    <Ionicons name="add-circle-outline" size={15} color={ACC} />
-    <Text style={styles.addDetailsText}>Add details</Text>
-  </TouchableOpacity>
-)}
+<TouchableOpacity
+  style={styles.addDetailsBtn}
+  onPress={() => setDetailsExpanded((prev) => !prev)}
+  activeOpacity={0.85}
+>
+  <Ionicons
+    name={detailsExpanded ? "remove-circle-outline" : "add-circle-outline"}
+    size={15}
+    color={ACC}
+  />
+  <Text style={styles.addDetailsText}>
+    {detailsExpanded ? "Hide details" : "Add details"}
+  </Text>
+</TouchableOpacity>
 
 {detailsExpanded && (
   <>
@@ -1679,8 +1684,8 @@ onChangeText={(text) =>
     {submitting
       ? t("asset.saving") || "Saving..."
       : mode === "edit"
-      ? "Save and Next"
-      : "Save and Create"}
+      ? "Save & Next"
+      : "Save & New Asset"}
   </Text>
 </TouchableOpacity>
 
@@ -2206,6 +2211,10 @@ assetTypePlusBtn: {
   alignItems: "center",
   justifyContent: "center",
   backgroundColor:ACC
+},
+
+modalCardCompact: {
+  alignSelf: "center",
 },
 
 
@@ -3217,7 +3226,7 @@ notesCheckText: {
 
   primaryText: {
     color: "#ffffff",
-    fontSize: 13,
+    fontSize: 10,
     fontWeight: "500",
   },
 
