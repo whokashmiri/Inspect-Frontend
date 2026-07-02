@@ -43,8 +43,8 @@ type Props = {
   initialData?: Partial<AssetDraft>;
   disableAssetName?: boolean;
   firstInputRef?: RefObject<TextInput | null>;
-
-   subAssetTypes?: string[];
+  subAssetTypes?: string[];
+  autoOpenCamera?: boolean;
 };
 
 
@@ -120,6 +120,7 @@ export default function CreateAssetWizardModal({
   disableAssetName = false,
   firstInputRef,
   subAssetTypes = [],
+  autoOpenCamera = false,
 
 }: Props) {
   const { t, i18n } = useTranslation();
@@ -191,7 +192,7 @@ const modalMinHeight = height * 0.88;
   };
 }, []);
 
- useEffect(() => {
+useEffect(() => {
   if (visible) {
     setStep(1);
     setDraft(getInitialDraft(initialData));
@@ -201,7 +202,16 @@ const modalMinHeight = height * 0.88;
     setSubmitting(false);
     didAutoOpenCameraRef.current = false;
 
-    if (mode === "create" && initialData?.assetType && !didAutoOpenCameraRef.current) {
+    const shouldAutoOpenForCreate =
+      mode === "create" && !!initialData?.assetType;
+
+    const shouldAutoOpenForEdit =
+      mode === "edit" && autoOpenCamera;
+
+    if (
+      (shouldAutoOpenForCreate || shouldAutoOpenForEdit) &&
+      !didAutoOpenCameraRef.current
+    ) {
       didAutoOpenCameraRef.current = true;
 
       setTimeout(() => {
@@ -212,7 +222,7 @@ const modalMinHeight = height * 0.88;
   } else {
     stopVoicePlayback();
   }
-}, [visible, initialData, mode]);
+}, [visible, initialData, mode, autoOpenCamera]);
 
  const previewSize = useMemo(() => {
   const columns = width < 360 ? 4 : width < 600 ? 5 : 6;

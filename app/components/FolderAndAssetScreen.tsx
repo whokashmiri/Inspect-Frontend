@@ -333,6 +333,9 @@ const handleBackPress = async () => {
   const [assetModalVisible, setAssetModalVisible] = useState(false);
   const [editingAsset, setEditingAsset] = useState<AssetItem | null>(null);
 
+   const [autoOpenCameraForEdit, setAutoOpenCameraForEdit] = useState(false);
+
+
   const [codeScannerVisible, setCodeScannerVisible] = useState(false);
   const [codeLookupLoading, setCodeLookupLoading] = useState(false);
 
@@ -342,6 +345,10 @@ const handleBackPress = async () => {
   "all" | "done" | "incomplete" | "not_present"
 >("all");
   const [searchQuery, setSearchQuery] = useState("");
+
+
+ 
+
 
   useEffect(() => {
     const loadRawDataKeys = async () => {
@@ -1317,15 +1324,17 @@ const submitAssetInBackground = async (draft: AssetDraft, isEdit: boolean) => {
     setPendingAssetSaveCount((count) => Math.max(0, count - 1));
   }
 };
-  const openEditAsset = (asset: AssetItem) => {
-    setEditingAsset(asset);
-    setAssetModalVisible(true);
-  };
+const openEditAsset = (asset: AssetItem, openCamera: boolean = false) => {
+  setEditingAsset(asset);
+  setAutoOpenCameraForEdit(openCamera);
+  setAssetModalVisible(true);
+};
 
-  const closeAssetModal = () => {
-    setEditingAsset(null);
-    setAssetModalVisible(false);
-  };
+const closeAssetModal = () => {
+  setEditingAsset(null);
+  setAssetModalVisible(false);
+  setAutoOpenCameraForEdit(false); // reset so next edit doesn't inherit it
+};
 
   const assetStats = useMemo(() => {
   const total = assets.length;
@@ -2334,31 +2343,45 @@ const openCreateAssetByCategory = (category: "Vehicle" | "Other") => {
     <View style={styles.menuOverlay}>
       <TouchableWithoutFeedback>
         <View style={styles.assetMenuCard}>
-          <TouchableOpacity
-            style={styles.assetMenuOption}
-            onPress={() => {
-              if (selectedAssetForMenu) {
-                openAssetMediaViewer(selectedAssetForMenu);
-              }
-            }}
-          >
-            <Ionicons name="eye-outline" size={20} color={TEXT} />
-            <Text style={styles.assetMenuOptionText}>View</Text>
-          </TouchableOpacity>
+        <TouchableOpacity
+  style={styles.assetMenuOption}
+  onPress={() => {
+    if (selectedAssetForMenu) {
+      openAssetMediaViewer(selectedAssetForMenu);
+    }
+  }}
+>
+  <Ionicons name="eye-outline" size={20} color={TEXT} />
+  <Text style={styles.assetMenuOptionText}>View</Text>
+</TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.assetMenuOption}
-            onPress={() => {
-              if (selectedAssetForMenu) {
-                handleDeleteAsset(selectedAssetForMenu);
-              }
-            }}
-          >
-            <Ionicons name="trash-outline" size={20} color="#FF4444" />
-            <Text style={[styles.assetMenuOptionText, { color: "#FF4444" }]}>
-              Delete
-            </Text>
-          </TouchableOpacity>
+{selectedAssetForMenu && getValidAssetMedia(selectedAssetForMenu).length > 0 && (
+  <TouchableOpacity
+    style={styles.assetMenuOption}
+    onPress={() => {
+      const asset = selectedAssetForMenu;
+      closeAssetMenu();
+      if (asset) openEditAsset(asset); // has media -> plain edit, no auto camera
+    }}
+  >
+    <Ionicons name="create-outline" size={20} color={TEXT} />
+    <Text style={styles.assetMenuOptionText}>Edit</Text>
+  </TouchableOpacity>
+)}
+
+<TouchableOpacity
+  style={styles.assetMenuOption}
+  onPress={() => {
+    if (selectedAssetForMenu) {
+      handleDeleteAsset(selectedAssetForMenu);
+    }
+  }}
+>
+  <Ionicons name="trash-outline" size={20} color="#FF4444" />
+  <Text style={[styles.assetMenuOptionText, { color: "#FF4444" }]}>
+    Delete
+  </Text>
+</TouchableOpacity>
         </View>
       </TouchableWithoutFeedback>
     </View>
@@ -2671,6 +2694,7 @@ const openCreateAssetByCategory = (category: "Vehicle" | "Other") => {
   mode={editingAsset ? "edit" : "create"}
   initialData={editingAsset ? mapAssetToDraft(editingAsset) : createAssetInitialData}
   subAssetTypes={projectSubAssetTypes}
+  autoOpenCamera={autoOpenCameraForEdit}
 />
 
         {/* ── Snackbar ── */}
