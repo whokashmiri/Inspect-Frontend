@@ -274,17 +274,32 @@ const updateQuantity = (nextValue: number | string) => {
 };
 
 const updateSubAssetType = (value: string) => {
-  const normalized = String(value || "").trim().toLowerCase();
+  setNewSubAssetTypeText(value);
+};
+
+const saveNewSubAssetType = () => {
+  const value = newSubAssetTypeText.trim().toLowerCase();
+
+  if (!value) {
+    showSnackbar("Please enter asset type", "error");
+    return;
+  }
 
   setDraft((prev) => ({
     ...prev,
-    subAssetType: normalized,
+    assetType: currentCategory,
+    subAssetType: value,
     rawData: cleanAssetRawData((prev as any).rawData),
   } as any));
-};;
+
+  setNewSubAssetTypeText("");
+  setAddTypeModalOpen(false);
+  setAssetTypeDropdownOpen(false);
+};
 
 const [assetTypeDropdownOpen, setAssetTypeDropdownOpen] = useState(false);
-const [showCustomTypeInput, setShowCustomTypeInput] = useState(false);
+const [addTypeModalOpen, setAddTypeModalOpen] = useState(false);
+const [newSubAssetTypeText, setNewSubAssetTypeText] = useState("");
 
 const projectAssetTypes = useMemo(() => {
   const unique = new Map<string, string>();
@@ -799,7 +814,7 @@ const handleFooterSave = async () => {
             style={styles.assetTypeInputChoose}
             onPress={() => {
               setAssetTypeDropdownOpen((prev) => !prev);
-              setShowCustomTypeInput(false);
+              setAddTypeModalOpen(false);
             }}
             activeOpacity={0.85}
           >
@@ -816,16 +831,17 @@ const handleFooterSave = async () => {
 
           <View style={styles.assetTypeInputDivider} />
 
-          <TouchableOpacity
-            style={styles.assetTypeInputPlus}
-            onPress={() => {
-              setShowCustomTypeInput((prev) => !prev);
-              setAssetTypeDropdownOpen(false);
-            }}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="add" size={18} color={TEXT} />
-          </TouchableOpacity>
+<TouchableOpacity
+  style={styles.assetTypeInputPlus}
+  onPress={() => {
+    setNewSubAssetTypeText("");
+    setAddTypeModalOpen(true);
+    setAssetTypeDropdownOpen(false);
+  }}
+  activeOpacity={0.85}
+>
+  <Ionicons name="add" size={18} color={TEXT} />
+</TouchableOpacity>
         </View>
       </View>
 
@@ -881,7 +897,7 @@ const handleFooterSave = async () => {
                 } as any));
 
                 setAssetTypeDropdownOpen(false);
-                setShowCustomTypeInput(false);
+                setAddTypeModalOpen(false);
               }}
               activeOpacity={0.85}
             >
@@ -898,44 +914,7 @@ const handleFooterSave = async () => {
       </View>
     )}
 
-    {showCustomTypeInput && (
-      <View style={styles.headerTypeInputRow}>
-        <TextInput
-          placeholder="Asset type e.g. Sofa, Chair, TV"
-          placeholderTextColor="#767B91"
-          value={subAssetType}
-          onChangeText={updateSubAssetType}
-          style={styles.headerTypeInput}
-        />
-
-        <TouchableOpacity
-          style={styles.headerTypeSaveBtn}
-          onPress={() => {
-            const value = String((draft as any).subAssetType || "")
-              .trim()
-              .toLowerCase();
-
-            if (!value) {
-              showSnackbar("Please enter asset type", "error");
-              return;
-            }
-
-            setDraft((prev) => ({
-              ...prev,
-              assetType: currentCategory,
-              subAssetType: value,
-              rawData: cleanAssetRawData((prev as any).rawData),
-            } as any));
-
-            setShowCustomTypeInput(false);
-            setAssetTypeDropdownOpen(false);
-          }}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.headerTypeSaveText}>Add</Text>
-        </TouchableOpacity>
-      </View>
-    )}
+  
   </View>
 )}
 
@@ -1276,81 +1255,6 @@ const handleFooterSave = async () => {
   </Modal>
 )}
 
-<Modal
-  visible={showCustomTypeInput}
-  transparent
-  animationType="fade"
-  onRequestClose={() => setShowCustomTypeInput(false)}
->
-  <TouchableWithoutFeedback onPress={() => setShowCustomTypeInput(false)}>
-    <View style={styles.vehicleSelectOverlay}>
-      <TouchableWithoutFeedback>
-        <View style={styles.addTypeModalCard}>
-          <View style={styles.vehicleSelectHeader}>
-            <Text style={styles.vehicleSelectTitle}>Add asset type</Text>
-            <TouchableOpacity
-              onPress={() => setShowCustomTypeInput(false)}
-              style={styles.vehicleSelectCloseBtn}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="close" size={18} color="#2A324B" />
-            </TouchableOpacity>
-          </View>
-
-          <View style={{ padding: 14 }}>
-            <Text style={styles.fieldLabel}>Asset type</Text>
-            <TextInput
-              placeholder="e.g. Sofa, Chair, TV"
-              placeholderTextColor="#767B91"
-              value={String((draft as any).subAssetType || "")}
-onChangeText={(text) =>
-  setDraft((prev) => ({
-    ...prev,
-    subAssetType: text,
-    rawData: cleanAssetRawData((prev as any).rawData),
-  } as any))
-}
-              style={[styles.input, styles.compactInput, { marginBottom: 16 }]}
-              autoFocus
-            />
-
-            <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 8 }}>
-              <TouchableOpacity
-                style={styles.secondaryBtn}
-                onPress={() => setShowCustomTypeInput(false)}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.secondaryText}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.primaryBtn}
-                onPress={() => {
-                  const value = String((draft as any).subAssetType || "").trim();
-                  if (!value) {
-                    showSnackbar("Please enter asset type", "error");
-                    return;
-                  }
-                  setDraft((prev) => ({
-                    ...prev,
-                    assetType: currentCategory,
-                    subAssetType: value,
-                    rawData: cleanAssetRawData((prev as any).rawData),
-                  } as any));
-                  setShowCustomTypeInput(false);
-                  setAssetTypeDropdownOpen(false);
-                }}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.primaryText}>Add</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </TouchableWithoutFeedback>
-    </View>
-  </TouchableWithoutFeedback>
-</Modal>
 
 <View style={styles.recordDoneRow}>
   <View style={styles.voiceCompactRow}>
@@ -1748,6 +1652,86 @@ onChangeText={(text) =>
           </View>
         </TouchableWithoutFeedback>
       </Modal>
+
+
+      <Modal
+  visible={addTypeModalOpen}
+  transparent
+  animationType="fade"
+  onRequestClose={() => {
+    setAddTypeModalOpen(false);
+    setNewSubAssetTypeText("");
+  }}
+>
+  <TouchableWithoutFeedback
+    onPress={() => {
+      setAddTypeModalOpen(false);
+      setNewSubAssetTypeText("");
+    }}
+  >
+    <View style={styles.vehicleSelectOverlay}>
+      <TouchableWithoutFeedback>
+        <View style={styles.addTypeModalCard}>
+          <View style={styles.vehicleSelectHeader}>
+            <Text style={styles.vehicleSelectTitle}>Add asset type</Text>
+
+            <TouchableOpacity
+              onPress={() => {
+                setAddTypeModalOpen(false);
+                setNewSubAssetTypeText("");
+              }}
+              style={styles.vehicleSelectCloseBtn}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="close" size={18} color="#2A324B" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ padding: 14 }}>
+            <Text style={styles.fieldLabel}>Asset type</Text>
+
+            <TextInput
+              placeholder="e.g. Sofa, Chair, TV"
+              placeholderTextColor="#767B91"
+              value={newSubAssetTypeText}
+              onChangeText={setNewSubAssetTypeText}
+              style={[styles.input, styles.compactInput, { marginBottom: 16 }]}
+              autoFocus
+              autoCapitalize="words"
+            />
+
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "flex-end",
+                gap: 8,
+              }}
+            >
+              <TouchableOpacity
+                style={styles.secondaryBtn}
+                onPress={() => {
+                  setAddTypeModalOpen(false);
+                  setNewSubAssetTypeText("");
+                }}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.secondaryText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.primaryBtn}
+                onPress={saveNewSubAssetType}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.primaryText}>Add</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </TouchableWithoutFeedback>
+    </View>
+  </TouchableWithoutFeedback>
+</Modal>
 
       <AssetCameraModal
   visible={cameraOpen}
@@ -2237,6 +2221,7 @@ addTypeModalCard: {
   shadowOpacity: 0.16,
   shadowRadius: 16,
   shadowOffset: { width: 0, height: 8 },
+  marginBottom:60,
 },
 
 
