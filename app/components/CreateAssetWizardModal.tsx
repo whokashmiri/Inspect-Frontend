@@ -1,5 +1,6 @@
 // CreateAssetWizardModal.tsx
 import React, {RefObject, useEffect, useMemo, useRef, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   Modal,
   View,
@@ -33,6 +34,9 @@ import { AssetDraft, AssetMediaInput, AssetType } from "./utils/types";
 import { AudioModule, RecordingPresets, useAudioRecorder } from "expo-audio";
 
 type CameraMode = "photos" | "scan";
+
+const FAVORITE_VEHICLE_BRANDS_KEY = "favorite_vehicle_brands";
+const FAVORITE_VEHICLE_MODELS_KEY = "favorite_vehicle_models_by_brand";
 
 
 type Props = {
@@ -155,6 +159,12 @@ const snackbarTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [brandDropdownOpen, setBrandDropdownOpen] = useState(false);
 const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
 
+
+const [favoriteBrands, setFavoriteBrands] = useState<string[]>([]);
+const [favoriteModelsByBrand, setFavoriteModelsByBrand] = useState<
+  Record<string, string[]>
+>({});
+
 const showSnackbar = (
   message: string,
   type: "success" | "error" | "info" = "info"
@@ -189,6 +199,28 @@ const modalMinHeight = detailsExpanded ? height * 0.88 : height * 0.45;
   const [draft, setDraft] = useState<AssetDraft>(
     getInitialDraft(initialData)
   );
+
+
+  useEffect(() => {
+  const loadVehicleFavorites = async () => {
+    try {
+      const savedBrands = await AsyncStorage.getItem(
+        FAVORITE_VEHICLE_BRANDS_KEY
+      );
+
+      const savedModels = await AsyncStorage.getItem(
+        FAVORITE_VEHICLE_MODELS_KEY
+      );
+
+      setFavoriteBrands(savedBrands ? JSON.parse(savedBrands) : []);
+      setFavoriteModelsByBrand(savedModels ? JSON.parse(savedModels) : {});
+    } catch (error) {
+      console.log("Failed to load vehicle favorites", error);
+    }
+  };
+
+  loadVehicleFavorites();
+}, []);
 
   useEffect(() => {
   return () => {
@@ -297,6 +329,74 @@ const saveNewSubAssetType = () => {
   setAssetTypeDropdownOpen(false);
 };
 
+
+const normalizeVehicleFavorite = (value: string) => String(value || "").trim();
+
+const moveFavoritesToTop = (items: string[], favorites: string[]) => {
+  const uniqueItems = Array.from(
+    new Set(items.map(normalizeVehicleFavorite).filter(Boolean))
+  );
+
+  const favoriteSet = new Set(favorites);
+
+  const favoriteItems = favorites.filter((item) => uniqueItems.includes(item));
+  const normalItems = uniqueItems.filter((item) => !favoriteSet.has(item));
+
+  return [...favoriteItems, ...normalItems];
+};
+
+const toggleFavoriteBrand = async (brand: string) => {
+  const cleanBrand = normalizeVehicleFavorite(brand);
+  if (!cleanBrand) return;
+
+  try {
+    const exists = favoriteBrands.includes(cleanBrand);
+
+    const nextFavorites = exists
+      ? favoriteBrands.filter((item) => item !== cleanBrand)
+      : [cleanBrand, ...favoriteBrands];
+
+    setFavoriteBrands(nextFavorites);
+
+    await AsyncStorage.setItem(
+      FAVORITE_VEHICLE_BRANDS_KEY,
+      JSON.stringify(nextFavorites)
+    );
+  } catch (error) {
+    console.log("Failed to save favorite brand", error);
+  }
+};
+
+const toggleFavoriteModel = async (brand: string, model: string) => {
+  const cleanBrand = normalizeVehicleFavorite(brand);
+  const cleanModel = normalizeVehicleFavorite(model);
+
+  if (!cleanBrand || !cleanModel) return;
+
+  try {
+    const currentFavorites = favoriteModelsByBrand[cleanBrand] || [];
+    const exists = currentFavorites.includes(cleanModel);
+
+    const nextBrandFavorites = exists
+      ? currentFavorites.filter((item) => item !== cleanModel)
+      : [cleanModel, ...currentFavorites];
+
+    const nextFavoritesByBrand = {
+      ...favoriteModelsByBrand,
+      [cleanBrand]: nextBrandFavorites,
+    };
+
+    setFavoriteModelsByBrand(nextFavoritesByBrand);
+
+    await AsyncStorage.setItem(
+      FAVORITE_VEHICLE_MODELS_KEY,
+      JSON.stringify(nextFavoritesByBrand)
+    );
+  } catch (error) {
+    console.log("Failed to save favorite model", error);
+  }
+};
+
 const [assetTypeDropdownOpen, setAssetTypeDropdownOpen] = useState(false);
 const [addTypeModalOpen, setAddTypeModalOpen] = useState(false);
 const [newSubAssetTypeText, setNewSubAssetTypeText] = useState("");
@@ -333,6 +433,18 @@ const isVehicleAsset =
 const selectedBrand = String((draft as any).brand || "").trim();
 
 const availableVehicleModels = getVehicleModelsByBrand(selectedBrand);
+
+
+const sortedVehicleBrands = moveFavoritesToTop(vehicleBrands, favoriteBrands);
+
+const selectedBrandFavoriteModels = selectedBrand
+  ? favoriteModelsByBrand[selectedBrand] || []
+  : [];
+
+const sortedVehicleModels = moveFavoritesToTop(
+  availableVehicleModels,
+  selectedBrandFavoriteModels
+);
 
 const subAssetType = String((draft as any).subAssetType || "")
   .trim()
@@ -757,6 +869,10 @@ const handleFooterSave = async () => {
 
   await saveDraftWithAction(onSaveAndCreate || onSubmit, false);
 };
+
+
+
+
   return (
     <>
       <Modal
@@ -1219,34 +1335,57 @@ const handleFooterSave = async () => {
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator
             >
-              {(brandDropdownOpen ? vehicleBrands : availableVehicleModels).map(
-                (item) => {
-                  const isSelected = brandDropdownOpen
-                    ? draft.brand === item
-                    : draft.model === item;
+            {(brandDropdownOpen ? sortedVehicleBrands : sortedVehicleModels).map((item) => {
+  const isBrandList = brandDropdownOpen;
 
-                  return (
-                    <TouchableOpacity
-                      key={item}
-                      style={styles.vehicleSelectOption}
-                      onPress={() => {
-                        if (brandDropdownOpen) {
-                          selectVehicleBrand(item);
-                        } else {
-                          selectVehicleModel(item);
-                        }
-                      }}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={styles.vehicleSelectOptionText}>{item}</Text>
+  const isSelected = isBrandList
+    ? draft.brand === item
+    : draft.model === item;
 
-                      {isSelected && (
-                        <Ionicons name="checkmark" size={18} color={ACC} />
-                      )}
-                    </TouchableOpacity>
-                  );
-                }
-              )}
+  const isFavorite = isBrandList
+    ? favoriteBrands.includes(item)
+    : selectedBrandFavoriteModels.includes(item);
+
+  return (
+    <View key={item} style={styles.vehicleSelectOptionRow}>
+      <TouchableOpacity
+        style={styles.vehicleSelectOptionMain}
+        onPress={() => {
+          if (isBrandList) {
+            selectVehicleBrand(item);
+          } else {
+            selectVehicleModel(item);
+          }
+        }}
+        activeOpacity={0.85}
+      >
+        <Text style={styles.vehicleSelectOptionText}>{item}</Text>
+
+        {isSelected && (
+          <Ionicons name="checkmark" size={18} color={ACC} />
+        )}
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.vehicleFavoriteBtn}
+        onPress={() => {
+          if (isBrandList) {
+            toggleFavoriteBrand(item);
+          } else {
+            toggleFavoriteModel(selectedBrand, item);
+          }
+        }}
+        activeOpacity={0.85}
+      >
+        <Ionicons
+          name={isFavorite ? "star" : "star-outline"}
+          size={19}
+          color={isFavorite ? "#F59E0B" : "#8A91A3"}
+        />
+      </TouchableOpacity>
+    </View>
+  );
+})}
             </ScrollView>
           </View>
         </TouchableWithoutFeedback>
@@ -2208,7 +2347,29 @@ previewImageLoading: {
   opacity: 0.35,
 },
 
+vehicleSelectOptionRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  borderBottomWidth: 1,
+  borderBottomColor: "#EEF2F7",
+},
 
+vehicleSelectOptionMain: {
+  flex: 1,
+  minHeight: 46,
+  paddingHorizontal: 14,
+  paddingVertical: 12,
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+},
+
+vehicleFavoriteBtn: {
+  width: 48,
+  minHeight: 46,
+  alignItems: "center",
+  justifyContent: "center",
+},
 
 addTypeModalCard: {
   width: "100%",
