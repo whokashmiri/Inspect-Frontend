@@ -18,6 +18,7 @@ import {
   LayoutChangeEvent,
   ActivityIndicator,
   StyleSheet
+  
 } from "react-native";
 
 import {
@@ -2048,8 +2049,8 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(42,50,75,0.55)",
     paddingHorizontal: 10,
     paddingVertical: 1,
-     justifyContent: "center",   // vertical center
-  alignItems: "center",       // horizontal center
+    justifyContent: "flex-start",   // vertical center
+    alignItems: "center",       // horizontal center
   },
 
   assetTypeQuantityRow: {
@@ -2071,7 +2072,7 @@ quantityFieldWrap: {
 keyboardWrap: {
   width: "100%",
   flex: 1,
-  justifyContent: "center",
+  justifyContent: "flex-start",
   alignItems: "center",
 },
 
@@ -2084,6 +2085,7 @@ modalCard: {
   alignSelf: "center",
   flexShrink: 1,
   overflow: "visible",
+  marginTop: 40,
 },
 
 scrollView: {
