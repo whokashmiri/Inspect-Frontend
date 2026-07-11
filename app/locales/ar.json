@@ -144,6 +144,15 @@
       "defaultMessage": "فشل البحث المتقدم"
     }
   },
+
+"category": {
+  "tittle": "اختر الفئة",
+  "vehicle": "مركبة",
+  "vehicleDetails": "العلامة التجارية، الموديل، سنة الصنع، وعدد الكيلومترات",
+  "otherTitle": "أخرى",
+  "otherDetails": "أريكة، كرسي، تلفاز، معدات، وغيرها."
+},
+
   "common": {
     "error": "خطأ",
     "validation": "تنبيه",
