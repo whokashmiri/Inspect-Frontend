@@ -5,7 +5,7 @@ export type VehicleCatalogItem = {
 
 export const vehicleCatalog: VehicleCatalogItem[] = [
 {
-  brand: "Toyota",
+  brand: "Toyota - تويوتا",
   models: [
     // Sedans
     "Camry",

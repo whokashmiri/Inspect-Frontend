@@ -332,14 +332,27 @@ const saveNewSubAssetType = () => {
 
 const normalizeVehicleFavorite = (value: string) => String(value || "").trim();
 
+const sortVehicleText = (a: string, b: string) =>
+  a.localeCompare(b, undefined, {
+    sensitivity: "base",
+    numeric: true,
+  });
+
 const moveFavoritesToTop = (items: string[], favorites: string[]) => {
   const uniqueItems = Array.from(
     new Set(items.map(normalizeVehicleFavorite).filter(Boolean))
+  ).sort(sortVehicleText);
+
+  const cleanFavorites = Array.from(
+    new Set(favorites.map(normalizeVehicleFavorite).filter(Boolean))
+  ).sort(sortVehicleText);
+
+  const favoriteSet = new Set(cleanFavorites);
+
+  const favoriteItems = cleanFavorites.filter((item) =>
+    uniqueItems.includes(item)
   );
 
-  const favoriteSet = new Set(favorites);
-
-  const favoriteItems = favorites.filter((item) => uniqueItems.includes(item));
   const normalItems = uniqueItems.filter((item) => !favoriteSet.has(item));
 
   return [...favoriteItems, ...normalItems];
@@ -771,12 +784,18 @@ const buildCleanDraft = (): AssetDraft | null => {
 
   const finalQuantity = Number(getQuantity());
 
-  const finalSubAssetType = String((draft as any).subAssetType || "")
-    .trim()
-    .toLowerCase();
+const finalSubAssetType = String((draft as any).subAssetType || "")
+  .trim()
+  .toLowerCase();
 
-  const isVehicleDraft =
-    String((draft as any).assetType || "").toLowerCase() === "vehicle";
+const isVehicleDraft =
+  String((draft as any).assetType || "").toLowerCase() === "vehicle";
+
+if (!isVehicleDraft && !finalSubAssetType) {
+  showSnackbar("Asset type is required", "error");
+  setAssetTypeDropdownOpen(true);
+  return null;
+}
 
   const cleanDraft: AssetDraft = {
     ...draft,
@@ -881,7 +900,14 @@ const handleFooterSave = async () => {
         animationType="fade"
         statusBarTranslucent
       >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+       <TouchableWithoutFeedback
+  onPress={() => {
+    Keyboard.dismiss();
+    setAssetTypeDropdownOpen(false);
+    setBrandDropdownOpen(false);
+    setModelDropdownOpen(false);
+  }}
+>
           <View style={styles.overlay}>
             <KeyboardAvoidingView
               style={styles.keyboardWrap}
@@ -961,34 +987,36 @@ const handleFooterSave = async () => {
         </View>
       </View>
 
-      <View style={styles.quantityFieldWrap}>
-        <Text style={styles.fieldLabel}>Quantity</Text>
+     <View style={styles.quantityFieldWrap}>
+  <Text style={styles.fieldLabel}>Quantity</Text>
 
-        <View style={styles.quantityControl}>
-          <TouchableOpacity
-            style={styles.quantityIconBtn}
-            onPress={() => updateQuantity(Number(getQuantity()) - 1)}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="remove" size={16} color={TEXT} />
-          </TouchableOpacity>
+  <View style={styles.quantityControl}>
+    <TouchableOpacity
+      style={styles.quantityIconBtn}
+      onPress={() => updateQuantity(Number(getQuantity()) - 1)}
+      activeOpacity={0.85}
+    >
+      <Ionicons name="remove" size={16} color={TEXT} />
+    </TouchableOpacity>
 
-          <TextInput
-            value={getQuantity()}
-            onChangeText={updateQuantity}
-            keyboardType="numeric"
-            style={styles.quantityInput}
-          />
+    <TextInput
+      value={getQuantity()}
+      onChangeText={updateQuantity}
+      keyboardType="numeric"
+      style={styles.quantityInput}
+      selectTextOnFocus
+      textAlign="center"
+    />
 
-          <TouchableOpacity
-            style={styles.quantityIconBtn}
-            onPress={() => updateQuantity(Number(getQuantity()) + 1)}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="add" size={16} color={TEXT} />
-          </TouchableOpacity>
-        </View>
-      </View>
+    <TouchableOpacity
+      style={styles.quantityIconBtn}
+      onPress={() => updateQuantity(Number(getQuantity()) + 1)}
+      activeOpacity={0.85}
+    >
+      <Ionicons name="add" size={16} color={TEXT} />
+    </TouchableOpacity>
+  </View>
+</View>
     </View>
 
     {assetTypeDropdownOpen && (
@@ -1100,7 +1128,7 @@ const handleFooterSave = async () => {
 >
   <Ionicons
     name={detailsExpanded ? "remove-circle-outline" : "add-circle-outline"}
-    size={15}
+    size={18}
     color={ACC}
   />
   <Text style={styles.addDetailsText}>
@@ -1325,7 +1353,7 @@ const handleFooterSave = async () => {
                 style={styles.vehicleSelectCloseBtn}
                 activeOpacity={0.85}
               >
-                <Ionicons name="close" size={18} color="#2A324B" />
+                <Ionicons name="close" size={18} color="#2b2a4b" />
               </TouchableOpacity>
             </View>
 
@@ -1797,6 +1825,7 @@ const handleFooterSave = async () => {
   visible={addTypeModalOpen}
   transparent
   animationType="fade"
+  statusBarTranslucent
   onRequestClose={() => {
     setAddTypeModalOpen(false);
     setNewSubAssetTypeText("");
@@ -1809,7 +1838,7 @@ const handleFooterSave = async () => {
     }}
   >
     <View style={styles.vehicleSelectOverlay}>
-      <TouchableWithoutFeedback>
+     <TouchableWithoutFeedback onPress={() => {}}>
         <View style={styles.addTypeModalCard}>
           <View style={styles.vehicleSelectHeader}>
             <Text style={styles.vehicleSelectTitle}>Add asset type</Text>
@@ -1822,7 +1851,7 @@ const handleFooterSave = async () => {
               style={styles.vehicleSelectCloseBtn}
               activeOpacity={0.85}
             >
-              <Ionicons name="close" size={18} color="#2A324B" />
+              <Ionicons name="close" size={18} color="#2b2b2d" />
             </TouchableOpacity>
           </View>
 
@@ -2029,12 +2058,12 @@ const styles = StyleSheet.create({
 },
 
 assetTypeFieldWrap: {
-  flex: 1,
-  marginRight: 8,
+  width: 200,
+  marginRight: 5,
 },
 
 quantityFieldWrap: {
-  width: 80,
+  flex: 1,
 },
 
 
@@ -2307,21 +2336,21 @@ addDetailsBtn: {
   flexDirection: "row",
   alignItems: "center",
   alignSelf: "flex-start",
-  gap: 5,
-  marginTop: 2,
-  marginBottom: 8,
-  paddingHorizontal: 8,
-  paddingVertical: 4,
+  gap: 7,
+  marginTop: 4,
+  marginBottom: 10,
+  paddingHorizontal: 14,
+  paddingVertical: 8,
   borderRadius: 999,
-  backgroundColor: "rgba(247,197,159,0.45)",
+  backgroundColor: "rgba(247,197,159,0.55)",
   borderWidth: 1,
   borderColor: SOFT,
 },
 
 addDetailsText: {
   color: TEXT,
-  fontSize: 10,
-  fontWeight: "700",
+  fontSize: 12,
+  fontWeight: "800",
 },
 
 conditionBoxFull: {
@@ -2687,6 +2716,7 @@ quantityBox: {
 
 quantityControl: {
   height: 40,
+  width: '100%',
   flexDirection: "row",
   alignItems: "center",
   backgroundColor: SURFACE,
@@ -2794,10 +2824,11 @@ compactPickerItem: {
 
 
 quantityIconBtn: {
-  width: 32,
-  height: "100%",
-  alignItems: "center",
-  justifyContent: "center",
+  width: 36,
+  height: 36,
+  borderRadius: 8,
+  alignItems: 'center',
+  justifyContent: 'center',
 },
 
 quantityInput: {
