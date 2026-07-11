@@ -146,6 +146,14 @@
       "defaultMessage": "Advanced search failed"
     }
   },
+"category": {
+    "tittle": "Select category",
+    "vehicle": "Vehicle",
+    "vehicleDetails": "Brand, model, year and kilometers",
+    "otherTitle": "Other",
+    "otherDetails": "Sofa, chair, TV, equipment, etc."
+  },
+
   "common": {
     "error": "Error",
     "validation": "Validation",

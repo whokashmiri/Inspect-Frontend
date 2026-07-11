@@ -2788,7 +2788,7 @@ const openCreateAssetByCategory = (category: "Vehicle" | "Other") => {
     <View style={styles.modalOverlay}>
       <TouchableWithoutFeedback>
         <View style={styles.assetCategoryCard}>
-          <Text style={styles.assetCategoryTitle}>Select category</Text>
+          <Text style={styles.assetCategoryTitle}>{t("category.tittle")}</Text>
 
           <TouchableOpacity
             style={styles.assetCategoryOption}
@@ -2797,9 +2797,10 @@ const openCreateAssetByCategory = (category: "Vehicle" | "Other") => {
           >
             <Ionicons name="car-outline" size={26} color={ACC} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.assetCategoryOptionTitle}>Vehicle</Text>
+              <Text style={styles.assetCategoryOptionTitle}>{t("category.vehicle")}</Text>
               <Text style={styles.assetCategoryOptionSub}>
-                Brand, model, year and kilometers
+                {t("category.vehicleDetails")}
+                {/* Brand, model, year and kilometers */}
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={MUTED} />
@@ -2812,9 +2813,12 @@ const openCreateAssetByCategory = (category: "Vehicle" | "Other") => {
           >
             <Ionicons name="cube-outline" size={26} color={ACC} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.assetCategoryOptionTitle}>Other</Text>
+              <Text style={styles.assetCategoryOptionTitle}>
+                {t("category.otherTitle")}
+              </Text>
               <Text style={styles.assetCategoryOptionSub}>
-                Sofa, chair, TV, equipment, etc.
+                {t("category.otherDetails")}
+                {/* Sofa, chair, TV, equipment, etc. */}
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={MUTED} />
@@ -2988,12 +2992,13 @@ videoPlayer: {
 
 assetQuantityControl: {
   position: "absolute",
-  top: 32,        // just below photoCountBadge (top: 6, ~22px tall)
+  top: 30,        // just below photoCountBadge (top: 6, ~22px tall)
   bottom: 30,     // just above syncTickBadge (bottom: 6, 20px tall)
   right: 6,
-  width: 42,
+  width: 55,
   borderRadius: 11,
   backgroundColor: "rgba(247,197,159,0.96)",
+  // backgroundColor: "rgba(234, 174, 42, 0.18)",
   borderWidth: 1,
   borderColor: "rgba(42,50,75,0.18)",
   flexDirection: "column",     // vertical stack now
@@ -3004,13 +3009,13 @@ assetQuantityControl: {
 },
 
 assetQuantityBtn: {
-  width: 22,
-  height: 22,
+  width: 35,
+  height: 35,
   borderRadius: 11,
   backgroundColor: "rgba(42,50,75,0.18)",
   alignItems: "center",
   justifyContent: "center",
-  marginTop:20,
+  marginTop:10,
 },
 
 assetQuantityText: {
