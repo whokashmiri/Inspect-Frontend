@@ -1274,9 +1274,10 @@ const saveNewCondition = () => {
                   >
                   <>
 <View style={styles.topQuickRow}>
-  <View style={{ flex: 1 }} onLayout={setFieldPosition("name")}>
-    <Text style={styles.fieldLabel}>Asset name</Text>
+ <View style={{ flex: 1 }} onLayout={setFieldPosition("name")}>
+  <Text style={styles.fieldLabel}>Asset name</Text>
 
+  <View style={styles.assetNameInputWrap}>
     <TextInput
       ref={firstInputRef}
       placeholder={t("asset.assetName")}
@@ -1293,12 +1294,33 @@ const saveNewCondition = () => {
       style={[
         styles.input,
         styles.compactInput,
+        styles.assetNameInputWithClear,
         disableAssetName && styles.inputDisabled,
       ]}
       returnKeyType="done"
       onFocus={() => scrollToField("name")}
     />
+
+    {!!draft.name?.trim() && !disableAssetName && (
+      <TouchableOpacity
+        style={styles.assetNameClearBtn}
+        onPress={() => {
+          setDraft((prev) => ({
+            ...prev,
+            name: "",
+          }));
+
+          setTimeout(() => {
+            firstInputRef?.current?.focus?.();
+          }, 50);
+        }}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="close-circle" size={25} color={MUTED} />
+      </TouchableOpacity>
+    )}
   </View>
+</View>
 </View>
 
 <TouchableOpacity
@@ -2497,6 +2519,28 @@ assetTypeChooseControl: {
   overflow: "hidden",
 },
 
+
+assetNameInputWrap: {
+  position: "relative",
+  justifyContent: "center",
+  
+},
+
+assetNameInputWithClear: {
+  paddingRight: 30,
+  
+},
+
+assetNameClearBtn: {
+  
+  position: "absolute",
+  right: 5,
+  top: 5,
+  bottom: 10,
+  width: 35,
+  alignItems: "center",
+  justifyContent: "center",
+},
 assetTypeChooseBtn: {
   flex: 1,
   height: "100%",
