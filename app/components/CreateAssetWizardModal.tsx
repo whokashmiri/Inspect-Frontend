@@ -39,6 +39,16 @@ type CameraMode = "photos" | "scan";
 const FAVORITE_VEHICLE_BRANDS_KEY = "favorite_vehicle_brands";
 const FAVORITE_VEHICLE_MODELS_KEY = "favorite_vehicle_models_by_brand";
 
+const DEFAULT_CONDITIONS = [
+  "New",
+  "Excellent",
+  "Good",
+  "Very Good",
+  "Acceptable",
+  "Poor",
+  "Scrape",
+];
+
 
 type Props = {
   visible: boolean;
@@ -49,7 +59,13 @@ type Props = {
   disableAssetName?: boolean;
   firstInputRef?: RefObject<TextInput | null>;
   subAssetTypes?: string[];
+  conditionOptions?: string[];
   autoOpenCamera?: boolean;
+
+  onRenameSubAssetType?: (
+    oldSubAssetType: string,
+    newSubAssetType: string
+  ) => Promise<void> | void;
 
   onSaveAndNext?: (draft: AssetDraft) => Promise<void> | void;
   onSaveAndCreate?: (draft: AssetDraft) => Promise<void> | void;
@@ -128,7 +144,9 @@ export default function CreateAssetWizardModal({
   disableAssetName = false,
   firstInputRef,
   subAssetTypes = [],
+  conditionOptions = [],
   autoOpenCamera = false,
+  onRenameSubAssetType,
   onSaveAndNext,
   onSaveAndCreate,
 }: Props) {
@@ -159,6 +177,9 @@ const snackbarTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [brandDropdownOpen, setBrandDropdownOpen] = useState(false);
 const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
+
+
+
 
 
 const [favoriteBrands, setFavoriteBrands] = useState<string[]>([]);
@@ -415,6 +436,15 @@ const [assetTypeDropdownOpen, setAssetTypeDropdownOpen] = useState(false);
 const [addTypeModalOpen, setAddTypeModalOpen] = useState(false);
 const [newSubAssetTypeText, setNewSubAssetTypeText] = useState("");
 
+const [editingSubAssetType, setEditingSubAssetType] = useState<string | null>(
+  null
+);
+const [editingSubAssetTypeText, setEditingSubAssetTypeText] = useState("");
+
+const [conditionModalOpen, setConditionModalOpen] = useState(false);
+const [addConditionMode, setAddConditionMode] = useState(false);
+const [newConditionText, setNewConditionText] = useState("");
+
 const projectAssetTypes = useMemo(() => {
   const unique = new Map<string, string>();
 
@@ -433,6 +463,34 @@ const projectAssetTypes = useMemo(() => {
 
   return Array.from(unique.values()).sort((a, b) => a.localeCompare(b));
 }, [subAssetTypes, (draft as any).subAssetType]);
+
+const projectConditions = useMemo(() => {
+  const unique = new Map<string, string>();
+
+  DEFAULT_CONDITIONS.forEach((item) => {
+    const value = String(item || "").trim();
+    if (value) unique.set(value.toLowerCase(), value);
+  });
+
+  conditionOptions.forEach((item) => {
+    const value = String(item || "").trim();
+    if (value) unique.set(value.toLowerCase(), value);
+  });
+
+  const current = String((draft as any).condition || "").trim();
+
+  if (current) {
+    unique.set(current.toLowerCase(), current);
+  }
+
+  return Array.from(unique.values()).sort((a, b) =>
+    a.localeCompare(b, undefined, {
+      sensitivity: "base",
+      numeric: true,
+    })
+  );
+}, [conditionOptions, (draft as any).condition]);
+
 const currentCategory:AssetType =
   String(draft.assetType || "").toLowerCase() === "vehicle"
     ? "vehicle"
@@ -892,6 +950,63 @@ const handleFooterSave = async () => {
 
 
 
+const saveEditedSubAssetType = async () => {
+  const oldValue = String(editingSubAssetType || "").trim().toLowerCase();
+  const newValue = editingSubAssetTypeText.trim().toLowerCase();
+
+  if (!oldValue) return;
+
+  if (!newValue) {
+    showSnackbar("Please enter asset type", "error");
+    return;
+  }
+
+  try {
+    if (oldValue !== newValue && onRenameSubAssetType) {
+      await onRenameSubAssetType(oldValue, newValue);
+    }
+
+    setDraft((prev) => ({
+      ...prev,
+      assetType: "other",
+      subAssetType:
+        String((prev as any).subAssetType || "").trim().toLowerCase() ===
+        oldValue
+          ? newValue
+          : (prev as any).subAssetType,
+      rawData: cleanAssetRawData((prev as any).rawData),
+    } as any));
+
+    setEditingSubAssetType(null);
+    setEditingSubAssetTypeText("");
+    setAssetTypeDropdownOpen(false);
+
+    showSnackbar("Asset type updated", "success");
+  } catch (error: any) {
+    showSnackbar(error?.message || "Failed to update asset type", "error");
+  }
+};
+
+
+
+const saveNewCondition = () => {
+  const value = newConditionText.trim();
+
+  if (!value) {
+    showSnackbar("Please enter condition", "error");
+    return;
+  }
+
+  setDraft((prev) => ({
+    ...prev,
+    condition: value,
+  }));
+
+  setNewConditionText("");
+  setAddConditionMode(false);
+  setConditionModalOpen(false);
+};
+
 
   return (
     <>
@@ -1029,32 +1144,96 @@ const handleFooterSave = async () => {
             </Text>
           </View>
         ) : (
-          projectAssetTypes.map((type) => (
-            <TouchableOpacity
-              key={type}
-              style={styles.addTypeDropdownOption}
-              onPress={() => {
-                setDraft((prev) => ({
-                  ...prev,
-                  assetType: currentCategory,
-                  subAssetType: type,
-                  rawData: cleanAssetRawData((prev as any).rawData),
-                } as any));
+          projectAssetTypes.map((type) => {
+  const isEditing = editingSubAssetType === type;
+  const isSelected = subAssetType === type;
 
-                setAssetTypeDropdownOpen(false);
-                setAddTypeModalOpen(false);
-              }}
-              activeOpacity={0.85}
+  return (
+    <View
+      key={type}
+      style={[
+        styles.addTypeDropdownOption,
+        isEditing && styles.addTypeDropdownOptionEditing,
+      ]}
+    >
+      {isEditing ? (
+        <>
+          <TextInput
+            value={editingSubAssetTypeText}
+            onChangeText={setEditingSubAssetTypeText}
+            style={styles.assetTypeEditInput}
+            autoFocus
+            selectTextOnFocus
+            placeholder="Edit asset type"
+            placeholderTextColor="#767B91"
+          />
+
+          <TouchableOpacity
+            style={styles.assetTypeMiniAction}
+            onPress={saveEditedSubAssetType}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="checkmark" size={18} color={ACC} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.assetTypeMiniAction}
+            onPress={() => {
+              setEditingSubAssetType(null);
+              setEditingSubAssetTypeText("");
+            }}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="close" size={18} color="#FF4444" />
+          </TouchableOpacity>
+        </>
+      ) : (
+        <>
+          <TouchableOpacity
+            style={styles.assetTypeOptionMain}
+            onPress={() => {
+              setDraft((prev) => ({
+                ...prev,
+                assetType: "other",
+                subAssetType: type,
+                rawData: cleanAssetRawData((prev as any).rawData),
+              } as any));
+
+              setAssetTypeDropdownOpen(false);
+              setAddTypeModalOpen(false);
+            }}
+            activeOpacity={0.85}
+          >
+            <Text
+              style={[
+                styles.addTypeDropdownOptionText,
+                isSelected && styles.addTypeDropdownOptionTextSelected,
+              ]}
+              numberOfLines={1}
             >
-              <Text style={styles.addTypeDropdownOptionText}>
-                {formatSubAssetTypeLabel(type)}
-              </Text>
+              {formatSubAssetTypeLabel(type)}
+            </Text>
 
-              {subAssetType === type && (
-                <Ionicons name="checkmark" size={16} color={ACC} />
-              )}
-            </TouchableOpacity>
-          ))
+            {isSelected && (
+              <Ionicons name="checkmark" size={16} color={ACC} />
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.assetTypeMiniAction}
+            onPress={() => {
+              setEditingSubAssetType(type);
+              setEditingSubAssetTypeText(type);
+            }}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="pencil-outline" size={16} color={ACC} />
+          </TouchableOpacity>
+        </>
+      )}
+    </View>
+  );
+})
         )}
       </View>
     )}
@@ -1139,28 +1318,31 @@ const handleFooterSave = async () => {
 
 {detailsExpanded && (
   <>
-  <View style={styles.conditionBoxFull}>
+<View style={styles.conditionBoxFull}>
   <Text style={styles.fieldLabel}>{t("asset.condition")}</Text>
 
-  <View style={styles.compactPickerWrap}>
-    <Picker
-      selectedValue={draft.condition}
-      onValueChange={(value) =>
-        setDraft((prev) => ({
-          ...prev,
-          condition: value,
-        }))
-      }
-      dropdownIconColor="#2A324B"
-      style={styles.compactPicker}
-      itemStyle={styles.compactPickerItem}
+  <TouchableOpacity
+    style={styles.conditionSelectInput}
+    onPress={() => {
+      setConditionModalOpen(true);
+      setAddConditionMode(false);
+      setNewConditionText("");
+      Keyboard.dismiss();
+    }}
+    activeOpacity={0.85}
+  >
+    <Text
+      style={[
+        styles.conditionSelectText,
+        !draft.condition && styles.vehicleDropdownPlaceholder,
+      ]}
+      numberOfLines={1}
     >
-      <Picker.Item label={t("asset.conditionGood")} value="Good" />
-      <Picker.Item label={t("asset.conditionNew")} value="New" />
-      <Picker.Item label={t("asset.conditionUsed")} value="Used" />
-      <Picker.Item label={t("asset.conditionDamaged")} value="Damaged" />
-    </Picker>
-  </View>
+      {draft.condition || "Choose condition"}
+    </Text>
+
+    <Ionicons name="chevron-down" size={16} color={TEXT} />
+  </TouchableOpacity>
 </View>
 
 
@@ -1896,6 +2078,131 @@ const handleFooterSave = async () => {
               </TouchableOpacity>
             </View>
           </View>
+        </View>
+      </TouchableWithoutFeedback>
+    </View>
+  </TouchableWithoutFeedback>
+</Modal>
+
+
+<Modal
+  visible={conditionModalOpen}
+  transparent
+  animationType="fade"
+  statusBarTranslucent
+  onRequestClose={() => {
+    setConditionModalOpen(false);
+    setAddConditionMode(false);
+    setNewConditionText("");
+  }}
+>
+  <TouchableWithoutFeedback
+    onPress={() => {
+      setConditionModalOpen(false);
+      setAddConditionMode(false);
+      setNewConditionText("");
+    }}
+  >
+    <View style={styles.vehicleSelectOverlay}>
+      <TouchableWithoutFeedback onPress={() => {}}>
+        <View style={styles.conditionModalCard}>
+          <View style={styles.vehicleSelectHeader}>
+            <Text style={styles.vehicleSelectTitle}>Choose condition</Text>
+
+            <TouchableOpacity
+              onPress={() => {
+                setConditionModalOpen(false);
+                setAddConditionMode(false);
+                setNewConditionText("");
+              }}
+              style={styles.vehicleSelectCloseBtn}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="close" size={18} color="#2b2b2d" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView
+            style={styles.vehicleSelectScroll}
+            contentContainerStyle={styles.vehicleSelectScrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator
+          >
+            {!addConditionMode ? (
+              <TouchableOpacity
+                style={styles.conditionAddRow}
+                onPress={() => {
+                  setAddConditionMode(true);
+                  setNewConditionText("");
+                }}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="add-circle-outline" size={18} color={ACC} />
+                <Text style={styles.conditionAddRowText}>Add a Condition</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.conditionInputRow}>
+                <TextInput
+                  value={newConditionText}
+                  onChangeText={setNewConditionText}
+                  placeholder="e.g. Needs Repair"
+                  placeholderTextColor="#767B91"
+                  style={styles.conditionInput}
+                  autoFocus
+                  returnKeyType="done"
+                  onSubmitEditing={saveNewCondition}
+                />
+
+                <TouchableOpacity
+                  style={styles.conditionTickBtn}
+                  onPress={saveNewCondition}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="checkmark" size={19} color="#ffffff" />
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {projectConditions.map((condition) => {
+              const isSelected =
+                String(draft.condition || "").trim().toLowerCase() ===
+                condition.trim().toLowerCase();
+
+              return (
+                <TouchableOpacity
+                  key={condition}
+                  style={[
+                    styles.conditionOptionRow,
+                    isSelected && styles.conditionOptionRowSelected,
+                  ]}
+                  onPress={() => {
+                    setDraft((prev) => ({
+                      ...prev,
+                      condition,
+                    }));
+
+                    setConditionModalOpen(false);
+                    setAddConditionMode(false);
+                    setNewConditionText("");
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <Text
+                    style={[
+                      styles.conditionOptionText,
+                      isSelected && styles.conditionOptionTextSelected,
+                    ]}
+                  >
+                    {condition}
+                  </Text>
+
+                  {isSelected && (
+                    <Ionicons name="checkmark" size={18} color={ACC} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
         </View>
       </TouchableWithoutFeedback>
     </View>
@@ -3535,6 +3842,162 @@ isPresentText: {
   color: TEXT,
   fontSize: 14,
   fontWeight: "600",
+},
+
+
+
+
+assetTypeOptionMain: {
+  flex: 1,
+  minHeight: 36,
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 8,
+},
+
+assetTypeMiniAction: {
+  width: 32,
+  height: 32,
+  borderRadius: 16,
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundColor: "rgba(42,50,75,0.06)",
+},
+
+assetTypeEditInput: {
+  flex: 1,
+  minHeight: 34,
+  borderRadius: 10,
+  borderWidth: 1,
+  borderColor: ACC,
+  backgroundColor: "#ffffff",
+  paddingHorizontal: 10,
+  color: TEXT,
+  fontSize: 12,
+  fontWeight: "700",
+},
+
+addTypeDropdownOptionEditing: {
+  backgroundColor: "rgba(247,197,159,0.35)",
+},
+
+addTypeDropdownOptionTextSelected: {
+  color: ACC,
+  fontWeight: "900",
+},
+
+conditionSelectInput: {
+  minHeight: 40,
+  borderRadius: 14,
+  backgroundColor: SURFACE,
+  borderWidth: 1,
+  borderColor: BORDER,
+  paddingHorizontal: 12,
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+  marginBottom: 8,
+},
+
+conditionSelectText: {
+  flex: 1,
+  color: TEXT,
+  fontSize: 13,
+  fontWeight: "700",
+  marginRight: 8,
+},
+
+conditionModalCard: {
+  width: "100%",
+  maxWidth: 380,
+  maxHeight: "68%",
+  backgroundColor: "#ffffff",
+  borderRadius: 18,
+  overflow: "hidden",
+  elevation: 20,
+  shadowColor: "#000",
+  shadowOpacity: 0.16,
+  shadowRadius: 16,
+  shadowOffset: { width: 0, height: 8 },
+},
+
+conditionAddRow: {
+  minHeight: 46,
+  paddingHorizontal: 14,
+  paddingVertical: 12,
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 8,
+  borderBottomWidth: 1,
+  borderBottomColor: "#EEF2F7",
+  backgroundColor: "rgba(247,197,159,0.25)",
+},
+
+conditionAddRowText: {
+  color: TEXT,
+  fontSize: 13,
+  fontWeight: "800",
+},
+
+conditionInputRow: {
+  minHeight: 52,
+  paddingHorizontal: 12,
+  paddingVertical: 8,
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 8,
+  borderBottomWidth: 1,
+  borderBottomColor: "#EEF2F7",
+  backgroundColor: "rgba(247,197,159,0.25)",
+},
+
+conditionInput: {
+  flex: 1,
+  minHeight: 38,
+  borderRadius: 12,
+  borderWidth: 1,
+  borderColor: BORDER,
+  backgroundColor: "#ffffff",
+  paddingHorizontal: 10,
+  color: TEXT,
+  fontSize: 13,
+  fontWeight: "700",
+},
+
+conditionTickBtn: {
+  width: 38,
+  height: 38,
+  borderRadius: 19,
+  backgroundColor: ACC,
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+conditionOptionRow: {
+  minHeight: 46,
+  paddingHorizontal: 14,
+  paddingVertical: 12,
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+  borderBottomWidth: 1,
+  borderBottomColor: "#EEF2F7",
+},
+
+conditionOptionRowSelected: {
+  backgroundColor: "rgba(42,50,75,0.06)",
+},
+
+conditionOptionText: {
+  flex: 1,
+  color: TEXT,
+  fontSize: 13,
+  fontWeight: "700",
+},
+
+conditionOptionTextSelected: {
+  fontWeight: "900",
 },
 
 
