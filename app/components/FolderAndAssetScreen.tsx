@@ -2246,7 +2246,7 @@ const openCreateAssetByCategory = (category: "Vehicle" | "Other") => {
         {deletingAssetId === item.id ? (
           <ActivityIndicator size="small" color="#fff" />
         ) : (
-          <Ionicons name="ellipsis-vertical" size={16} color="#fff" />
+          <Ionicons name="ellipsis-vertical" size={25} color="#fff" />
         )}
       </TouchableOpacity>
 
@@ -2264,7 +2264,7 @@ const openCreateAssetByCategory = (category: "Vehicle" | "Other") => {
       )}
 
 {normalizeAssetType((item as any).assetType) !== "vehicle" && (
-  <View style={styles.assetQuantityControl}>
+  <View style={styles.assetQuantityControl} pointerEvents={isAssetUploading(item) ? "none" : "auto"}>
     <TouchableOpacity
       style={styles.assetQuantityBtn}
       onPress={(e) => {
@@ -2997,8 +2997,8 @@ assetQuantityControl: {
   right: 6,
   width: 55,
   borderRadius: 11,
-  backgroundColor: "rgba(247,197,159,0.96)",
-  // backgroundColor: "rgba(234, 174, 42, 0.18)",
+   backgroundColor: "rgba(247,197,159,0.96)",
+  // backgroundColor: "rgba(209, 32, 38, 0.18)",
   borderWidth: 1,
   borderColor: "rgba(42,50,75,0.18)",
   flexDirection: "column",     // vertical stack now
@@ -3010,7 +3010,7 @@ assetQuantityControl: {
 
 assetQuantityBtn: {
   width: 35,
-  height: 35,
+  height: 38,
   borderRadius: 11,
   backgroundColor: "rgba(42,50,75,0.18)",
   alignItems: "center",
@@ -3184,10 +3184,10 @@ searchInputWrap: {
 
 assetMenuBtn: {
   position: "absolute",
-  top: 6,
-  left: 6,
-  width: 26,
-  height: 26,
+  top: 10,
+  left: 10,
+  width: 30,
+  height: 30,
   borderRadius: 13,
   backgroundColor: "rgba(42,50,75,0.75)",
   alignItems: "center",
