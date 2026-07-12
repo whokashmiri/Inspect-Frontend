@@ -687,7 +687,7 @@ export interface AssetVoiceNoteItem {
 }
 
 
-
+export type AssetCondition = string | null; 
 export interface AssetItem {
   id: string;
   name: string;
@@ -702,7 +702,7 @@ export interface AssetItem {
 
   rawData: Record<string, any> | null;
 
-  condition: "" | "New" | "Used" | "Damaged" | "Good" | null;
+  condition: AssetCondition;
 
   // Main category
   assetType: "vehicle" | "other";
@@ -756,6 +756,19 @@ export interface UpdateAssetResponse {
 }
 export interface SubAssetTypesResponse {
   subAssetTypes: string[];
+}
+
+export interface ConditionsResponse {
+  conditions: string[];
+}
+
+export interface RenameSubAssetTypeResponse {
+  success: boolean;
+  matchedCount: number;
+  modifiedCount: number;
+  unchanged?: boolean;
+  oldSubAssetType: string;
+  newSubAssetType: string;
 }
 
 export interface UploadFileInput {
@@ -814,6 +827,11 @@ const normalizeSubAssetType = (value?: string | null): string | undefined => {
   return text || undefined;
 };
 
+const normalizeCondition = (value?: string | null): string | undefined => {
+  const text = String(value || "").trim();
+  return text || undefined;
+};
+
 const normalizeRawData = (rawData?: Record<string, any> | null) => {
   return rawData && typeof rawData === "object" && !Array.isArray(rawData)
     ? rawData
@@ -865,6 +883,33 @@ getProjectSubAssetTypes: (projectId: string) =>
     }
   ),
 
+
+  getProjectConditions: (projectId: string) =>
+  request<ConditionsResponse>(
+    `/projects/${projectId}/assets/conditions`,
+    {
+      method: "GET",
+    }
+  ),
+
+renameProjectSubAssetType: (payload: {
+  projectId: string;
+  oldSubAssetType: string;
+  newSubAssetType: string;
+  parent?: string | null;
+}) =>
+  request<RenameSubAssetTypeResponse>(
+    `/projects/${payload.projectId}/assets/sub-asset-types/rename`,
+    {
+      method: "PATCH",
+      body: {
+        oldSubAssetType: payload.oldSubAssetType,
+        newSubAssetType: payload.newSubAssetType,
+        parent: payload.parent ?? undefined,
+      },
+    }
+  ),
+
  createAsset: async (payload: {
   projectId: string;
   name: string;
@@ -878,7 +923,7 @@ getProjectSubAssetTypes: (projectId: string) =>
   images?: AssetMediaInput[];
   voiceNotes?: AssetMediaInput[];
 
-  condition?: "" | "New" | "Used" | "Damaged" | "Good" | null;
+  condition?: string | null;
   assetType?: "vehicle" | "other" | "Vehicle" | "Other";
 
   brand?: string | null;
@@ -955,7 +1000,7 @@ const finalRawData = {
   name: payload.name,
   parent: resolvedParentSubProjectId,
 
-  condition: payload.condition || undefined,
+  condition: normalizeCondition(payload.condition),
   assetType: normalizeAssetType(payload.assetType) ?? "other",
 
   subAssetType,
@@ -1040,7 +1085,7 @@ const finalRawData = {
   images?: AssetMediaInput[];
   voiceNotes?: AssetMediaInput[];
 
-  condition?: "" | "New" | "Used" | "Damaged" | "Good" | null;
+  condition?: string | null;
   assetType?: "vehicle" | "other" | "Vehicle" | "Other";
 
   brand?: string | null;
@@ -1111,7 +1156,7 @@ const finalRawData = {
      body: {
   name: payload.name,
 
-  condition: payload.condition || undefined,
+  condition: normalizeCondition(payload.condition),
   assetType: normalizeAssetType(payload.assetType),
 
   subAssetType,
