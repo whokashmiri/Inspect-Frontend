@@ -52,6 +52,9 @@ import {
   getOfflineAssetById,
   getOfflineRawDataKeys,
   advancedSearchOfflineAssets,
+  getOfflineConditions,
+  getOfflineSubAssetTypes,
+  renameOfflineSubAssetType,
 } from "../offline";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 
@@ -147,6 +150,7 @@ const [viewerMedia, setViewerMedia] = useState<any[]>([]);
 const [activeMediaIndex, setActiveMediaIndex] = useState(0);
 
 const [projectSubAssetTypes, setProjectSubAssetTypes] = useState<string[]>([]);
+const [projectConditions, setProjectConditions] = useState<string[]>([]);
 
 
 const closeMediaViewer = () => {
@@ -458,16 +462,55 @@ useEffect(() => {
   setPendingCount(count);
 }, []);
 
+const DEFAULT_CONDITIONS = [
+  "New",
+  "Excellent",
+  "Good",
+  "Very Good",
+  "Acceptable",
+  "Poor",
+  "Scrape",
+];
+
+const mergeConditionOptions = (items: string[] = []) => {
+  const unique = new Map<string, string>();
+
+  DEFAULT_CONDITIONS.forEach((item) => {
+    unique.set(item.toLowerCase(), item);
+  });
+
+  items.forEach((item) => {
+    const value = String(item || "").trim();
+
+    if (value) {
+      unique.set(value.toLowerCase(), value);
+    }
+  });
+
+  return Array.from(unique.values()).sort((a, b) =>
+    a.localeCompare(b, undefined, {
+      sensitivity: "base",
+      numeric: true,
+    })
+  );
+};
+
 
 const loadProjectSubAssetTypes = useCallback(async () => {
   if (projectId.startsWith("offline_")) return;
 
   try {
-    const result = await projectContentApi.getProjectSubAssetTypes(projectId);
+    const shouldUseOfflineCache =
+      downloadedOffline && (isOnline === false || isOnline === null);
+
+    const values = shouldUseOfflineCache
+      ? await getOfflineSubAssetTypes(projectId)
+      : (await projectContentApi.getProjectSubAssetTypes(projectId))
+          .subAssetTypes || [];
 
     const unique = Array.from(
       new Set(
-        (result.subAssetTypes || [])
+        values
           .map((item) => String(item || "").trim().toLowerCase())
           .filter(Boolean)
       )
@@ -477,11 +520,39 @@ const loadProjectSubAssetTypes = useCallback(async () => {
   } catch (error) {
     console.warn("SUB ASSET TYPES ERROR:", error);
   }
-}, [projectId]);
+}, [projectId, downloadedOffline, isOnline]);
+
+
+
+
+const loadProjectConditions = useCallback(async () => {
+  if (projectId.startsWith("offline_")) {
+    setProjectConditions(mergeConditionOptions([]));
+    return;
+  }
+
+  try {
+    const shouldUseOfflineCache =
+      downloadedOffline && (isOnline === false || isOnline === null);
+
+    const values = shouldUseOfflineCache
+      ? await getOfflineConditions(projectId)
+      : (await projectContentApi.getProjectConditions(projectId)).conditions || [];
+
+    setProjectConditions(mergeConditionOptions(values));
+  } catch (error) {
+    console.warn("CONDITIONS ERROR:", error);
+    setProjectConditions(mergeConditionOptions([]));
+  }
+}, [projectId, downloadedOffline, isOnline]);
+
+
 
 useEffect(() => {
   loadProjectSubAssetTypes();
-}, [loadProjectSubAssetTypes]);
+  loadProjectConditions();
+}, [loadProjectSubAssetTypes, loadProjectConditions]);
+
 
 const collectRawDataValuesForKey = useCallback(
   async (key: string) => {
@@ -1026,21 +1097,17 @@ const cleanAssetRawData = (rawData?: Record<string, any> | null) => {
 
     const rawData = cleanAssetRawData((draft as any).rawData);
 
-const quantityValue = Number(
-  (draft as any).quantity ?? rawData.quantity ?? 1
-);
+const quantity = isVehicle
+  ? 1
+  : normalizeAssetQuantity((draft as any).quantity ?? 1);
 
-const quantity =
-  Number.isFinite(quantityValue) && quantityValue > 0
-    ? Math.floor(quantityValue)
-    : 1;
-
-const subAssetType = String(
-  (draft as any).subAssetType ??
-    rawData.subAssetType ??
-    rawData.customAssetType ??
-    ""
-).trim();
+const subAssetType = isVehicle
+  ? null
+  : normalizeSubAssetTypeValue(
+      (draft as any).subAssetType ??
+        rawData.subAssetType ??
+        rawData.customAssetType
+    );
 
 const notesText = String(draft.notes || "").trim();
     return {
@@ -1048,12 +1115,12 @@ const notesText = String(draft.notes || "").trim();
       name: draft.name,
       parent: currentFolderId ?? null,
 quantity,
-subAssetType: subAssetType || null,
+subAssetType,
 rawData,
       projectId,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      condition: draft.condition || null,
+      condition: normalizeConditionValue(draft.condition),
       assetType: normalizedAssetType,
       brand: isVehicle ? draft.brand || null : null,
       model: isVehicle ? draft.model || null : null,
@@ -1069,6 +1136,26 @@ rawData,
     voiceNotes: normalizeLocalMedia(draft.voiceNotes || []),
     };
   };
+
+  const normalizeConditionValue = (value?: string | null) => {
+  const text = String(value || "").trim();
+  return text || "Good";
+};
+
+const normalizeSubAssetTypeValue = (value?: string | null) => {
+  const text = String(value || "").trim().toLowerCase();
+  return text || null;
+};
+
+const normalizeAssetQuantity = (value: any) => {
+  const numberValue = Number(value);
+
+  if (!Number.isFinite(numberValue) || numberValue < 1) {
+    return 1;
+  }
+
+  return Math.floor(numberValue);
+};
 
  const createAssetAsync = async (draft: AssetDraft) => {
   const clientMutationId =
@@ -1096,14 +1183,15 @@ rawData,
 
     const rawData = cleanAssetRawData((draft as any).rawData);
 
-    const quantity = Number((draft as any).quantity ?? 1);
+   const condition = normalizeConditionValue(draft.condition);
 
-const subAssetType = String((draft as any).subAssetType || "")
-  .trim()
-  .toLowerCase();
+const safeQuantity = isVehicle
+  ? 1
+  : normalizeAssetQuantity((draft as any).quantity ?? 1);
 
-   const safeQuantity =
-  Number.isFinite(quantity) && quantity > 0 ? Math.floor(quantity) : 1;
+const subAssetType = isVehicle
+  ? null
+  : normalizeSubAssetTypeValue((draft as any).subAssetType);
 
 const finalRawData = rawData;
 
@@ -1118,11 +1206,11 @@ const payload = {
   images: newImages,
   voiceNotes: newVoiceNotes,
 
-  condition: draft.condition || null,
+  condition,
   code: draft.code || null,
   assetType: normalizedAssetType,
 
-  subAssetType: subAssetType || null,
+  subAssetType,
   quantity: safeQuantity,
   rawData: finalRawData,
 
@@ -1135,6 +1223,36 @@ const payload = {
 
   isDone: draft.isDone ?? false,
   isPresent: draft.isPresent ?? true,
+};
+
+
+const normalizedOptimisticAsset = {
+  ...optimisticAsset,
+  id: clientMutationId,
+  projectId,
+  parent: currentFolderId || null,
+  folderId: currentFolderId || null,
+
+  condition,
+  assetType: normalizedAssetType,
+  subAssetType,
+  quantity: safeQuantity,
+  rawData: finalRawData,
+
+  brand: isVehicle ? draft.brand || null : null,
+  model: isVehicle ? draft.model || null : null,
+  manufactureYear: isVehicle ? draft.manufactureYear || null : null,
+  kilometersDriven: isVehicle ? draft.kilometersDriven || null : null,
+
+  hasNotes: notesText.length > 0,
+  notes: notesText || null,
+
+  isDone: draft.isDone ?? false,
+  isPresent: draft.isPresent ?? true,
+
+  images: normalizeLocalMedia(draft.images || []),
+  voiceNotes: normalizeLocalMedia(draft.voiceNotes || []),
+  updatedAt: new Date().toISOString(),
 };
 
     const result = await safeApiCall(
@@ -1151,7 +1269,7 @@ const payload = {
       setAssets((prev) =>
         prev.map((asset) =>
           asset.id === clientMutationId
-            ? { ...optimisticAsset, id: localId }
+            ? { ...normalizedOptimisticAsset, id: localId }
             : asset
         )
       );
@@ -1166,9 +1284,10 @@ const payload = {
       );
 
       if (downloadedOffline) {
-        await upsertOfflineAsset({ ...optimisticAsset, id: localId });
+        await upsertOfflineAsset({ ...normalizedOptimisticAsset, id: localId });
       }
       await loadProjectSubAssetTypes();
+      await loadProjectConditions();
       showSnackbar(result.message, "info");
       return;
     }
@@ -1191,6 +1310,7 @@ const payload = {
       await upsertOfflineAsset(result.asset);
     }
     await loadProjectSubAssetTypes();
+    await loadProjectConditions();
 
     showSnackbar(t("folderAssetScreen.snackbar.assetCreated"), "success");
   } catch (error: any) {
@@ -1258,21 +1378,21 @@ const saveAndCreateNextAsset = (draft: AssetDraft) => {
 
     const rawData = cleanAssetRawData((draft as any).rawData);
 
-const quantityValue = Number((draft as any).quantity ?? 1);
+const condition = normalizeConditionValue(draft.condition);
 
-const safeQuantity =
-  Number.isFinite(quantityValue) && quantityValue > 0
-    ? Math.floor(quantityValue)
-    : 1;
+const safeQuantity = isVehicle
+  ? 1
+  : normalizeAssetQuantity((draft as any).quantity ?? 1);
 
-const subAssetType = String((draft as any).subAssetType || "")
-  .trim()
-  .toLowerCase();
+const subAssetType = isVehicle
+  ? null
+  : normalizeSubAssetTypeValue((draft as any).subAssetType);
 
 const finalRawData = rawData;
 
 const notesText = String(draft.notes || "").trim();
-   const payload = {
+
+const payload = {
   assetId: targetAsset.id,
   projectId,
   name: draft.name,
@@ -1280,11 +1400,11 @@ const notesText = String(draft.notes || "").trim();
   images: newImages,
   voiceNotes: newVoiceNotes,
 
-  condition: draft.condition || null,
+  condition,
   code: draft.code || null,
   assetType: normalizedAssetType,
 
-  subAssetType: subAssetType || null,
+  subAssetType,
   quantity: safeQuantity,
   rawData: finalRawData,
 
@@ -1312,11 +1432,11 @@ const notesText = String(draft.notes || "").trim();
           ...existingOfflineAsset,
           name: draft.name,
           quantity: safeQuantity,
-          subAssetType: subAssetType || null,
+          subAssetType,
           rawData: finalRawData,
           hasNotes: notesText.length > 0,
           notes: notesText || null,
-          condition: draft.condition || null,
+          condition,
           code: draft.code ?? existingOfflineAsset.code ?? null,
           assetType: normalizedAssetType,
           brand: isVehicle ? draft.brand || null : null,
@@ -1338,6 +1458,7 @@ const notesText = String(draft.notes || "").trim();
     } else {
       if (downloadedOffline) await upsertOfflineAsset(result.asset);
        await loadProjectSubAssetTypes();
+       await loadProjectConditions();
       showSnackbar(t("folderAssetScreen.snackbar.assetUpdated"), "success");
     }
      setUploadingAssetIds((prev) => prev.filter((id) => id !== targetAsset.id));
@@ -1813,6 +1934,65 @@ const openCreateAssetByCategory = (category: "Vehicle" | "Other") => {
 
   setAssetCategoryModalVisible(false);
   setAssetModalVisible(true);
+};
+
+
+const handleRenameSubAssetType = async (
+  oldSubAssetType: string,
+  newSubAssetType: string
+) => {
+  const oldValue = String(oldSubAssetType || "").trim().toLowerCase();
+  const newValue = String(newSubAssetType || "").trim().toLowerCase();
+
+  if (!oldValue || !newValue || oldValue === newValue) return;
+
+  const shouldUseOfflineCache =
+    downloadedOffline && (isOnline === false || isOnline === null);
+
+  if (shouldUseOfflineCache) {
+    await renameOfflineSubAssetType({
+      projectId,
+      oldSubAssetType: oldValue,
+      newSubAssetType: newValue,
+      parent: currentFolderId ?? null,
+    });
+
+    await safeApiCall(
+      () =>
+        projectContentApi.renameProjectSubAssetType({
+          projectId,
+          oldSubAssetType: oldValue,
+          newSubAssetType: newValue,
+          parent: currentFolderId ?? null,
+        }),
+      {
+        projectId,
+        oldSubAssetType: oldValue,
+        newSubAssetType: newValue,
+        parent: currentFolderId ?? null,
+      },
+      { type: "renameSubAssetType", projectId }
+    );
+
+    await refreshPendingCount();
+    await loadContents(currentFolderId, { showSkeleton: true });
+    await loadProjectSubAssetTypes();
+
+    showSnackbar("Asset type updated offline. It will sync later.", "info");
+    return;
+  }
+
+  await projectContentApi.renameProjectSubAssetType({
+    projectId,
+    oldSubAssetType: oldValue,
+    newSubAssetType: newValue,
+    parent: currentFolderId ?? null,
+  });
+
+  await loadContents(currentFolderId, { showSkeleton: true });
+  await loadProjectSubAssetTypes();
+
+  showSnackbar("Asset type updated", "success");
 };
   
   return (
@@ -2841,6 +3021,8 @@ const openCreateAssetByCategory = (category: "Vehicle" | "Other") => {
   mode={editingAsset ? "edit" : "create"}
   initialData={editingAsset ? mapAssetToDraft(editingAsset) : createAssetInitialData}
   subAssetTypes={projectSubAssetTypes}
+  conditionOptions={projectConditions}
+  onRenameSubAssetType={handleRenameSubAssetType}
   autoOpenCamera={autoOpenCameraForEdit}
 />
 
