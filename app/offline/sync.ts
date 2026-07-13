@@ -60,18 +60,22 @@ async function patchPendingProjectRefs(
   pendingItems?: PendingItem[]
 ) {
   const queue = pendingItems ?? (await getPending("pending"));
-  const updates: Promise<void>[] = [];
 
   for (const item of queue) {
     const payload = item.payload as Record<string, unknown>;
+    let updatedPayload = payload;
+    let changed = false;
+
     if (payload?.projectId === localId) {
-      const updatedPayload = { ...payload, projectId: remoteId };
+      updatedPayload = { ...updatedPayload, projectId: remoteId };
+      changed = true;
+    }
+
+    if (changed) {
       await updatePayload(item.id, updatedPayload);
       item.payload = updatedPayload;
     }
   }
-
-  await Promise.all(updates);
 }
 
 async function patchPendingFolderRefs(
@@ -80,7 +84,6 @@ async function patchPendingFolderRefs(
   pendingItems?: PendingItem[]
 ) {
   const queue = pendingItems ?? (await getPending("pending"));
-  const updates: Promise<void>[] = [];
 
   for (const item of queue) {
     const payload = item.payload as Record<string, unknown>;
@@ -97,12 +100,16 @@ async function patchPendingFolderRefs(
       changed = true;
     }
 
+    if (payload?.folderId === localId) {
+      updatedPayload = { ...updatedPayload, folderId: remoteId };
+      changed = true;
+    }
+
     if (changed) {
       await updatePayload(item.id, updatedPayload);
+      item.payload = updatedPayload;
     }
   }
-
-  await Promise.all(updates);
 }
 
 async function processQueueItem(
@@ -135,6 +142,16 @@ async function processQueueItem(
         break;
       }
 
+      case "renameSubAssetType": {
+        await projectContentApi.renameProjectSubAssetType({
+          projectId: item.payload.projectId,
+          oldSubAssetType: item.payload.oldSubAssetType,
+          newSubAssetType: item.payload.newSubAssetType,
+          parent: item.payload.parent ?? null,
+        });
+        break;
+      }
+
       default:
         console.warn("Unknown action type:", item.type);
         return false;
@@ -147,7 +164,12 @@ async function processQueueItem(
     console.error(`Sync failed for ${item.id}:`, error);
 
     if ((item.retryCount ?? 0) < 3) {
-      await updateStatus(item.id, "pending", (item.retryCount ?? 0) + 1, Date.now());
+      await updateStatus(
+        item.id,
+        "pending",
+        (item.retryCount ?? 0) + 1,
+        Date.now()
+      );
     } else {
       await updateStatus(item.id, "failed", item.retryCount ?? 3, Date.now());
     }
@@ -155,7 +177,6 @@ async function processQueueItem(
     return false;
   }
 }
-
 export async function syncQueue(): Promise<{
   synced: number;
   failed: number;
