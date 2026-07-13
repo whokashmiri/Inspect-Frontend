@@ -5,7 +5,8 @@ export type OfflineAction =
   | "createProject"
   | "createFolder"
   | "createAsset"
-  | "updateAsset";
+  | "updateAsset"
+  | "renameSubAssetType";
 
 export interface PendingItem {
   id: string;
