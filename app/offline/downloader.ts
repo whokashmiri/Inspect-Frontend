@@ -25,10 +25,62 @@ function normalizeFolder(folder: any): FolderItem {
   };
 }
 
+function normalizeText(value: any): string | null {
+  const text = String(value || "").trim();
+  return text || null;
+}
+
+function normalizeSubAssetType(value: any): string | null {
+  const text = String(value || "").trim().toLowerCase();
+  return text || null;
+}
+
+function normalizeQuantity(value: any): number {
+  const numberValue = Number(value);
+
+  if (!Number.isFinite(numberValue) || numberValue < 1) {
+    return 1;
+  }
+
+  return Math.floor(numberValue);
+}
+
 function normalizeAsset(asset: any): AssetItem {
+  const assetType =
+    String(asset?.assetType || "").trim().toLowerCase() === "vehicle"
+      ? "vehicle"
+      : "other";
+
+  const condition = normalizeText(asset?.condition) || "Good";
+
+  const subAssetType =
+    assetType === "vehicle"
+      ? "vehicle"
+      : normalizeSubAssetType(
+          asset?.subAssetType ??
+            asset?.rawData?.subAssetType ??
+            asset?.rawData?.customAssetType
+        );
+
+  const rawData =
+    asset?.rawData && typeof asset.rawData === "object" && !Array.isArray(asset.rawData)
+      ? { ...asset.rawData }
+      : {};
+
+  delete rawData.quantity;
+  delete rawData.subAssetType;
+  delete rawData.customAssetType;
+
   return {
     ...asset,
     parent: asset.parent ?? asset.folderId ?? null,
+    folderId: asset.folderId ?? asset.parent ?? null,
+
+    assetType,
+    condition,
+    subAssetType,
+    quantity: assetType === "vehicle" ? 1 : normalizeQuantity(asset?.quantity),
+    rawData,
   };
 }
 
