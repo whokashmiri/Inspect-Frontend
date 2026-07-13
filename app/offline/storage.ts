@@ -52,6 +52,58 @@ function getNestedRawDataValue(rawData: any, key?: string | null) {
   }, rawData);
 }
 
+
+
+function normalizeText(value: any): string | null {
+  const text = String(value || "").trim();
+  return text || null;
+}
+
+function normalizeCondition(value: any): string | null {
+  return normalizeText(value);
+}
+
+function normalizeSubAssetTypeValue(value: any): string | null {
+  const text = String(value || "").trim().toLowerCase();
+  return text || null;
+}
+
+function normalizeOfflineAsset(asset: any) {
+  const assetType =
+    String(asset?.assetType || "").trim().toLowerCase() === "vehicle"
+      ? "vehicle"
+      : "other";
+
+  const condition = normalizeCondition(asset?.condition) || "Good";
+
+  const subAssetType =
+    assetType === "vehicle"
+      ? "vehicle"
+      : normalizeSubAssetTypeValue(
+          asset?.subAssetType ??
+            asset?.rawData?.subAssetType ??
+            asset?.rawData?.customAssetType
+        );
+
+  const rawData =
+    asset?.rawData && typeof asset.rawData === "object" && !Array.isArray(asset.rawData)
+      ? { ...asset.rawData }
+      : {};
+
+  delete rawData.quantity;
+  delete rawData.subAssetType;
+  delete rawData.customAssetType;
+
+  return {
+    ...asset,
+    assetType,
+    condition,
+    subAssetType,
+    rawData,
+  };
+}
+
+
 function rawDataValueMatches(value: any, search: string): boolean {
   if (value === null || value === undefined) return false;
 
@@ -154,7 +206,7 @@ export async function advancedSearchOfflineAssets({
   let assets = rows
     .map((row) => {
       try {
-        return JSON.parse(row.data);
+        return normalizeOfflineAsset(JSON.parse(row.data));
       } catch {
         return null;
       }
@@ -690,10 +742,10 @@ export async function saveAssetsOffline(
     for (const asset of assets) {
       const folderId = normalizeAssetFolder(asset);
 
-      const normalizedAsset = {
-        ...asset,
-        folderId,
-      };
+     const normalizedAsset = normalizeOfflineAsset({
+  ...asset,
+  folderId,
+});
 
       await db.runAsync(
         `INSERT OR REPLACE INTO offline_assets (id, projectId, folderId, data)
@@ -776,10 +828,10 @@ export async function getOfflineContents(
     );
   }
 
-  return {
-    folders: folderRows.map((row) => JSON.parse(row.data)),
-    assets: assetRows.map((row) => JSON.parse(row.data)),
-  };
+ return {
+  folders: folderRows.map((row) => JSON.parse(row.data)),
+  assets: assetRows.map((row) => normalizeOfflineAsset(JSON.parse(row.data))),
+};
 }
 
 export async function getAllDownloadedProjects(): Promise<any[]> {
@@ -842,10 +894,10 @@ export async function upsertOfflineAsset(
     await initStorage();
 
     const folderId = normalizeAssetFolder(asset);
-    const normalizedAsset = {
-      ...asset,
-      folderId,
-    };
+  const normalizedAsset = normalizeOfflineAsset({
+  ...asset,
+  folderId,
+});
 
     await runDbTask(() =>
       db.runAsync(
@@ -870,9 +922,176 @@ export async function getOfflineAssetById(assetId: string): Promise<any | null> 
     );
 
     if (!row) return null;
-    return JSON.parse(row.data);
+    return normalizeOfflineAsset(JSON.parse(row.data));
   } catch (error) {
     console.error("Error getting offline asset by ID:", error);
     return null;
   }
+}
+
+export async function getOfflineSubAssetTypes(projectId: string): Promise<string[]> {
+  await initStorage();
+
+  const rows = await db.getAllAsync<{ data: string }>(
+    `SELECT data FROM offline_assets WHERE projectId = ?;`,
+    [projectId]
+  );
+
+  const unique = new Set<string>();
+
+  for (const row of rows) {
+    try {
+      const asset = normalizeOfflineAsset(JSON.parse(row.data));
+
+      if (asset.assetType !== "other") continue;
+
+      const value = normalizeSubAssetTypeValue(asset.subAssetType);
+
+      if (value) {
+        unique.add(value);
+      }
+    } catch {
+      // ignore malformed row
+    }
+  }
+
+  return Array.from(unique).sort((a, b) =>
+    a.localeCompare(b, undefined, {
+      sensitivity: "base",
+      numeric: true,
+    })
+  );
+}
+
+export async function getOfflineConditions(projectId: string): Promise<string[]> {
+  await initStorage();
+
+  const defaultConditions = [
+    "New",
+    "Excellent",
+    "Good",
+    "Very Good",
+    "Acceptable",
+    "Poor",
+    "Scrape",
+  ];
+
+  const rows = await db.getAllAsync<{ data: string }>(
+    `SELECT data FROM offline_assets WHERE projectId = ?;`,
+    [projectId]
+  );
+
+  const unique = new Map<string, string>();
+
+  for (const item of defaultConditions) {
+    unique.set(item.toLowerCase(), item);
+  }
+
+  for (const row of rows) {
+    try {
+      const asset = normalizeOfflineAsset(JSON.parse(row.data));
+      const value = normalizeCondition(asset.condition);
+
+      if (value) {
+        unique.set(value.toLowerCase(), value);
+      }
+    } catch {
+      // ignore malformed row
+    }
+  }
+
+  return Array.from(unique.values()).sort((a, b) =>
+    a.localeCompare(b, undefined, {
+      sensitivity: "base",
+      numeric: true,
+    })
+  );
+}
+
+
+export async function renameOfflineSubAssetType({
+  projectId,
+  oldSubAssetType,
+  newSubAssetType,
+  parent,
+}: {
+  projectId: string;
+  oldSubAssetType: string;
+  newSubAssetType: string;
+  parent?: string | null;
+}): Promise<{
+  success: boolean;
+  matchedCount: number;
+  modifiedCount: number;
+  oldSubAssetType: string;
+  newSubAssetType: string;
+}> {
+  await initStorage();
+
+  const oldValue = normalizeSubAssetTypeValue(oldSubAssetType);
+  const newValue = normalizeSubAssetTypeValue(newSubAssetType);
+
+  if (!oldValue) {
+    throw new Error("Old sub asset type is required");
+  }
+
+  if (!newValue) {
+    throw new Error("New sub asset type is required");
+  }
+
+  const rows = await db.getAllAsync<{
+    id: string;
+    folderId: string | null;
+    data: string;
+  }>(
+    parent === undefined
+      ? `SELECT id, folderId, data FROM offline_assets WHERE projectId = ?;`
+      : parent === null
+      ? `SELECT id, folderId, data FROM offline_assets WHERE projectId = ? AND folderId IS NULL;`
+      : `SELECT id, folderId, data FROM offline_assets WHERE projectId = ? AND folderId = ?;`,
+    parent === undefined ? [projectId] : parent === null ? [projectId] : [projectId, parent]
+  );
+
+  let matchedCount = 0;
+  let modifiedCount = 0;
+
+  await runDbTask(async () => {
+    for (const row of rows) {
+      let asset: any;
+
+      try {
+        asset = normalizeOfflineAsset(JSON.parse(row.data));
+      } catch {
+        continue;
+      }
+
+      if (asset.assetType === "vehicle") continue;
+
+      const current = normalizeSubAssetTypeValue(asset.subAssetType);
+
+      if (current !== oldValue) continue;
+
+      matchedCount += 1;
+
+      const updatedAsset = normalizeOfflineAsset({
+        ...asset,
+        subAssetType: newValue,
+      });
+
+      await db.runAsync(
+        `UPDATE offline_assets SET data = ? WHERE id = ?;`,
+        [JSON.stringify(updatedAsset), row.id]
+      );
+
+      modifiedCount += 1;
+    }
+  });
+
+  return {
+    success: true,
+    matchedCount,
+    modifiedCount,
+    oldSubAssetType: oldValue,
+    newSubAssetType: newValue,
+  };
 }
