@@ -45,11 +45,12 @@ const handleRealEstatePress = async () => {
 
     
     }
-
-    router.push("/inspection/TransactionsScreen");
+ router.push("/inspection/PropertyInspectionForm");
+    // router.push("/inspection/TransactionsScreen");
   } catch (error) {
     // console.log("Download transactions failed:", error);
-    router.push("/inspection/TransactionsScreen");
+    // router.push("/inspection/TransactionsScreen");
+     router.push("/inspection/PropertyInspectionForm");
   } finally {
     setDownloading(false);
   }
