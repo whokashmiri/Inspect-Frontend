@@ -102,6 +102,13 @@ function AppHeaderComponent({
   const { t } = useTranslation();
   const [isRTL, setIsRTL] = useState(i18n.language === "ar");
 
+    const [menuVisible, setMenuVisible] = useState(false);
+
+const openMenu = useCallback(() => setMenuVisible(true), []);
+const closeMenu = useCallback(() => setMenuVisible(false), []);
+
+
+
   const [profileVisible, setProfileVisible] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -113,6 +120,9 @@ function AppHeaderComponent({
     Array.isArray(user?.serviceCities) ? user.serviceCities : []
   );
   const [savingProfile, setSavingProfile] = useState(false);
+
+
+
 
   const toggleLanguage = useCallback(async () => {
     const current = i18n.language;
@@ -131,6 +141,11 @@ const openProfile = useCallback(() => {
   setEditingProfile(!user?.isProfileCompleted);
   setProfileVisible(true);
 }, [user?.name, user?.serviceCities, user?.isProfileCompleted]);
+
+const openProfileFromMenu = useCallback(() => {
+  closeMenu();
+  openProfile();
+}, [closeMenu, openProfile]);
 
   const closeProfile = useCallback(() => {
     if (loggingOut || savingProfile) return;
@@ -221,7 +236,7 @@ const openProfile = useCallback(() => {
           </View>
         </View>
 
-        <View
+          <View
           style={[
             { flexDirection: "row", marginLeft: 10, alignItems: "center" },
             { flexDirection: isRTL ? "row-reverse" : "row" },
@@ -241,14 +256,37 @@ const openProfile = useCallback(() => {
         {isAuthenticated && user ? (
           <TouchableOpacity
             activeOpacity={0.85}
-            onPress={openProfile}
-            style={styles.avatarButton}
+            onPress={openMenu}
+            style={styles.menuButton}
+            hitSlop={8}
           >
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{initials}</Text>
-            </View>
+            <Ionicons name="ellipsis-vertical" size={20} color={TEXT} />
           </TouchableOpacity>
         ) : null}
+
+<Modal
+  visible={menuVisible}
+  animationType="fade"
+  transparent
+  onRequestClose={closeMenu}
+>
+  <Pressable style={styles.menuOverlay} onPress={closeMenu}>
+    <View style={[styles.menuDropdown, isRTL ? { left: 16 } : { right: 16 }]}>
+      <TouchableOpacity
+        style={styles.menuRow}
+        activeOpacity={0.8}
+        onPress={openProfileFromMenu}
+      >
+        <View style={styles.menuAvatar}>
+          <Ionicons name="person" size={16} color="#ffffff" />
+        </View>
+        <Text style={styles.menuRowText}>{t("header.userProfile")}</Text>
+          
+        <Ionicons name="chevron-forward" size={16} color={MUTED} />
+      </TouchableOpacity>
+    </View>
+  </Pressable>
+</Modal>
       </View>
 
       <Modal
@@ -349,7 +387,7 @@ const openProfile = useCallback(() => {
                   {savingProfile ? (
                     <ActivityIndicator size="small" color="#ffffff" />
                   ) : (
-                    <Text style={styles.saveProfileText}>Save Profile</Text>
+                    <Text style={styles.saveProfileText}>{t("header.saveProfile")}</Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -367,7 +405,7 @@ const openProfile = useCallback(() => {
     }}
   >
     <Ionicons name="create-outline" size={15} color="#ffffff" />
-    <Text style={styles.editProfileText}>Edit Profile / Add Cities</Text>
+    <Text style={styles.editProfileText}>{t("header.editProfile")}</Text>
   </TouchableOpacity>
 ) : null}
 
@@ -443,6 +481,63 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
+
+menuButton: {
+  marginLeft: 12,
+  width: 38,
+  height: 38,
+  borderRadius: 12,
+  backgroundColor: SURFACE,
+  borderWidth: 1,
+  borderColor: BORDER,
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+menuOverlay: {
+  flex: 1,
+  backgroundColor: "rgba(42,50,75,0.25)",
+},
+
+menuDropdown: {
+  position: "absolute",
+  top: 78,
+  width: 200,
+  backgroundColor: "#ffffff",
+  borderWidth: 1,
+  borderColor: BORDER,
+  borderRadius: 16,
+  paddingVertical: 6,
+  elevation: 12,
+  shadowColor: "#000",
+  shadowOffset: { width: 0, height: 8 },
+  shadowOpacity: 0.15,
+  shadowRadius: 12,
+},
+
+menuRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 10,
+  paddingHorizontal: 12,
+  paddingVertical: 10,
+},
+
+menuAvatar: {
+  width: 28,
+  height: 28,
+  borderRadius: 14,
+  backgroundColor: ACC,
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+menuRowText: {
+  flex: 1,
+  color: TEXT,
+  fontSize: 13,
+  fontWeight: "700",
+},
   brandRow: {
     flexDirection: "row",
     alignItems: "center",
