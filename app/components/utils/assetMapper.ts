@@ -14,6 +14,59 @@ const cleanAssetRawData = (rawData?: Record<string, any> | null) => {
   return source;
 };
 
+const isRemoteUrl = (value?: string | null) => {
+  const text = String(value || "").trim().toLowerCase();
+
+  return text.startsWith("http://") || text.startsWith("https://");
+};
+
+const mapExistingMediaToDraft = (
+  items: any[] = [],
+  fallbackPrefix: "image" | "voice"
+) => {
+  return items.map((item: any, index: number) => {
+    const url = String(item.url || "").trim();
+    const uri = String(item.uri || "").trim();
+
+    const hasRemoteUrl = isRemoteUrl(url) || isRemoteUrl(uri);
+    const hasPublicId = !!item.publicId;
+
+    const existing = hasRemoteUrl || hasPublicId || item.existing === true;
+
+    return {
+      ...item,
+
+      // keep remote url when it exists
+      uri: uri || url || "",
+      url: url || (isRemoteUrl(uri) ? uri : ""),
+
+      name: item.name || `${fallbackPrefix}_${index}`,
+      type:
+        item.type ||
+        item.mimeType ||
+        (fallbackPrefix === "voice" ? "audio/m4a" : "image/jpeg"),
+      mimeType:
+        item.mimeType ??
+        item.type ??
+        (fallbackPrefix === "voice" ? "audio/m4a" : "image/jpeg"),
+
+      publicId: item.publicId ?? null,
+      mediaType:
+        item.mediaType ??
+        (fallbackPrefix === "voice"
+          ? undefined
+          : item.type?.startsWith("video/")
+          ? "video"
+          : "image"),
+
+      thumbnailUrl: item.thumbnailUrl ?? null,
+      duration: item.duration ?? null,
+
+      existing,
+    };
+  });
+};
+
 export function mapAssetToDraft(
   asset: AssetItem
 ): AssetDraft & {
@@ -38,13 +91,12 @@ export function mapAssetToDraft(
   return {
     name: asset.name,
 
-    // keep for old type compatibility, but backend no longer uses it
     writtenDescription: (asset as any).writtenDescription || "",
 
-    condition: asset.condition || "",
+    condition: asset.condition || "Good",
     assetType: asset.assetType || "other",
 
-    subAssetType: subAssetType || null,
+    subAssetType: subAssetType || undefined,
     quantity,
 
     rawData: cleanAssetRawData((asset as any).rawData),
@@ -60,18 +112,7 @@ export function mapAssetToDraft(
     hasNotes: asset.hasNotes ?? false,
     notes: asset.notes || "",
 
-    images: asset.images.map((img, index) => ({
-      uri: img.url,
-      name: `asset_image_${index + 1}.jpg`,
-      type: img.mimeType || "image/jpeg",
-      existing: true,
-    })),
-
-    voiceNotes: asset.voiceNotes.map((note, index) => ({
-      uri: note.url,
-      name: `voice_note_${index + 1}.m4a`,
-      type: "audio/m4a",
-      existing: true,
-    })),
+    images: mapExistingMediaToDraft(asset.images || [], "image"),
+    voiceNotes: mapExistingMediaToDraft(asset.voiceNotes || [], "voice"),
   };
 }
