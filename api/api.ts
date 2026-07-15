@@ -5,10 +5,10 @@
 import * as SecureStore from "expo-secure-store";
 
 // ─── Config ────────────────────────────────────────────────────────────────
-// export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://api.167.71.231.64.nip.io/api/v1";
+export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://api.167.71.231.64.nip.io/api/v1";
 
 
-export const BASE_URL = process.env.EXPO_PUBLIC_API_URL
+// export const BASE_URL = process.env.EXPO_PUBLIC_API_URL
 
 const TOKEN_KEY = "auth.accessToken";
 const REFRESH_KEY = "auth.refreshToken";
@@ -335,23 +335,52 @@ export async function setSignupPasswordAndSave(payload: {
 
   return res;
 }
-function getExistingUploadedMedia(files?: AssetMediaInput[]) {
-  return (files || [])
-    .filter((file) => {
-      return typeof file.url === "string" && file.url.startsWith("http");
-    })
-    .map((file) => ({
-      url: file.url!,
-      publicId: file.publicId ?? null,
-      mediaType:
-        file.mediaType ??
-        (file.type?.startsWith("video/") ? "video" : "image"),
-      mimeType: file.mimeType ?? file.type ?? null,
-      duration: file.duration ?? null,
-      thumbnailUrl: file.thumbnailUrl ?? null,
-    }));
-}
 
+function isRemoteUrl(value?: string | null) {
+  const text = String(value || "").trim().toLowerCase();
+
+  return text.startsWith("http://") || text.startsWith("https://");
+}
+function getExistingUploadedMedia(files?: AssetMediaInput[]) {
+  
+
+  const result = (files || [])
+    .filter((file: any, index) => {
+      const url = String(file.url || "").trim();
+      const uri = String(file.uri || "").trim();
+
+      const shouldKeep =
+        file.existing === true ||
+        !!file.publicId ||
+        isRemoteUrl(url) ||
+        isRemoteUrl(uri);
+
+      return shouldKeep;
+    })
+    .map((file: any) => {
+      const remoteUrl = isRemoteUrl(file.url)
+        ? file.url
+        : isRemoteUrl(file.uri)
+        ? file.uri
+        : file.url || file.uri;
+
+      return {
+        url: remoteUrl,
+        publicId: file.publicId ?? null,
+        mediaType:
+          file.mediaType ??
+          (file.type?.startsWith("video/") || file.mimeType?.startsWith("video/")
+            ? "video"
+            : "image"),
+        mimeType: file.mimeType ?? file.type ?? null,
+        duration: file.duration ?? null,
+        thumbnailUrl: file.thumbnailUrl ?? null,
+        existing: true,
+      };
+    });
+
+  return result;
+}
 // ─── Projects ───────────────────────────────────────────────────────────────
 
 export interface ProjectCompany {
@@ -777,17 +806,33 @@ export interface UploadFileInput {
   type: string;
 }
 
+
+
 function getLocalUploadFiles(files?: AssetMediaInput[]): UploadFileInput[] {
-  return (files || [])
-    .filter((file) => {
-      const uri = file.uri;
-      return typeof uri === "string" && !uri.startsWith("http");
+  
+  const result = (files || [])
+    .filter((file: any, index) => {
+      const uri = String(file.uri || "").trim();
+      const url = String(file.url || "").trim();
+
+      const shouldUpload =
+        !!uri &&
+        file.existing !== true &&
+        !file.publicId &&
+        !isRemoteUrl(url) &&
+        !isRemoteUrl(uri);
+
+    
+
+      return shouldUpload;
     })
     .map((file) => ({
       uri: file.uri!,
       name: file.name || `file_${Date.now()}`,
-      type: file.type || "application/octet-stream",
+      type: file.type || file.mimeType || "application/octet-stream",
     }));
+
+  return result;
 }
 
 function isVideoFile(file: UploadFileInput) {
@@ -1175,6 +1220,8 @@ const finalRawData = {
   isPresent: payload.isPresent,
 
   images: [...existingMedia, ...uploadedImages, ...uploadedVideos],
+
+
   voiceNotes: uploadedVoiceNotes,
 },
     });
