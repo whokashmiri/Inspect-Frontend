@@ -315,6 +315,9 @@
     "somethingWentWrong": "حدث خطأ ما."
   },
   "header": {
+    "userProfile": "الملف الشخصي",
+    "saveProfile": "حفظ الملف الشخصي",
+    "editProfile": "تعديل الملف الشخصي / إضافة المدن",
     "username": "اسم المستخدم",
     "company": "الشركة",
     "role": "الدور",

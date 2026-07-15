@@ -1080,15 +1080,37 @@ const cleanAssetRawData = (rawData?: Record<string, any> | null) => {
   return source;
 };
 
-  const normalizeLocalMedia = (items: any[] = []) => {
-  return items.map((item, index) => ({
-    ...item,
-    uri: item.uri || item.url || "",
-    url: item.url || item.uri || "",
-    name: item.name || `media_${Date.now()}_${index}`,
-    type: item.type || "application/octet-stream",
-    existing: item.existing ?? false,
-  }));
+const isRemoteMediaUrl = (value?: string | null) => {
+  const text = String(value || "").trim().toLowerCase();
+
+  return text.startsWith("http://") || text.startsWith("https://");
+};
+
+const normalizeLocalMedia = (items: any[] = []) => {
+  return items.map((item, index) => {
+    const uri = item.uri || item.url || "";
+    const url = item.url || item.uri || "";
+
+    const isExisting =
+      item.existing === true ||
+      !!item.publicId ||
+      isRemoteMediaUrl(item.url) ||
+      isRemoteMediaUrl(item.uri);
+
+    return {
+      ...item,
+      uri,
+      url,
+      name: item.name || `media_${Date.now()}_${index}`,
+      type: item.type || item.mimeType || "application/octet-stream",
+      mimeType: item.mimeType ?? item.type ?? null,
+      publicId: item.publicId ?? null,
+      mediaType: item.mediaType ?? (item.type?.startsWith("video/") ? "video" : "image"),
+      thumbnailUrl: item.thumbnailUrl ?? null,
+      duration: item.duration ?? null,
+      existing: isExisting,
+    };
+  });
 };
 
   const buildLocalAsset = (draft: AssetDraft): AssetItem => {
@@ -1170,13 +1192,10 @@ const normalizeAssetQuantity = (value: any) => {
   setAssets((prev) => [optimisticAsset, ...prev]);
 
   try {
-    const newImages = (draft.images || []).filter(
-      (item: any) => item.uri && !item.uri.startsWith("http")
-    );
+  const allImages = normalizeLocalMedia(draft.images || []);
+const allVoiceNotes = normalizeLocalMedia(draft.voiceNotes || []);
 
-    const newVoiceNotes = (draft.voiceNotes || []).filter(
-      (item: any) => item.uri && !item.uri.startsWith("http")
-    );
+
 
     const normalizedAssetType = normalizeAssetType(draft.assetType as any);
     const isVehicle = normalizedAssetType === "vehicle";
@@ -1203,8 +1222,8 @@ const payload = {
   name: draft.name,
   parent: currentFolderId || undefined,
 
-  images: newImages,
-  voiceNotes: newVoiceNotes,
+  images: allImages,
+  voiceNotes: allVoiceNotes,
 
   condition,
   code: draft.code || null,
@@ -1250,8 +1269,8 @@ const normalizedOptimisticAsset = {
   isDone: draft.isDone ?? false,
   isPresent: draft.isPresent ?? true,
 
-  images: normalizeLocalMedia(draft.images || []),
-  voiceNotes: normalizeLocalMedia(draft.voiceNotes || []),
+  images: allImages,
+  voiceNotes: allVoiceNotes,
   updatedAt: new Date().toISOString(),
 };
 
@@ -1366,19 +1385,15 @@ const saveAndCreateNextAsset = (draft: AssetDraft) => {
   setUploadingAssetIds((prev) =>
     prev.includes(targetAsset.id) ? prev : [...prev, targetAsset.id]
   );
-    const newImages = (draft.images || []).filter(
-      (item: any) => !item.existing && item.uri && !item.uri.startsWith("http")
-    );
-    const newVoiceNotes = (draft.voiceNotes || []).filter(
-      (item: any) => !item.existing && item.uri && !item.uri.startsWith("http")
-    );
+    const allImages = normalizeLocalMedia(draft.images || []);
+    const allVoiceNotes = normalizeLocalMedia(draft.voiceNotes || []);
     const normalizedAssetType = normalizeAssetType(draft.assetType as any);
     const isVehicle = normalizedAssetType === "vehicle";
 
 
     const rawData = cleanAssetRawData((draft as any).rawData);
 
-const condition = normalizeConditionValue(draft.condition);
+    const condition = normalizeConditionValue(draft.condition);
 
 const safeQuantity = isVehicle
   ? 1
@@ -1397,8 +1412,8 @@ const payload = {
   projectId,
   name: draft.name,
 
-  images: newImages,
-  voiceNotes: newVoiceNotes,
+  images:allImages,
+  voiceNotes: allVoiceNotes,
 
   condition,
   code: draft.code || null,
@@ -2388,11 +2403,11 @@ const handleRenameSubAssetType = async (
       )}
 
       {/* ── Uploading overlay ── */}
-      {isAssetUploading(item) && (
-        <View style={styles.uploadingOverlay}>
-          <ActivityIndicator size="small" color="#ffffff" />
-        </View>
-      )}
+     {isAssetUploading(item) && (
+  <View style={styles.uploadingOverlay} pointerEvents="none">
+    <ActivityIndicator size="small" color="#ffffff" />
+  </View>
+)}
 
       {!item.isPresent && <View style={styles.notPresentOverlay} />}
 
@@ -2444,39 +2459,39 @@ const handleRenameSubAssetType = async (
       )}
 
 {normalizeAssetType((item as any).assetType) !== "vehicle" && (
-  <View style={styles.assetQuantityControl} pointerEvents={isAssetUploading(item) ? "none" : "auto"}>
-    <TouchableOpacity
-      style={styles.assetQuantityBtn}
-      onPress={(e) => {
-        e.stopPropagation();
-        changeAssetQuantity(item, "decrease");
-      }}
-      activeOpacity={0.8}
-      disabled={getAssetQuantity(item) <= 1 || isAssetUploading(item)}
-    >
-      <Ionicons
-        name="remove"
-        size={20}
-        color={getAssetQuantity(item) <= 1 ? "#9CA3AF" : TEXT}
-      />
-    </TouchableOpacity>
+ <TouchableOpacity
+  activeOpacity={1}
+  style={styles.assetQuantityControl}
+  onPress={(e) => e.stopPropagation()}
+>
+  <TouchableOpacity
+    style={styles.assetQuantityBtn}
+    onPress={(e) => {
+      e.stopPropagation();
+      if (isAssetUploading(item)) return;
+      changeAssetQuantity(item, "decrease");
+    }}
+    disabled={getAssetQuantity(item) <= 1 || isAssetUploading(item)}
+    activeOpacity={0.8}
+  >
+    <Ionicons name="remove" size={20} color={getAssetQuantity(item) <= 1 ? "#9CA3AF" : TEXT} />
+  </TouchableOpacity>
 
-    <Text style={styles.assetQuantityText}>
-      {getAssetQuantity(item)}
-    </Text>
+  <Text style={styles.assetQuantityText}>{getAssetQuantity(item)}</Text>
 
-    <TouchableOpacity
-      style={styles.assetQuantityBtn}
-      onPress={(e) => {
-        e.stopPropagation();
-        changeAssetQuantity(item, "increase");
-      }}
-      activeOpacity={0.8}
-      disabled={isAssetUploading(item)}
-    >
-      <Ionicons name="add" size={20} color={TEXT} />
-    </TouchableOpacity>
-  </View>
+  <TouchableOpacity
+    style={styles.assetQuantityBtn}
+    onPress={(e) => {
+      e.stopPropagation();
+      if (isAssetUploading(item)) return;
+      changeAssetQuantity(item, "increase");
+    }}
+    disabled={isAssetUploading(item)}
+    activeOpacity={0.8}
+  >
+    <Ionicons name="add" size={20} color={TEXT} />
+  </TouchableOpacity>
+</TouchableOpacity>
 )}
 
       <View style={styles.syncTickBadge}>
@@ -3193,20 +3208,22 @@ assetQuantityControl: {
 assetQuantityBtn: {
   width: 35,
   height: 38,
-  borderRadius: 11,
+  borderRadius: 8,
   backgroundColor: "rgba(42,50,75,0.18)",
   alignItems: "center",
   justifyContent: "center",
-  marginTop:10,
+  marginTop:7,
 },
 
 assetQuantityText: {
-  minWidth: 20,
+  minWidth: 50,
+  maxWidth: 50,
   textAlign: "center",
   color: TEXT,
-  fontSize: 10,
+  fontSize: 15,
   fontWeight: "900",
-  marginTop:15,
+  marginTop:10,
+  // backgroundColor: "red",
 },
   filterBtn: {
   flex: 1,

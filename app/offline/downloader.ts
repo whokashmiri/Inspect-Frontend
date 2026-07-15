@@ -93,11 +93,11 @@ async function collectProjectTree(
     folders: [],
     assets: [],
   };
-console.log("Fetching folder:", parentId);
+// console.log("Fetching folder:", parentId);
 
   const contents = await projectContentApi.listContents(projectId, parentId);
-  console.log("Folders:", contents.folders?.length || 0);
-console.log("Assets:", contents.assets?.length || 0);
+  // console.log("Folders:", contents.folders?.length || 0);
+// console.log("Assets:", contents.assets?.length || 0);
 
   if (contents.folders?.length) {
     bucket.folders.push(...contents.folders.map(normalizeFolder));

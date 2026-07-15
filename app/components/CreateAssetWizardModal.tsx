@@ -2267,21 +2267,30 @@ const saveNewCondition = () => {
 
 
 
-
-      {snackbar && (
-  <View
-    style={[
-      styles.snackbar,
-      snackbar.type === "error"
-        ? styles.snackbarError
-        : snackbar.type === "success"
-        ? styles.snackbarSuccess
-        : styles.snackbarInfo,
-    ]}
-  >
-    <Text style={styles.snackbarText}>{snackbar.message}</Text>
+<Modal
+  visible={!!snackbar}
+  transparent
+  animationType="fade"
+  statusBarTranslucent
+  onRequestClose={() => setSnackbar(null)}
+>
+  <View style={styles.snackbarModalOverlay} pointerEvents="none">
+    {snackbar && (
+      <View
+        style={[
+          styles.snackbar,
+          snackbar.type === "error"
+            ? styles.snackbarError
+            : snackbar.type === "success"
+            ? styles.snackbarSuccess
+            : styles.snackbarInfo,
+        ]}
+      >
+        <Text style={styles.snackbarText}>{snackbar.message}</Text>
+      </View>
+    )}
   </View>
-)}
+</Modal>
     </>
   );
 }
@@ -2768,22 +2777,29 @@ addTypeModalCard: {
 },
 
 
-snackbar: {
-  position: "absolute",
-  top: Platform.OS === "ios" ? 60 : 5,
-  left: 20,
-  right: 20,
-  paddingVertical: 12,
-  paddingHorizontal: 16,
-  borderRadius: 14,
-  zIndex: 9999,
-  elevation: 20,
+snackbarModalOverlay: {
+  flex: 1,
+  alignItems: "center",
 },
 
+snackbar: {
+  position: "absolute",
+  top: Platform.OS === "ios" ? 60 : 30,
+  left: 16,
+  right: 16,
+  minHeight: 30,
+  justifyContent: "center",
+  alignItems: "center",
+  paddingVertical: 10,
+  paddingHorizontal: 14,
+  borderRadius: 12,
+  zIndex: 9999,
+  elevation: 9999,
+},
 snackbarText: {
-  color: "#ffffff",
-  fontSize: 13,
-  fontWeight: "600",
+  color: "#fff",
+  fontSize: 12,
+  fontWeight: "500",
   textAlign: "center",
 },
 
@@ -2794,6 +2810,8 @@ snackbarSuccess: {
 snackbarError: {
   backgroundColor: "#FF6B6B",
 },
+
+
 
 snackbarInfo: {
   backgroundColor: MUTED,
