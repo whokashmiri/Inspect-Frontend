@@ -424,8 +424,9 @@ export async function initStorage(): Promise<void> {
             [normalizedFolderId, row.id]
           );
         }
-      } catch {
-        // ignore malformed rows
+      } catch (error) {
+        console.log(error);
+        
       }
     }
 
