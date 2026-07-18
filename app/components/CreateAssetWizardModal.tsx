@@ -25,12 +25,16 @@ import {
   vehicleBrands,
   getVehicleModelsByBrand,
 } from "../data/vehicleCatalog";
-import { Picker } from "@react-native-picker/picker";
+
 import * as ImagePicker from "expo-image-picker";
 import { Audio } from "expo-av";
 import {Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import AssetCameraModal from "./AssetCameraModal";
+
+import OtherAssetForm from "./forms/OtherAssetForm";
+import VehicleAssetForm from "./forms/VehicleAssetForm";
+
 import { AssetDraft, AssetMediaInput, AssetType } from "./utils/types";
 import { AudioModule, RecordingPresets, useAudioRecorder } from "expo-audio";
 
@@ -327,9 +331,6 @@ const updateQuantity = (nextValue: number | string) => {
   } as any));
 };
 
-const updateSubAssetType = (value: string) => {
-  setNewSubAssetTypeText(value);
-};
 
 const saveNewSubAssetType = () => {
   const value = newSubAssetTypeText.trim().toLowerCase();
@@ -1058,188 +1059,28 @@ const saveNewCondition = () => {
         {displayCategory}
       </Text>
     </View>
-
   </View>
 
 {!isVehicleAsset && (
-  <View style={styles.otherAssetControls}>
-    <View style={styles.assetTypeQuantityRow}>
-      <View style={styles.assetTypeFieldWrap}>
-        <Text style={styles.fieldLabel}>Asset type</Text>
-
-        <View style={styles.assetTypeInputLikeWrap}>
-          <TouchableOpacity
-            style={styles.assetTypeInputChoose}
-            onPress={() => {
-              setAssetTypeDropdownOpen((prev) => !prev);
-              setAddTypeModalOpen(false);
-            }}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.assetTypeInputText} numberOfLines={1}>
-              {subAssetType ? formatSubAssetTypeLabel(subAssetType) : "Choose"}
-            </Text>
-
-            <Ionicons
-              name={assetTypeDropdownOpen ? "chevron-up" : "chevron-down"}
-              size={16}
-              color={TEXT}
-            />
-          </TouchableOpacity>
-
-          <View style={styles.assetTypeInputDivider} />
-
-<TouchableOpacity
-  style={styles.assetTypeInputPlus}
-  onPress={() => {
-    setNewSubAssetTypeText("");
-    setAddTypeModalOpen(true);
-    setAssetTypeDropdownOpen(false);
-  }}
-  activeOpacity={0.85}
->
-  <Ionicons name="add" size={18} color={TEXT} />
-</TouchableOpacity>
-        </View>
-      </View>
-
-     <View style={styles.quantityFieldWrap}>
-  <Text style={styles.fieldLabel}>Quantity</Text>
-
-  <View style={styles.quantityControl}>
-    <TouchableOpacity
-      style={styles.quantityIconBtn}
-      onPress={() => updateQuantity(Number(getQuantity()) - 1)}
-      activeOpacity={0.85}
-    >
-      <Ionicons name="remove" size={16} color={TEXT} />
-    </TouchableOpacity>
-
-    <TextInput
-      value={getQuantity()}
-      onChangeText={updateQuantity}
-      keyboardType="numeric"
-      style={styles.quantityInput}
-      selectTextOnFocus
-      textAlign="center"
-    />
-
-    <TouchableOpacity
-      style={styles.quantityIconBtn}
-      onPress={() => updateQuantity(Number(getQuantity()) + 1)}
-      activeOpacity={0.85}
-    >
-      <Ionicons name="add" size={16} color={TEXT} />
-    </TouchableOpacity>
-  </View>
-</View>
-    </View>
-
-    {assetTypeDropdownOpen && (
-      <View style={styles.assetTypeDropdownMenuFull}>
-        {projectAssetTypes.length === 0 ? (
-          <View style={styles.addTypeDropdownOption}>
-            <Text style={styles.addTypeDropdownOptionText}>
-              No sub asset types yet
-            </Text>
-          </View>
-        ) : (
-          projectAssetTypes.map((type) => {
-  const isEditing = editingSubAssetType === type;
-  const isSelected = subAssetType === type;
-
-  return (
-    <View
-      key={type}
-      style={[
-        styles.addTypeDropdownOption,
-        isEditing && styles.addTypeDropdownOptionEditing,
-      ]}
-    >
-      {isEditing ? (
-        <>
-          <TextInput
-            value={editingSubAssetTypeText}
-            onChangeText={setEditingSubAssetTypeText}
-            style={styles.assetTypeEditInput}
-            autoFocus
-            selectTextOnFocus
-            placeholder="Edit asset type"
-            placeholderTextColor="#767B91"
-          />
-
-          <TouchableOpacity
-            style={styles.assetTypeMiniAction}
-            onPress={saveEditedSubAssetType}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="checkmark" size={18} color={ACC} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.assetTypeMiniAction}
-            onPress={() => {
-              setEditingSubAssetType(null);
-              setEditingSubAssetTypeText("");
-            }}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="close" size={18} color="#FF4444" />
-          </TouchableOpacity>
-        </>
-      ) : (
-        <>
-          <TouchableOpacity
-            style={styles.assetTypeOptionMain}
-            onPress={() => {
-              setDraft((prev) => ({
-                ...prev,
-                assetType: "other",
-                subAssetType: type,
-                rawData: cleanAssetRawData((prev as any).rawData),
-              } as any));
-
-              setAssetTypeDropdownOpen(false);
-              setAddTypeModalOpen(false);
-            }}
-            activeOpacity={0.85}
-          >
-            <Text
-              style={[
-                styles.addTypeDropdownOptionText,
-                isSelected && styles.addTypeDropdownOptionTextSelected,
-              ]}
-              numberOfLines={1}
-            >
-              {formatSubAssetTypeLabel(type)}
-            </Text>
-
-            {isSelected && (
-              <Ionicons name="checkmark" size={16} color={ACC} />
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.assetTypeMiniAction}
-            onPress={() => {
-              setEditingSubAssetType(type);
-              setEditingSubAssetTypeText(type);
-            }}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="pencil-outline" size={16} color={ACC} />
-          </TouchableOpacity>
-        </>
-      )}
-    </View>
-  );
-})
-        )}
-      </View>
-    )}
-
-  
-  </View>
+  <OtherAssetForm
+    draft={draft}
+    setDraft={setDraft}
+    projectAssetTypes={projectAssetTypes}
+    subAssetType={subAssetType}
+    assetTypeDropdownOpen={assetTypeDropdownOpen}
+    setAssetTypeDropdownOpen={setAssetTypeDropdownOpen}
+    setAddTypeModalOpen={setAddTypeModalOpen}
+    setNewSubAssetTypeText={setNewSubAssetTypeText}
+    editingSubAssetType={editingSubAssetType}
+    setEditingSubAssetType={setEditingSubAssetType}
+    editingSubAssetTypeText={editingSubAssetTypeText}
+    setEditingSubAssetTypeText={setEditingSubAssetTypeText}
+    saveEditedSubAssetType={saveEditedSubAssetType}
+    getQuantity={getQuantity}
+    updateQuantity={updateQuantity}
+    cleanAssetRawData={cleanAssetRawData}
+    formatSubAssetTypeLabel={formatSubAssetTypeLabel}
+  />
 )}
 
    
@@ -1392,240 +1233,30 @@ const saveNewCondition = () => {
   />
 </View>
 
-
- <View style={styles.conditionQuantityRow}>
-
-
- 
-</View>
-
 {isVehicle && (
-  <View style={styles.vehicleGrid}>
-    <View style={[styles.vehicleField, styles.vehicleFieldDropdownTop]}>
-      <Text style={styles.fieldLabel}>{t("asset.brand")}</Text>
-
-      <TouchableOpacity
-        style={[styles.input, styles.compactInput, styles.vehicleDropdownInput]}
-        onPress={() => {
-          setBrandDropdownOpen((prev) => !prev);
-          setModelDropdownOpen(false);
-        }}
-        activeOpacity={0.85}
-      >
-        <Text
-          style={[
-            styles.vehicleDropdownText,
-            !draft.brand && styles.vehicleDropdownPlaceholder,
-          ]}
-          numberOfLines={1}
-        >
-          {draft.brand || t("asset.brand")}
-        </Text>
-
-        <Ionicons
-          name={brandDropdownOpen ? "chevron-up" : "chevron-down"}
-          size={16}
-          color="#2A324B"
-        />
-      </TouchableOpacity>
-
-
-
-    </View>
-
-   <View style={[styles.vehicleField, styles.vehicleFieldDropdownTop]}>
-      <Text style={styles.fieldLabel}>{t("asset.model")}</Text>
-
-      <TouchableOpacity
-        style={[
-          styles.input,
-          styles.compactInput,
-          styles.vehicleDropdownInput,
-          !draft.brand && styles.vehicleDropdownDisabled,
-        ]}
-        onPress={() => {
-          if (!draft.brand) return;
-          setModelDropdownOpen((prev) => !prev);
-          setBrandDropdownOpen(false);
-        }}
-        activeOpacity={0.85}
-        disabled={!draft.brand}
-      >
-        <Text
-          style={[
-            styles.vehicleDropdownText,
-            !draft.model && styles.vehicleDropdownPlaceholder,
-          ]}
-          numberOfLines={1}
-        >
-          {draft.model || (draft.brand ? t("asset.model") : "Choose brand first")}
-        </Text>
-
-        <Ionicons
-          name={modelDropdownOpen ? "chevron-up" : "chevron-down"}
-          size={16}
-          color={!draft.brand ? "#9CA3AF" : "#2A324B"}
-        />
-      </TouchableOpacity>
-
-
-    </View>
-
-<View
-  pointerEvents={brandDropdownOpen || modelDropdownOpen ? "none" : "auto"}
-  style={styles.vehicleField}
->
-      <Text style={styles.fieldLabel}>{t("asset.manufactureYear")}</Text>
-
-      <View style={styles.vehicleYearPickerWrap}>
-        <Picker
-          selectedValue={draft.manufactureYear || ""}
-          onValueChange={(value) =>
-            setDraft((prev) => ({
-              ...prev,
-              manufactureYear: value,
-            }))
-          }
-          dropdownIconColor="#2A324B"
-          style={styles.vehicleYearPicker}
-          itemStyle={styles.vehicleYearPickerItem}
-        >
-          <Picker.Item label="Year" value="" />
-          {manufactureYears.map((year) => (
-            <Picker.Item key={year} label={year} value={year} />
-          ))}
-        </Picker>
-      </View>
-    </View>
-
-<View
-  pointerEvents={brandDropdownOpen || modelDropdownOpen ? "none" : "auto"}
-  style={styles.vehicleField}
->
-      <Text style={styles.fieldLabel}>{t("asset.kilometersDriven")}</Text>
-
-      <TextInput
-        placeholder={t("asset.kilometersDriven")}
-        placeholderTextColor="#767B91"
-        value={draft.kilometersDriven}
-        keyboardType="numeric"
-        onChangeText={(text) =>
-          setDraft((prev) => ({ ...prev, kilometersDriven: text }))
-        }
-        style={[styles.input, styles.compactInput]}
-      />
-    </View>
-  </View>
+  <VehicleAssetForm
+    draft={draft}
+    setDraft={setDraft}
+    brandDropdownOpen={brandDropdownOpen}
+    setBrandDropdownOpen={setBrandDropdownOpen}
+    modelDropdownOpen={modelDropdownOpen}
+    setModelDropdownOpen={setModelDropdownOpen}
+    sortedVehicleBrands={sortedVehicleBrands}
+    sortedVehicleModels={sortedVehicleModels}
+    favoriteBrands={favoriteBrands}
+    selectedBrandFavoriteModels={selectedBrandFavoriteModels}
+    selectedBrand={selectedBrand}
+    selectVehicleBrand={selectVehicleBrand}
+    selectVehicleModel={selectVehicleModel}
+    toggleFavoriteBrand={toggleFavoriteBrand}
+    toggleFavoriteModel={toggleFavoriteModel}
+    manufactureYears={manufactureYears}
+    height={height}
+    t={t}
+  />
 )}
 
 
-{isVehicle && (
-  <Modal
-    visible={brandDropdownOpen || modelDropdownOpen}
-    transparent
-    animationType="fade"
-    onRequestClose={() => {
-      setBrandDropdownOpen(false);
-      setModelDropdownOpen(false);
-    }}
-  >
-    <TouchableWithoutFeedback
-      onPress={() => {
-        setBrandDropdownOpen(false);
-        setModelDropdownOpen(false);
-      }}
-    >
-      <View style={styles.vehicleSelectOverlay}>
-        <TouchableWithoutFeedback>
-          <View
-            style={[
-              styles.vehicleSelectCard,
-              {
-                maxHeight: Math.min(height * 0.55, 360),
-              },
-            ]}
-          >
-            <View style={styles.vehicleSelectHeader}>
-              <Text style={styles.vehicleSelectTitle}>
-                {brandDropdownOpen ? t("asset.brand") : t("asset.model")}
-              </Text>
-
-              <TouchableOpacity
-                onPress={() => {
-                  setBrandDropdownOpen(false);
-                  setModelDropdownOpen(false);
-                }}
-                style={styles.vehicleSelectCloseBtn}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="close" size={18} color="#2b2a4b" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView
-              style={styles.vehicleSelectScroll}
-              contentContainerStyle={styles.vehicleSelectScrollContent}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator
-            >
-            {(brandDropdownOpen ? sortedVehicleBrands : sortedVehicleModels).map((item) => {
-  const isBrandList = brandDropdownOpen;
-
-  const isSelected = isBrandList
-    ? draft.brand === item
-    : draft.model === item;
-
-  const isFavorite = isBrandList
-    ? favoriteBrands.includes(item)
-    : selectedBrandFavoriteModels.includes(item);
-
-  return (
-    <View key={item} style={styles.vehicleSelectOptionRow}>
-      <TouchableOpacity
-        style={styles.vehicleSelectOptionMain}
-        onPress={() => {
-          if (isBrandList) {
-            selectVehicleBrand(item);
-          } else {
-            selectVehicleModel(item);
-          }
-        }}
-        activeOpacity={0.85}
-      >
-        <Text style={styles.vehicleSelectOptionText}>{item}</Text>
-
-        {isSelected && (
-          <Ionicons name="checkmark" size={18} color={ACC} />
-        )}
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.vehicleFavoriteBtn}
-        onPress={() => {
-          if (isBrandList) {
-            toggleFavoriteBrand(item);
-          } else {
-            toggleFavoriteModel(selectedBrand, item);
-          }
-        }}
-        activeOpacity={0.85}
-      >
-        <Ionicons
-          name={isFavorite ? "star" : "star-outline"}
-          size={19}
-          color={isFavorite ? "#F59E0B" : "#8A91A3"}
-        />
-      </TouchableOpacity>
-    </View>
-  );
-})}
-            </ScrollView>
-          </View>
-        </TouchableWithoutFeedback>
-      </View>
-    </TouchableWithoutFeedback>
-  </Modal>
-)}
 
 
 <View style={styles.recordDoneRow}>
@@ -2220,6 +1851,7 @@ const saveNewCondition = () => {
 
                   {isSelected && (
                     <Ionicons name="checkmark" size={18} color={ACC} />
+                    
                   )}
                 </TouchableOpacity>
               );
@@ -2337,6 +1969,7 @@ const notesModalMaxHeight = height * 0.78;
               <View style={styles.header}>
                 <Text style={styles.title}>Notes</Text>
                 <TouchableOpacity onPress={onCancel} style={styles.closeBtn}>
+                 
                   <Text style={styles.closeText}>✕</Text>
                 </TouchableOpacity>
               </View>
@@ -2358,6 +1991,7 @@ const notesModalMaxHeight = height * 0.78;
                   onPress={onCancel}
                 >
                   <Text style={styles.secondaryText}>Cancel</Text>
+                  
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.primaryBtn}
