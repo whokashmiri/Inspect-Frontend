@@ -149,9 +149,9 @@
 "category": {
     "tittle": "Select category",
     "vehicle": "Vehicle",
-    "vehicleDetails": "Brand, model, year and kilometers",
+    "vehicleDetails": "Brand, Model, Year and Kilometers",
     "otherTitle": "Other",
-    "otherDetails": "Sofa, chair, TV, equipment, etc."
+    "otherDetails": "Sofa, Chair, TV, Equipment, etc."
   },
 
   "common": {
