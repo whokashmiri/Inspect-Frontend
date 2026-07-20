@@ -4,7 +4,14 @@
 
 import NetInfo from "@react-native-community/netinfo";
 import { projectApi, projectContentApi, authApi, tokenStore } from "../../api/api";
-import { getPending, updateStatus, deletePending, updatePayload } from "./storage";
+import {
+  getPending,
+  updateStatus,
+  deletePending,
+  updatePayload,
+  getProjectSyncState,
+  saveProjectSyncState,
+} from "./storage";
 import { deleteOfflineMediaFiles } from "./mediaStorage";
 import { PendingItem } from "./types";
 import {
@@ -112,6 +119,19 @@ async function patchPendingFolderRefs(
   }
 }
 
+async function markUploadedProjectNeedsDownload(projectId?: string) {
+  if (!projectId) return;
+
+  const state = await getProjectSyncState(projectId);
+
+  await saveProjectSyncState({
+    projectId,
+    syncVersion: Number(state?.syncVersion || 0),
+    needsSync: true,
+    lastSyncAt: state?.lastSyncAt || null,
+  });
+}
+
 async function processQueueItem(
   item: PendingItem,
   pendingItems?: PendingItem[]
@@ -159,6 +179,8 @@ async function processQueueItem(
 
     await updateStatus(item.id, "synced");
     await deletePending(item.id);
+
+await markUploadedProjectNeedsDownload(item.projectId);
     return true;
   } catch (error) {
     console.error(`Sync failed for ${item.id}:`, error);
