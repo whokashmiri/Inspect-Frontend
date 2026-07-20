@@ -1,12 +1,12 @@
-// _layout.tsx
+// app/_layout.tsx
+import "./sync/projectBackgroundTask";
+
 import { Stack } from "expo-router";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { StyleSheet ,TouchableOpacity, View ,Text } from "react-native";
+import { StyleSheet } from "react-native";
 import { AuthProvider } from "../api/AuthContext";
 
-
 export default function RootLayout() {
-    
   return (
     <GestureHandlerRootView style={styles.root}>
       <AuthProvider>
@@ -16,18 +16,15 @@ export default function RootLayout() {
             animation: "slide_from_right",
             contentStyle: { backgroundColor: "#0c0c0c" },
           }}
-        >
-
-        </Stack>
+        />
       </AuthProvider>
     </GestureHandlerRootView>
   );
 }
 
-
-
 const styles = StyleSheet.create({
-  root: { flex: 1 ,  backgroundColor: "#080808"},
-
-
+  root: {
+    flex: 1,
+    backgroundColor: "#080808",
+  },
 });
