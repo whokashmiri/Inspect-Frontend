@@ -1,3 +1,4 @@
+// api/AuthContext.ts
 import React, {
   createContext,
   useContext,
@@ -6,7 +7,22 @@ import React, {
   useCallback,
 } from "react";
 import NetInfo from "@react-native-community/netinfo";
-import { authApi, loginAndSave, setSignupPasswordAndSave, tokenStore, User } from "./api";
+import {
+  authApi,
+  loginAndSave,
+  setSignupPasswordAndSave,
+  tokenStore,
+  User,
+  projectApi,
+} from "./api";
+
+import {
+  connectProjectSocket,
+  disconnectProjectSocket,
+} from "../app/realtime/projectSocket";
+import { registerProjectBackgroundSync } from "../app/sync/projectBackgroundTask";
+import { syncAssignedProjects } from "../app/sync/projectSyncEngine";
+
 import {
   initAuthStorage,
   getCachedUser,
@@ -44,7 +60,6 @@ interface AuthContextValue extends AuthState {
   selectCompany: (companyId: string) => Promise<void>;
 }
 
-
 function normalizeCompanies(user: any, companies: Company[] = []): Company[] {
   if (companies.length > 0) return companies;
 
@@ -79,13 +94,46 @@ function getDefaultCompanyId(user: any, companies: Company[]): string | null {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 async function fetchCompaniesOnline(): Promise<Company[]> {
-  if (typeof (authApi as any).getCompanies === "function") {
-    return (authApi as any).getCompanies();
+  try {
+    if (typeof (authApi as any).getCompanies === "function") {
+      const result = await (authApi as any).getCompanies();
+
+      if (Array.isArray(result)) return result;
+      if (Array.isArray(result?.companies)) return result.companies;
+
+      return [];
+    }
+
+    if (typeof (authApi as any).companies === "function") {
+      const result = await (authApi as any).companies();
+
+      if (Array.isArray(result)) return result;
+      if (Array.isArray(result?.companies)) return result.companies;
+
+      return [];
+    }
+
+    return [];
+  } catch {
+    return [];
   }
-  if (typeof (authApi as any).companies === "function") {
-    return (authApi as any).companies();
+}
+
+async function startProjectAutoSync(companyId?: string | null) {
+  try {
+    const projectsResult = await projectApi.list(companyId || undefined);
+    const projects = projectsResult.projects || [];
+    const projectIds = projects.map((project) => project.id);
+
+    await connectProjectSocket(projectIds);
+    await registerProjectBackgroundSync();
+
+    syncAssignedProjects(projects).catch((error) => {
+      console.log("[project-auto-sync] failed", error);
+    });
+  } catch (error) {
+    console.log("[project-auto-sync] skipped", error);
   }
-  return [];
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -113,18 +161,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (isOnline && token) {
       try {
         const user = await authApi.me();
-const fetchedCompanies = await fetchCompaniesOnline();
-const companies = normalizeCompanies(user, fetchedCompanies);
 
-let selectedCompanyId = await getSelectedCompanyId(user.id);
+        const fetchedCompanies = await fetchCompaniesOnline();
+        const companies = normalizeCompanies(user, fetchedCompanies);
+
+        let selectedCompanyId = await getSelectedCompanyId(user.id);
 
         if (!selectedCompanyId) {
-  selectedCompanyId = getDefaultCompanyId(user, companies);
+          selectedCompanyId = getDefaultCompanyId(user, companies);
 
-  if (selectedCompanyId) {
-    await saveSelectedCompany(user.id, selectedCompanyId);
-  }
-}
+          if (selectedCompanyId) {
+            await saveSelectedCompany(user.id, selectedCompanyId);
+          }
+        }
 
         await cacheAuthenticatedSession({
           user,
@@ -142,6 +191,10 @@ let selectedCompanyId = await getSelectedCompanyId(user.id);
           authMode: "online",
           companies,
           selectedCompanyId,
+        });
+
+        startProjectAutoSync(selectedCompanyId).catch((error) => {
+          console.log("[bootstrap-sync] failed", error);
         });
 
         return;
@@ -225,41 +278,10 @@ let selectedCompanyId = await getSelectedCompanyId(user.id);
     return unsubscribe;
   }, [bootstrap]);
 
- const login = useCallback(async (username: string, password: string) => {
-  const res = await loginAndSave(username, password);
+  const login = useCallback(async (username: string, password: string) => {
+    const res = await loginAndSave(username, password);
 
-  const fetchedCompanies = await fetchCompaniesOnline().catch(() => []);
-  const companies = normalizeCompanies(res.user, fetchedCompanies);
-  const selectedCompanyId = getDefaultCompanyId(res.user, companies);
-
-  await cacheAuthenticatedSession({
-    user: res.user,
-    accessToken: res.tokens.accessToken,
-    refreshToken: res.tokens.refreshToken ?? null,
-    companies,
-    selectedCompanyId,
-  });
-
-  setState({
-    user: res.user,
-    isLoading: false,
-    isAuthenticated: true,
-    isOnline: true,
-    authMode: "online",
-    companies,
-    selectedCompanyId,
-  });
-}, []);
-
-const completeSignup = useCallback(
-  async (setupToken: string, password: string) => {
-    const res = await setSignupPasswordAndSave({
-      setupToken,
-      password,
-      role: "Inspector",
-    });
-
-    const fetchedCompanies = await fetchCompaniesOnline().catch(() => []);
+    const fetchedCompanies = await fetchCompaniesOnline();
     const companies = normalizeCompanies(res.user, fetchedCompanies);
     const selectedCompanyId = getDefaultCompanyId(res.user, companies);
 
@@ -280,9 +302,48 @@ const completeSignup = useCallback(
       companies,
       selectedCompanyId,
     });
-  },
-  []
-);
+
+    startProjectAutoSync(selectedCompanyId).catch((error) => {
+      console.log("[login-sync] failed", error);
+    });
+  }, []);
+
+  const completeSignup = useCallback(
+    async (setupToken: string, password: string) => {
+      const res = await setSignupPasswordAndSave({
+        setupToken,
+        password,
+        role: "Inspector",
+      });
+
+      const fetchedCompanies = await fetchCompaniesOnline();
+      const companies = normalizeCompanies(res.user, fetchedCompanies);
+      const selectedCompanyId = getDefaultCompanyId(res.user, companies);
+
+      await cacheAuthenticatedSession({
+        user: res.user,
+        accessToken: res.tokens.accessToken,
+        refreshToken: res.tokens.refreshToken ?? null,
+        companies,
+        selectedCompanyId,
+      });
+
+      setState({
+        user: res.user,
+        isLoading: false,
+        isAuthenticated: true,
+        isOnline: true,
+        authMode: "online",
+        companies,
+        selectedCompanyId,
+      });
+
+      startProjectAutoSync(selectedCompanyId).catch((error) => {
+        console.log("[signup-sync] failed", error);
+      });
+    },
+    []
+  );
 
   const refreshSession = useCallback(async () => {
     await bootstrap();
@@ -298,6 +359,10 @@ const completeSignup = useCallback(
         ...prev,
         selectedCompanyId: companyId,
       }));
+
+      startProjectAutoSync(companyId).catch((error) => {
+        console.log("[company-sync] failed", error);
+      });
     },
     [state.user]
   );
@@ -313,6 +378,8 @@ const completeSignup = useCallback(
     } catch {
       // continue local logout anyway
     }
+
+    disconnectProjectSocket();
 
     await tokenStore.clear();
     await clearOfflineAuthState();
@@ -346,6 +413,10 @@ const completeSignup = useCallback(
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used inside <AuthProvider>");
+
+  if (!ctx) {
+    throw new Error("useAuth must be used inside <AuthProvider>");
+  }
+
   return ctx;
 }
