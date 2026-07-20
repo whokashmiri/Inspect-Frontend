@@ -335,6 +335,16 @@ export async function initStorage(): Promise<void> {
 
       CREATE INDEX IF NOT EXISTS idx_offline_assets_folderId
       ON offline_assets(folderId);
+
+            CREATE TABLE IF NOT EXISTS project_sync_state (
+        projectId TEXT PRIMARY KEY NOT NULL,
+        syncVersion INTEGER NOT NULL DEFAULT 0,
+        needsSync INTEGER NOT NULL DEFAULT 0,
+        lastSyncAt TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_project_sync_state_needsSync
+      ON project_sync_state(needsSync);
     `);
 
     // ---- migration for older installs: offline_projects ----
@@ -762,6 +772,21 @@ export async function saveAssetsOffline(
   });
 }
 
+
+export async function clearOfflineProjectContents(projectId: string): Promise<void> {
+  await initStorage();
+
+  await runDbTask(async () => {
+    await db.runAsync(`DELETE FROM offline_folders WHERE projectId = ?;`, [
+      projectId,
+    ]);
+
+    await db.runAsync(`DELETE FROM offline_assets WHERE projectId = ?;`, [
+      projectId,
+    ]);
+  });
+}
+
 export async function clearOfflineProject(projectId: string): Promise<void> {
   await initStorage();
  await runDbTask(async ()=> {
@@ -1095,4 +1120,94 @@ export async function renameOfflineSubAssetType({
     oldSubAssetType: oldValue,
     newSubAssetType: newValue,
   };
+}
+
+
+export async function getProjectSyncState(projectId: string): Promise<{
+  projectId: string;
+  syncVersion: number;
+  needsSync: boolean;
+  lastSyncAt: string | null;
+} | null> {
+  await initStorage();
+
+  const row = await db.getFirstAsync<{
+    projectId: string;
+    syncVersion: number | string;
+    needsSync: number | string;
+    lastSyncAt: string | null;
+  }>(
+    `SELECT projectId, syncVersion, needsSync, lastSyncAt
+     FROM project_sync_state
+     WHERE projectId = ?;`,
+    [projectId]
+  );
+
+  if (!row) return null;
+
+  return {
+    projectId: row.projectId,
+    syncVersion: Number(row.syncVersion || 0),
+    needsSync: Number(row.needsSync || 0) === 1,
+    lastSyncAt: row.lastSyncAt ?? null,
+  };
+}
+
+export async function saveProjectSyncState(state: {
+  projectId: string;
+  syncVersion: number;
+  needsSync: boolean;
+  lastSyncAt?: string | null;
+}): Promise<void> {
+  await initStorage();
+
+  await runDbTask(() =>
+    db.runAsync(
+      `INSERT OR REPLACE INTO project_sync_state
+       (projectId, syncVersion, needsSync, lastSyncAt)
+       VALUES (?, ?, ?, ?);`,
+      [
+        state.projectId,
+        Number(state.syncVersion || 0),
+        state.needsSync ? 1 : 0,
+        state.lastSyncAt ?? null,
+      ]
+    )
+  );
+}
+
+export async function getProjectsNeedingSync(): Promise<string[]> {
+  await initStorage();
+
+  const rows = await db.getAllAsync<{ projectId: string }>(
+    `SELECT projectId
+     FROM project_sync_state
+     WHERE needsSync = 1;`
+  );
+
+  return rows.map((row) => row.projectId);
+}
+
+export async function deleteOfflineFoldersByIds(folderIds: string[]): Promise<void> {
+  if (!folderIds.length) return;
+
+  await initStorage();
+
+  await runDbTask(async () => {
+    for (const id of folderIds) {
+      await db.runAsync(`DELETE FROM offline_folders WHERE id = ?;`, [id]);
+    }
+  });
+}
+
+export async function deleteOfflineAssetsByIds(assetIds: string[]): Promise<void> {
+  if (!assetIds.length) return;
+
+  await initStorage();
+
+  await runDbTask(async () => {
+    for (const id of assetIds) {
+      await db.runAsync(`DELETE FROM offline_assets WHERE id = ?;`, [id]);
+    }
+  });
 }
