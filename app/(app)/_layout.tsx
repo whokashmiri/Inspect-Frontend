@@ -1,3 +1,5 @@
+//app/(app)/_layout.ts
+
 import React from "react";
 import { Stack, Redirect } from "expo-router";
 import { View, StyleSheet } from "react-native";
