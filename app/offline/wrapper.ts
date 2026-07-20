@@ -1,7 +1,14 @@
 // offline/wrapper.ts
-
 import NetInfo from "@react-native-community/netinfo";
-import { savePending, initStorage, getPendingAssetItemId , getPendingAssetItem } from "./storage";
+import {
+  savePending,
+  initStorage,
+  getPendingAssetItemId,
+  getPendingAssetItem,
+  getProjectSyncState,
+  saveProjectSyncState,
+  getDownloadedProject,
+} from "./storage";
 import { PendingItem, OfflineResult, OfflineAction } from "./types";
 import { getCachedUser, isOfflineSessionValid } from "./authStorage";
 import { persistOfflineMediaPayload } from "./mediaStorage";
@@ -32,6 +39,25 @@ function shouldPersistMedia(type: OfflineAction) {
   return type === "createAsset" || type === "updateAsset";
 }
 
+
+async function markProjectNeedsSync(projectId?: string) {
+  if (!projectId) return;
+
+  const existingState = await getProjectSyncState(projectId);
+  const downloadedProject = await getDownloadedProject(projectId);
+
+  const syncVersion = Math.max(
+    Number(existingState?.syncVersion || 0),
+    Number(downloadedProject?.syncVersion || 0)
+  );
+
+  await saveProjectSyncState({
+    projectId,
+    syncVersion,
+    needsSync: true,
+    lastSyncAt: existingState?.lastSyncAt || null,
+  });
+}
 export async function safeApiCall<T>(
   apiFn: () => Promise<T>,
   fallbackPayload: any,
@@ -122,6 +148,7 @@ const pending: Omit<PendingItem, "status" | "retryCount" | "lastAttempt"> = {
 };
 
   await savePending(pending);
+  await markProjectNeedsSync(options.projectId);
 
   return {
     offline: true,
