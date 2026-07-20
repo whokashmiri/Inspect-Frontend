@@ -40,6 +40,8 @@ import { AudioModule, RecordingPresets, useAudioRecorder } from "expo-audio";
 
 type CameraMode = "photos" | "scan";
 
+type VehiclePhotoSlot = "plate" | "details" | "odometer" | "other" | null;
+
 const FAVORITE_VEHICLE_BRANDS_KEY = "favorite_vehicle_brands";
 const FAVORITE_VEHICLE_MODELS_KEY = "favorite_vehicle_models_by_brand";
 
@@ -160,6 +162,9 @@ export default function CreateAssetWizardModal({
   const [step, setStep] = useState(1);
   const [cameraOpen, setCameraOpen] = useState(false);
 const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
+
+const [vehiclePhotoSlot, setVehiclePhotoSlot] =
+  useState<VehiclePhotoSlot>(null);
  
 
   const [submitting, setSubmitting] = useState(false);
@@ -263,27 +268,30 @@ useEffect(() => {
     setImageLoadingMap({});
     setIsRecording(false);
     setCameraMode("photos");
+    setVehiclePhotoSlot(null);
     setSubmitting(false);
     setDetailsExpanded(false);
     didAutoOpenCameraRef.current = false;
 
-    const shouldAutoOpenForCreate =
-      mode === "create" && !!initialData?.assetType;
+  const initialAssetType = String(initialData?.assetType || "").toLowerCase();
 
-    const shouldAutoOpenForEdit =
-      mode === "edit" && autoOpenCamera;
+const shouldAutoOpenForCreate =
+  mode === "create" && initialAssetType === "other";
 
-    if (
-      (shouldAutoOpenForCreate || shouldAutoOpenForEdit) &&
-      !didAutoOpenCameraRef.current
-    ) {
-      didAutoOpenCameraRef.current = true;
+const shouldAutoOpenForEdit =
+  mode === "edit" && autoOpenCamera;
 
-      setTimeout(() => {
-        setCameraMode("photos");
-        setCameraOpen(true);
-      }, 350);
-    }
+if (
+  (shouldAutoOpenForCreate || shouldAutoOpenForEdit) &&
+  !didAutoOpenCameraRef.current
+) {
+  didAutoOpenCameraRef.current = true;
+
+  setTimeout(() => {
+    setCameraMode("photos");
+    setCameraOpen(true);
+  }, 350);
+}
   } else {
     stopVoicePlayback();
   }
@@ -571,7 +579,14 @@ const scrollToField = (key: string) => {
 
   const back = () => setStep((s) => Math.max(s - 1, 1));
 
+  const openVehiclePhotoCamera = (slot: VehiclePhotoSlot) => {
+  setVehiclePhotoSlot(slot);
+  setCameraMode("photos");
+  setCameraOpen(true);
+};
+
   const openPhotoCamera = () => {
+    setVehiclePhotoSlot(null);
     setCameraMode("photos");
     setCameraOpen(true);
   };
@@ -654,31 +669,34 @@ const selectVehicleModel = (model: string) => {
   };
 
 
-  const vehiclePreviewSlots = [
+const vehiclePreviewSlots = [
   {
-    key: "front",
+    key: "plate",
     label: "Car Plate",
     icon: "car-sport-outline",
+    index: 0,
+    single: true,
   },
   {
-    key: "left",
+    key: "details",
     label: "Car Details",
     icon: "document-text",
+    index: 1,
+    single: true,
   },
   {
-    key: "right",
+    key: "odometer",
     label: "Odometer",
     icon: "speedometer-outline",
+    index: 2,
+    single: true,
   },
-  // {
-  //   key: "back",
-  //   label: "Back",
-  //   icon: "return-down-back-outline",
-  // },
   {
     key: "other",
     label: "Other",
     icon: "images-outline",
+    index: null,
+    single: false,
   },
 ] as const;
 
@@ -829,6 +847,7 @@ const manufactureYears = Array.from(
     setStep(1);
     setIsRecording(false);
     setCameraMode("photos");
+    setVehiclePhotoSlot(null);
 
     Keyboard.dismiss();
     onClose();
@@ -1398,9 +1417,13 @@ const saveNewCondition = () => {
 {isVehicle ? (
   <View style={styles.vehiclePreviewGrid}>
     {vehiclePreviewSlots.map((slot, index) => {
-      const img = draft.images[index];
+      const img =
+      slot.index === null
+    ? draft.images[3]
+    : draft.images[slot.index];
       const imageUri = img?.uri || img?.url;
-      const imageKey = imageUri ? getImageKey(imageUri, index) : slot.key;
+      const realIndex = slot.index === null ? 3 : slot.index;
+const imageKey = imageUri ? getImageKey(imageUri, realIndex) : slot.key;
       const isImageLoading = imageUri
         ? imageLoadingMap[imageKey] !== false
         : false;
@@ -1415,7 +1438,7 @@ const saveNewCondition = () => {
               height: previewSize + 18,
             },
           ]}
-          onPress={openPhotoCamera}
+          onPress={() => openVehiclePhotoCamera(slot.key as VehiclePhotoSlot)}
           activeOpacity={0.85}
         >
           <View style={styles.vehiclePreviewBox}>
@@ -1444,7 +1467,7 @@ const saveNewCondition = () => {
                   style={styles.removeBadge}
                   onPress={(e) => {
                     e.stopPropagation();
-                    removeImage(index);
+                   removeImage(realIndex);
                   }}
                 >
                   <Text style={styles.removeBadgeText}>✕</Text>
@@ -1465,8 +1488,8 @@ const saveNewCondition = () => {
       );
     })}
 
-    {draft.images.slice(5).map((img, extraIndex) => {
-      const realIndex = extraIndex + 5;
+    {draft.images.slice(4).map((img, extraIndex) => {
+  const realIndex = extraIndex + 4;
       const imageUri = img.uri || img.url;
       if (!imageUri) return null;
 
@@ -1867,28 +1890,56 @@ const saveNewCondition = () => {
   visible={cameraOpen}
   mode={cameraMode}
   onClose={() => setCameraOpen(false)}
-  onDone={(media: any[]) => {
-    if (cameraMode !== "photos") return;
+onDone={(media: any[]) => {
+  if (cameraMode !== "photos") return;
 
-    const mapped = media.map((item: any, index: number) => {
-     const isVideo = item.mediaType === "video";
+  const mapped: AssetMediaInput[] = media.map((item: any, index: number) => {
+    const isVideo = item.mediaType === "video";
 
-      return {
-        uri: item.path?.startsWith("file://")
-          ? item.path
-          : `file://${item.path}`,
-        name: isVideo
-          ? `video_${Date.now()}_${index}.mp4`
+    return {
+      uri: item.path?.startsWith("file://")
+        ? item.path
+        : `file://${item.path}`,
+      name: isVideo
+        ? `video_${Date.now()}_${index}.mp4`
         : `photo_${Date.now()}_${index}.jpg`,
       type: isVideo ? "video/mp4" : "image/jpeg",
-      };
-    });
+      mediaType: isVideo ? "video" : "image",
+    };
+  });
 
-    setDraft((prev) => ({
+  if (!mapped.length) return;
+
+  setDraft((prev): AssetDraft => {
+    const currentImages: AssetMediaInput[] = [...prev.images];
+
+    if (isVehicle) {
+      if (vehiclePhotoSlot === "plate") {
+        currentImages[0] = mapped[0];
+      } else if (vehiclePhotoSlot === "details") {
+        currentImages[1] = mapped[0];
+      } else if (vehiclePhotoSlot === "odometer") {
+        currentImages[2] = mapped[0];
+      } else if (vehiclePhotoSlot === "other") {
+        currentImages.push(...mapped);
+      } else {
+        currentImages.push(...mapped);
+      }
+
+      return {
+        ...prev,
+        images: currentImages.filter(Boolean) as AssetMediaInput[],
+      };
+    }
+
+    return {
       ...prev,
       images: [...prev.images, ...mapped],
-    }));
-  }}
+    };
+  });
+
+  setVehiclePhotoSlot(null);
+}}
   onScanText={(text: string) => {
     if (cameraMode !== "scan") return;
 
