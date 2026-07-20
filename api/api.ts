@@ -498,6 +498,9 @@ export interface Project {
 
   locations?: ProjectLocation[];
 
+   syncVersion?: number;
+  lastSyncedChangeAt?: string | null;
+
 
 
 
@@ -517,6 +520,8 @@ export interface ListProjectsResponse {
   companies?: ProjectCompanyOption[];
   selectedCompanyId?: string | null;
 }
+
+
 
 export const mediaApi = {
   signUpload: (payload: {
@@ -624,6 +629,24 @@ export const projectApi = {
       companyId
         ? `/projects?companyId=${encodeURIComponent(companyId)}`
         : "/projects",
+      {
+        method: "GET",
+      }
+    ),
+
+      offlineManifest: (projectId: string) =>
+    request<OfflineManifestResponse>(
+      `/projects/${projectId}/offline-manifest`,
+      {
+        method: "GET",
+      }
+    ),
+
+  offlineChanges: (projectId: string, sinceVersion = 0) =>
+    request<OfflineChangesResponse>(
+      `/projects/${projectId}/offline-changes?sinceVersion=${encodeURIComponent(
+        String(sinceVersion)
+      )}`,
       {
         method: "GET",
       }
@@ -760,6 +783,26 @@ export interface AssetItem {
 
   images: AssetImageItem[];
   voiceNotes: AssetVoiceNoteItem[];
+}
+
+export interface OfflineManifestResponse {
+  projectId: string;
+  syncVersion: number;
+  updatedAt: string | null;
+  lastSyncedChangeAt: string | null;
+}
+
+export interface OfflineChangesResponse {
+  projectId: string;
+  syncVersion: number;
+  updatedAt: string | null;
+  lastSyncedChangeAt: string | null;
+  hasChanges: boolean;
+  project: Project | null;
+  folders: FolderItem[];
+  assets: AssetItem[];
+  deletedFolders: string[];
+  deletedAssets: string[];
 }
 
 export interface ProjectContentsResponse {
