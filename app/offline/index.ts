@@ -27,6 +27,7 @@ export {
   saveFoldersOffline,
   saveAssetsOffline,
   clearOfflineProject,
+  clearOfflineProjectContents,
   isProjectDownloaded,
   getDownloadedProject,
   getOfflineContents,
@@ -41,6 +42,11 @@ export {
   getOfflineConditions,
   getOfflineSubAssetTypes,
   renameOfflineSubAssetType,
+  getProjectSyncState,
+  saveProjectSyncState,
+  getProjectsNeedingSync,
+  deleteOfflineFoldersByIds,
+  deleteOfflineAssetsByIds,
 } from "./storage";
 
 
