@@ -521,6 +521,112 @@ addDetailsText: {
     fontSize: 10,
     fontWeight: "700",
   }
+,
 
+
+// =========================================
+
+
+countBadge: {
+    position: "absolute",
+    top: 4,
+    left: 4,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 5,
+    borderRadius: 10,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  countBadgeText: {
+    color: "#ffffff",
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  otherAddBadge: {
+    position: "absolute",
+    bottom: 4,
+    right: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: ACC,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  otherGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    // paddingVertical: 8,
+    padding:5
+  },
+  addOtherTile: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: ACC,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
+  addOtherTileText: {
+    fontSize: 11,
+    color: ACC,
+    fontWeight: "500",
+  },
+//====================================================
+
+
+
+  vehicleSearchWrap: {
+  flexDirection: "row",
+  alignItems: "center",
+  marginHorizontal: 14,
+  marginBottom: 10,
+  paddingHorizontal: 12,
+  minHeight: 42,
+  borderWidth: 1,
+  borderColor: "#C7CCDB",
+  borderRadius: 10,
+  backgroundColor: "#F8F9FC",
+},
+
+vehicleSearchInput: {
+  flex: 1,
+  minHeight: 40,
+  marginLeft: 8,
+  paddingVertical: 8,
+  color: "#2A324B",
+  fontSize: 14,
+  textAlign: "left",
+},
+
+vehicleSearchClearBtn: {
+  padding: 4,
+  marginLeft: 4,
+},
+
+vehicleSearchEmpty: {
+  alignItems: "center",
+  justifyContent: "center",
+  paddingHorizontal: 24,
+  paddingVertical: 36,
+},
+
+vehicleSearchEmptyTitle: {
+  marginTop: 10,
+  color: "#2A324B",
+  fontSize: 15,
+  fontWeight: "600",
+},
+
+vehicleSearchEmptyText: {
+  marginTop: 4,
+  color: "#767B91",
+  fontSize: 12,
+  textAlign: "center",
+},
 
 });
