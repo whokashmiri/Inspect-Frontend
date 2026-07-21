@@ -1,6 +1,5 @@
 // CreateAssetWizardModal.tsx
 import React, {RefObject, useEffect, useMemo, useRef, useState } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   Modal,
   View,
@@ -21,18 +20,16 @@ import {
   
 } from "react-native";
 
-import {
-  vehicleBrands,
-  getVehicleModelsByBrand,
-} from "../data/vehicleCatalog";
 
-import * as ImagePicker from "expo-image-picker";
 import { Audio } from "expo-av";
 import {Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import AssetCameraModal from "./AssetCameraModal";
 
-import OtherAssetForm from "./forms/OtherAssetForm";
+import OtherAssetForm, {
+  cleanOtherAssetDraft,
+  getOtherSubAssetType,
+} from "./forms/OtherAssetForm";
 import VehicleAssetForm from "./forms/VehicleAssetForm";
 
 import { AssetDraft, AssetMediaInput, AssetType } from "./utils/types";
@@ -42,8 +39,7 @@ type CameraMode = "photos" | "scan";
 
 type VehiclePhotoSlot = "plate" | "details" | "odometer" | "other" | null;
 
-const FAVORITE_VEHICLE_BRANDS_KEY = "favorite_vehicle_brands";
-const FAVORITE_VEHICLE_MODELS_KEY = "favorite_vehicle_models_by_brand";
+
 
 const DEFAULT_CONDITIONS = [
   "New",
@@ -91,16 +87,6 @@ const cleanAssetRawData = (rawData?: Record<string, any> | null) => {
   return source;
 };
 
-const formatSubAssetTypeLabel = (value: string) => {
-  const text = String(value || "").trim();
-
-  if (!text) return "";
-
-  return text
-    .split(" ")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-};
 
 const getInitialDraft = (
   initialData?: Partial<AssetDraft>
@@ -161,438 +147,196 @@ export default function CreateAssetWizardModal({
 
   const [step, setStep] = useState(1);
   const [cameraOpen, setCameraOpen] = useState(false);
-const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
+  const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
 
-const [vehiclePhotoSlot, setVehiclePhotoSlot] =
-  useState<VehiclePhotoSlot>(null);
- 
+  const [vehiclePhotoSlot, setVehiclePhotoSlot] =
+    useState<VehiclePhotoSlot>(null);
 
   const [submitting, setSubmitting] = useState(false);
-
   const [detailsExpanded, setDetailsExpanded] = useState(false);
 
-
   const [snackbar, setSnackbar] = useState<{
-  message: string;
-  type: "success" | "error" | "info";
-} | null>(null);
+    message: string;
+    type: "success" | "error" | "info";
+  } | null>(null);
 
-const snackbarTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
- const soundObjectRef = useRef<any>(null);
+  const snackbarTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const soundObjectRef = useRef<any>(null);
   const [playingIndex, setPlayingIndex] = useState<number | null>(null);
 
   const scrollRef = useRef<ScrollView>(null);
   const fieldPositions = useRef<Record<string, number>>({});
 
-  const [brandDropdownOpen, setBrandDropdownOpen] = useState(false);
-const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
+  const didAutoOpenCameraRef = useRef(false);
 
+  const { width, height } = useWindowDimensions();
 
+  const isSmallScreen = width < 380 || height < 700;
+  const isTablet = width >= 768;
 
-
-
-const [favoriteBrands, setFavoriteBrands] = useState<string[]>([]);
-const [favoriteModelsByBrand, setFavoriteModelsByBrand] = useState<
-  Record<string, string[]>
->({});
-
-const showSnackbar = (
-  message: string,
-  type: "success" | "error" | "info" = "info"
-) => {
-  if (snackbarTimeout.current) {
-    clearTimeout(snackbarTimeout.current);
-  }
-
-  setSnackbar({ message, type });
-  snackbarTimeout.current = setTimeout(() => setSnackbar(null), 3000);
-};
-
- const { width, height } = useWindowDimensions();
-
-
-const isSmallScreen = width < 380 || height < 700;
-const isTablet = width >= 768;
-
-const modalWidth = Math.min(width * 0.95, isTablet ? 720 : 520);
-const modalMaxHeight = detailsExpanded ? height * 0.95 : height * 0.55;
-const modalMinHeight = detailsExpanded ? height * 0.88 : height * 0.45;
-
-
+  const modalWidth = Math.min(width * 0.95, isTablet ? 720 : 520);
+  const modalMaxHeight = detailsExpanded ? height * 0.95 : height * 0.55;
+  const modalMinHeight = detailsExpanded ? height * 0.88 : height * 0.45;
 
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
 
-  const [imageLoadingMap, setImageLoadingMap] = useState<Record<string, boolean>>({});
+  const [imageLoadingMap, setImageLoadingMap] = useState<
+    Record<string, boolean>
+  >({});
 
- 
+  const [draft, setDraft] = useState<AssetDraft>(getInitialDraft(initialData));
 
-  const [draft, setDraft] = useState<AssetDraft>(
-    getInitialDraft(initialData)
-  );
+  const [conditionModalOpen, setConditionModalOpen] = useState(false);
+  const [addConditionMode, setAddConditionMode] = useState(false);
+  const [newConditionText, setNewConditionText] = useState("");
 
-
-  useEffect(() => {
-  const loadVehicleFavorites = async () => {
-    try {
-      const savedBrands = await AsyncStorage.getItem(
-        FAVORITE_VEHICLE_BRANDS_KEY
-      );
-
-      const savedModels = await AsyncStorage.getItem(
-        FAVORITE_VEHICLE_MODELS_KEY
-      );
-
-      setFavoriteBrands(savedBrands ? JSON.parse(savedBrands) : []);
-      setFavoriteModelsByBrand(savedModels ? JSON.parse(savedModels) : {});
-    } catch (error) {
-      console.log("Failed to load vehicle favorites", error);
-    }
-  };
-
-  loadVehicleFavorites();
-}, []);
-
-  useEffect(() => {
-  return () => {
+  const showSnackbar = (
+    message: string,
+    type: "success" | "error" | "info" = "info"
+  ) => {
     if (snackbarTimeout.current) {
       clearTimeout(snackbarTimeout.current);
     }
+
+    setSnackbar({ message, type });
+    snackbarTimeout.current = setTimeout(() => setSnackbar(null), 3000);
   };
-}, []);
 
-useEffect(() => {
-  if (visible) {
-    setStep(1);
-    setDraft(getInitialDraft(initialData));
-    setImageLoadingMap({});
-    setIsRecording(false);
-    setCameraMode("photos");
-    setVehiclePhotoSlot(null);
-    setSubmitting(false);
-    setDetailsExpanded(false);
-    didAutoOpenCameraRef.current = false;
-
-  const initialAssetType = String(initialData?.assetType || "").toLowerCase();
-
-const shouldAutoOpenForCreate =
-  mode === "create" && initialAssetType === "other";
-
-const shouldAutoOpenForEdit =
-  mode === "edit" && autoOpenCamera;
-
-if (
-  (shouldAutoOpenForCreate || shouldAutoOpenForEdit) &&
-  !didAutoOpenCameraRef.current
-) {
-  didAutoOpenCameraRef.current = true;
-
-  setTimeout(() => {
-    setCameraMode("photos");
-    setCameraOpen(true);
-  }, 350);
-}
-  } else {
-    stopVoicePlayback();
-  }
-}, [visible, initialData, mode, autoOpenCamera]);
-
- const previewSize = useMemo(() => {
-  const columns = width < 360 ? 4 : width < 600 ? 5 : 6;
-  const cardPadding = 32;
-  const gaps = (columns - 1) * 6;
-  const available = modalWidth - cardPadding - gaps;
-
-  return Math.max(44, Math.min(62, Math.floor(available / columns)));
-}, [width, modalWidth]);
-
-const didAutoOpenCameraRef = useRef(false);
-
-
-const getQuantity = () => {
-  const rawQuantity =
-    (draft as any).quantity ??
-    (draft as any).rawData?.quantity ??
-    1;
-
-  const quantity = Number(rawQuantity);
-
-  if (!Number.isFinite(quantity) || quantity < 1) {
-    return "1";
-  }
-
-  return String(Math.floor(quantity));
-};
-
-const updateQuantity = (nextValue: number | string) => {
-  const cleaned =
-    typeof nextValue === "number"
-      ? nextValue
-      : Number(String(nextValue).replace(/[^0-9]/g, "") || 1);
-
-  const quantity = Math.max(1, Math.floor(cleaned));
-
-  setDraft((prev) => ({
-    ...prev,
-    quantity,
-    rawData: cleanAssetRawData((prev as any).rawData),
-  } as any));
-};
-
-
-const saveNewSubAssetType = () => {
-  const value = newSubAssetTypeText.trim().toLowerCase();
-
-  if (!value) {
-    showSnackbar("Please enter asset type", "error");
-    return;
-  }
-
-  setDraft((prev) => ({
-    ...prev,
-    assetType: currentCategory,
-    subAssetType: value,
-    rawData: cleanAssetRawData((prev as any).rawData),
-  } as any));
-
-  setNewSubAssetTypeText("");
-  setAddTypeModalOpen(false);
-  setAssetTypeDropdownOpen(false);
-};
-
-
-const normalizeVehicleFavorite = (value: string) => String(value || "").trim();
-
-const sortVehicleText = (a: string, b: string) =>
-  a.localeCompare(b, undefined, {
-    sensitivity: "base",
-    numeric: true,
-  });
-
-const moveFavoritesToTop = (items: string[], favorites: string[]) => {
-  const uniqueItems = Array.from(
-    new Set(items.map(normalizeVehicleFavorite).filter(Boolean))
-  ).sort(sortVehicleText);
-
-  const cleanFavorites = Array.from(
-    new Set(favorites.map(normalizeVehicleFavorite).filter(Boolean))
-  ).sort(sortVehicleText);
-
-  const favoriteSet = new Set(cleanFavorites);
-
-  const favoriteItems = cleanFavorites.filter((item) =>
-    uniqueItems.includes(item)
-  );
-
-  const normalItems = uniqueItems.filter((item) => !favoriteSet.has(item));
-
-  return [...favoriteItems, ...normalItems];
-};
-
-const toggleFavoriteBrand = async (brand: string) => {
-  const cleanBrand = normalizeVehicleFavorite(brand);
-  if (!cleanBrand) return;
-
-  try {
-    const exists = favoriteBrands.includes(cleanBrand);
-
-    const nextFavorites = exists
-      ? favoriteBrands.filter((item) => item !== cleanBrand)
-      : [cleanBrand, ...favoriteBrands];
-
-    setFavoriteBrands(nextFavorites);
-
-    await AsyncStorage.setItem(
-      FAVORITE_VEHICLE_BRANDS_KEY,
-      JSON.stringify(nextFavorites)
-    );
-  } catch (error) {
-    console.log("Failed to save favorite brand", error);
-  }
-};
-
-const toggleFavoriteModel = async (brand: string, model: string) => {
-  const cleanBrand = normalizeVehicleFavorite(brand);
-  const cleanModel = normalizeVehicleFavorite(model);
-
-  if (!cleanBrand || !cleanModel) return;
-
-  try {
-    const currentFavorites = favoriteModelsByBrand[cleanBrand] || [];
-    const exists = currentFavorites.includes(cleanModel);
-
-    const nextBrandFavorites = exists
-      ? currentFavorites.filter((item) => item !== cleanModel)
-      : [cleanModel, ...currentFavorites];
-
-    const nextFavoritesByBrand = {
-      ...favoriteModelsByBrand,
-      [cleanBrand]: nextBrandFavorites,
+  useEffect(() => {
+    return () => {
+      if (snackbarTimeout.current) {
+        clearTimeout(snackbarTimeout.current);
+      }
     };
+  }, []);
 
-    setFavoriteModelsByBrand(nextFavoritesByBrand);
+  useEffect(() => {
+    if (visible) {
+      setStep(1);
+      setDraft(getInitialDraft(initialData));
+      setImageLoadingMap({});
+      setIsRecording(false);
+      setCameraMode("photos");
+      setVehiclePhotoSlot(null);
+      setSubmitting(false);
+      setDetailsExpanded(false);
+      didAutoOpenCameraRef.current = false;
 
-    await AsyncStorage.setItem(
-      FAVORITE_VEHICLE_MODELS_KEY,
-      JSON.stringify(nextFavoritesByBrand)
+      const initialAssetType = String(initialData?.assetType || "").toLowerCase();
+
+      const shouldAutoOpenForCreate =
+        mode === "create" && initialAssetType === "other";
+
+      const shouldAutoOpenForEdit = mode === "edit" && autoOpenCamera;
+
+      if (
+        (shouldAutoOpenForCreate || shouldAutoOpenForEdit) &&
+        !didAutoOpenCameraRef.current
+      ) {
+        didAutoOpenCameraRef.current = true;
+
+        setTimeout(() => {
+          setCameraMode("photos");
+          setCameraOpen(true);
+        }, 350);
+      }
+    } else {
+      stopVoicePlayback();
+    }
+  }, [visible, initialData, mode, autoOpenCamera]);
+
+  const previewSize = useMemo(() => {
+    const columns = width < 360 ? 4 : width < 600 ? 5 : 6;
+    const cardPadding = 32;
+    const gaps = (columns - 1) * 6;
+    const available = modalWidth - cardPadding - gaps;
+
+    return Math.max(44, Math.min(62, Math.floor(available / columns)));
+  }, [width, modalWidth]);
+
+  const projectConditions = useMemo(() => {
+    const unique = new Map<string, string>();
+
+    DEFAULT_CONDITIONS.forEach((item) => {
+      const value = String(item || "").trim();
+      if (value) unique.set(value.toLowerCase(), value);
+    });
+
+    conditionOptions.forEach((item) => {
+      const value = String(item || "").trim();
+      if (value) unique.set(value.toLowerCase(), value);
+    });
+
+    const current = String((draft as any).condition || "").trim();
+
+    if (current) {
+      unique.set(current.toLowerCase(), current);
+    }
+
+    return Array.from(unique.values()).sort((a, b) =>
+      a.localeCompare(b, undefined, {
+        sensitivity: "base",
+        numeric: true,
+      })
     );
-  } catch (error) {
-    console.log("Failed to save favorite model", error);
-  }
-};
+  }, [conditionOptions, (draft as any).condition]);
 
-const [assetTypeDropdownOpen, setAssetTypeDropdownOpen] = useState(false);
-const [addTypeModalOpen, setAddTypeModalOpen] = useState(false);
-const [newSubAssetTypeText, setNewSubAssetTypeText] = useState("");
+  const currentCategory: AssetType =
+    String(draft.assetType || "").toLowerCase() === "vehicle"
+      ? "vehicle"
+      : "other";
 
-const [editingSubAssetType, setEditingSubAssetType] = useState<string | null>(
-  null
-);
-const [editingSubAssetTypeText, setEditingSubAssetTypeText] = useState("");
+  const isVehicle = currentCategory === "vehicle";
 
-const [conditionModalOpen, setConditionModalOpen] = useState(false);
-const [addConditionMode, setAddConditionMode] = useState(false);
-const [newConditionText, setNewConditionText] = useState("");
+  const isVehicleAsset =
+    String((draft as any).assetType || "").toLowerCase() === "vehicle" ||
+    String((draft as any).assetType || "") === "Vehicle";
 
-const projectAssetTypes = useMemo(() => {
-  const unique = new Map<string, string>();
+  const subAssetType = getOtherSubAssetType(draft);
 
-  subAssetTypes.forEach((item) => {
-    const value = String(item || "").trim().toLowerCase();
-    if (value) unique.set(value, value);
-  });
+  const displayCategory =
+    subAssetType && subAssetType !== currentCategory
+      ? `${currentCategory} • ${subAssetType}`
+      : currentCategory;
 
-  const current = String((draft as any).subAssetType || "")
-    .trim()
-    .toLowerCase();
-
-  if (current) {
-    unique.set(current, current);
-  }
-
-  return Array.from(unique.values()).sort((a, b) => a.localeCompare(b));
-}, [subAssetTypes, (draft as any).subAssetType]);
-
-const projectConditions = useMemo(() => {
-  const unique = new Map<string, string>();
-
-  DEFAULT_CONDITIONS.forEach((item) => {
-    const value = String(item || "").trim();
-    if (value) unique.set(value.toLowerCase(), value);
-  });
-
-  conditionOptions.forEach((item) => {
-    const value = String(item || "").trim();
-    if (value) unique.set(value.toLowerCase(), value);
-  });
-
-  const current = String((draft as any).condition || "").trim();
-
-  if (current) {
-    unique.set(current.toLowerCase(), current);
-  }
-
-  return Array.from(unique.values()).sort((a, b) =>
-    a.localeCompare(b, undefined, {
-      sensitivity: "base",
-      numeric: true,
-    })
-  );
-}, [conditionOptions, (draft as any).condition]);
-
-const currentCategory:AssetType =
-  String(draft.assetType || "").toLowerCase() === "vehicle"
-    ? "vehicle"
-    : "other";
-
-const isVehicle = currentCategory === "vehicle";
-
-const isVehicleAsset =
-  String((draft as any).assetType || "").toLowerCase() === "vehicle" ||
-  String((draft as any).assetType || "") === "Vehicle";
-
-const selectedBrand = String((draft as any).brand || "").trim();
-
-const availableVehicleModels = getVehicleModelsByBrand(selectedBrand);
-
-
-const sortedVehicleBrands = moveFavoritesToTop(vehicleBrands, favoriteBrands);
-
-const selectedBrandFavoriteModels = selectedBrand
-  ? favoriteModelsByBrand[selectedBrand] || []
-  : [];
-
-const sortedVehicleModels = moveFavoritesToTop(
-  availableVehicleModels,
-  selectedBrandFavoriteModels
-);
-
-const subAssetType = String((draft as any).subAssetType || "")
-  .trim()
-  .toLowerCase();
-
-const displayCategory =
-  subAssetType && subAssetType !== currentCategory
-    ? `${currentCategory} • ${subAssetType}`
-    : currentCategory;
-
-
-const getShortVoiceName = () => {
-  if (isRecording) return "Recording...";
-  if (!draft.voiceNotes?.[0]) return "Add voice";
-  return "Play your Voice note";
-};
+  const getShortVoiceName = () => {
+    if (isRecording) return "Recording...";
+    if (!draft.voiceNotes?.[0]) return "Add voice";
+    return "Play your Voice note";
+  };
 
   const setFieldPosition = (key: string) => (e: LayoutChangeEvent) => {
     fieldPositions.current[key] = e.nativeEvent.layout.y;
   };
 
-const scrollToField = (key: string) => {
-  const y = fieldPositions.current[key] ?? 0;
+  const scrollToField = (key: string) => {
+    const y = fieldPositions.current[key] ?? 0;
 
-  setTimeout(() => {
-    scrollRef.current?.scrollTo({
-      y: Math.max(0, y - 80),
-      animated: true,
-    });
-  }, 80);
+    setTimeout(() => {
+      scrollRef.current?.scrollTo({
+        y: Math.max(0, y - 80),
+        animated: true,
+      });
+    }, 80);
 
-  setTimeout(() => {
-    scrollRef.current?.scrollTo({
-      y: Math.max(0, y - 80),
-      animated: true,
-    });
-  }, 320);
-};
-
-  const totalSteps = 3;
-
-  const next = () => {
-    if (step === 1 && !draft.name?.trim()) {
-     showSnackbar(t("asset.assetNameRequired"), "error");
-      scrollToField("name");
-      return;
-    }
-
-    setStep((s) => Math.min(s + 1, totalSteps));
+    setTimeout(() => {
+      scrollRef.current?.scrollTo({
+        y: Math.max(0, y - 80),
+        animated: true,
+      });
+    }, 320);
   };
 
-  const back = () => setStep((s) => Math.max(s - 1, 1));
-
   const openVehiclePhotoCamera = (slot: VehiclePhotoSlot) => {
-  setVehiclePhotoSlot(slot);
-  setCameraMode("photos");
-  setCameraOpen(true);
-};
-
-  const openPhotoCamera = () => {
-    setVehiclePhotoSlot(null);
+    setVehiclePhotoSlot(slot);
     setCameraMode("photos");
     setCameraOpen(true);
   };
 
-  const openScanCamera = () => {
-    setCameraMode("scan");
+  const openPhotoCamera = () => {
+    setVehiclePhotoSlot(null);
+    setCameraMode("photos");
     setCameraOpen(true);
   };
 
@@ -612,105 +356,16 @@ const scrollToField = (key: string) => {
     showSnackbar("Scanned text added", "success");
   };
 
-
-  const selectVehicleBrand = (brand: string) => {
-  setDraft((prev) => ({
-    ...prev,
-    brand,
-    model: "",
-  }));
-
-  setBrandDropdownOpen(false);
-  setModelDropdownOpen(false);
-};
-
-const selectVehicleModel = (model: string) => {
-  setDraft((prev) => ({
-    ...prev,
-    model,
-  }));
-
-  setModelDropdownOpen(false);
-};
-
-  const pickImagesFromLibrary = async () => {
-    try {
-      const permission =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-      if (!permission.granted) {
-        showSnackbar(t("asset.photoPermissionMessage"), "error");
-
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsMultipleSelection: true,
-        quality: 0.8,
-        selectionLimit: 10,
-      });
-
-      if (result.canceled) return;
-
-      const mapped = result.assets.map((asset, i) => ({
-        uri: asset.uri,
-        name: asset.fileName || `gallery_${Date.now()}_${i}.jpg`,
-        type: asset.mimeType || "image/jpeg",
-      }));
-
-      setDraft((prev) => ({
-        ...prev,
-        images: [...prev.images, ...mapped],
-      }));
-    } catch {
-     showSnackbar(t("asset.unablePickImages"), "error");
-    }
+  const getImageKey = (uri: string, index: number) => {
+    return `${uri}-${index}`;
   };
 
-
-const vehiclePreviewSlots = [
-  {
-    key: "plate",
-    label: "Car Plate",
-    icon: "car-sport-outline",
-    index: 0,
-    single: true,
-  },
-  {
-    key: "details",
-    label: "Car Details",
-    icon: "document-text",
-    index: 1,
-    single: true,
-  },
-  {
-    key: "odometer",
-    label: "Odometer",
-    icon: "speedometer-outline",
-    index: 2,
-    single: true,
-  },
-  {
-    key: "other",
-    label: "Other",
-    icon: "images-outline",
-    index: null,
-    single: false,
-  },
-] as const;
-
-
-const getImageKey = (uri: string, index: number) => {
-  return `${uri}-${index}`;
-};
-
-const setImageLoading = (key: string, loading: boolean) => {
-  setImageLoadingMap((prev) => ({
-    ...prev,
-    [key]: loading,
-  }));
-};
+  const setImageLoading = (key: string, loading: boolean) => {
+    setImageLoadingMap((prev) => ({
+      ...prev,
+      [key]: loading,
+    }));
+  };
 
   const startRecording = async () => {
     try {
@@ -724,45 +379,43 @@ const setImageLoading = (key: string, loading: boolean) => {
       await recorder.prepareToRecordAsync();
       recorder.record();
       setIsRecording(true);
-    } catch (error) {
-     showSnackbar(t("asset.couldNotStartRecording"), "error");
+    } catch {
+      showSnackbar(t("asset.couldNotStartRecording"), "error");
     }
   };
 
- const stopRecording = async () => {
-  try {
-    await recorder.stop();
-    setIsRecording(false);
+  const stopRecording = async () => {
+    try {
+      await recorder.stop();
+      setIsRecording(false);
 
-    const uri = recorder.uri;
+      const uri = recorder.uri;
 
-    if (uri) {
-      await stopVoicePlayback();
+      if (uri) {
+        await stopVoicePlayback();
 
-      setDraft((prev) => ({
-        ...prev,
-        voiceNotes: [
-          {
-            uri,
-            name: `voice_note_${Date.now()}.m4a`,
-            type: "audio/m4a",
-          },
-        ],
-      }));
+        setDraft((prev) => ({
+          ...prev,
+          voiceNotes: [
+            {
+              uri,
+              name: `voice_note_${Date.now()}.m4a`,
+              type: "audio/m4a",
+            },
+          ],
+        }));
+      }
+    } catch {
+      showSnackbar(t("asset.couldNotStopRecording"), "error");
     }
-  } catch (error) {
-    showSnackbar(t("asset.couldNotStopRecording"), "error");
-  }
-};
+  };
 
+  const currentYear = new Date().getFullYear();
 
-const currentYear = new Date().getFullYear();
-
-const manufactureYears = Array.from(
-  { length: currentYear - 1979 },
-  (_, index) => String(currentYear - index)
-);
-  
+  const manufactureYears = Array.from(
+    { length: currentYear - 1979 },
+    (_, index) => String(currentYear - index)
+  );
 
   const playVoiceNote = async (uri: string, index: number) => {
     try {
@@ -801,7 +454,7 @@ const manufactureYears = Array.from(
           setPlayingIndex(null);
         }
       });
-    } catch (error) {
+    } catch {
       showSnackbar(t("asset.couldNotPlayVoiceNote"), "error");
     }
   };
@@ -853,180 +506,135 @@ const manufactureYears = Array.from(
     onClose();
   };
 
-const buildCleanDraft = (): AssetDraft | null => {
-  if (!draft.name?.trim()) {
-    Alert.alert(t("common.validation"), t("asset.assetNameRequired"));
-    return null;
-  }
-
-  const cleanedNotes = (draft.notes || "").trim();
-
-  const finalQuantity = Number(getQuantity());
-
-const finalSubAssetType = String((draft as any).subAssetType || "")
-  .trim()
-  .toLowerCase();
-
-const isVehicleDraft =
-  String((draft as any).assetType || "").toLowerCase() === "vehicle";
-
-if (!isVehicleDraft && !finalSubAssetType) {
-  showSnackbar("Asset type is required", "error");
-  setAssetTypeDropdownOpen(true);
-  return null;
-}
-
-  const cleanDraft: AssetDraft = {
-    ...draft,
-
-    notes: cleanedNotes || undefined,
-    hasNotes: cleanedNotes.length > 0,
-
-    quantity: isVehicleDraft ? undefined : Math.max(1, finalQuantity),
-    subAssetType: isVehicleDraft ? undefined : finalSubAssetType || undefined,
-
-    brand: isVehicleDraft ? draft.brand || undefined : undefined,
-    model: isVehicleDraft ? draft.model || undefined : undefined,
-    manufactureYear: isVehicleDraft
-      ? draft.manufactureYear || undefined
-      : undefined,
-    kilometersDriven: isVehicleDraft
-      ? draft.kilometersDriven || undefined
-      : undefined,
-
-    rawData: cleanAssetRawData((draft as any).rawData),
-  } as any;
-
-  return cleanDraft;
-};
-
-const saveDraftWithAction = async (
-  action?: (draft: AssetDraft) => Promise<void> | void,
-  closeAfterSave = true
-) => {
-  if (submitting) return;
-
-  if (isRecording) {
-    Alert.alert(
-      t("asset.recordingInProgress"),
-      t("asset.stopRecordingBeforeSaving"),
-      [
-        {
-          text: t("asset.stopRecordingAndSave"),
-          onPress: async () => {
-            try {
-              await stopRecording();
-              saveDraftWithAction(action, closeAfterSave);
-            } catch {
-              Alert.alert(t("common.error"), t("asset.couldNotStopRecording"));
-            }
-          },
-        },
-        {
-          text: t("common.cancel"),
-          style: "cancel",
-        },
-      ]
-    );
-
-    return;
-  }
-
-  const cleanDraft = buildCleanDraft();
-
-  if (!cleanDraft) return;
-
-  setSubmitting(true);
-
-  try {
-    await (action ? action(cleanDraft) : onSubmit(cleanDraft));
-
-    if (closeAfterSave) {
-      await handleClose();
-    } else {
-      setSubmitting(false);
+  const buildCleanDraft = (): AssetDraft | null => {
+    if (!draft.name?.trim()) {
+      Alert.alert(t("common.validation"), t("asset.assetNameRequired"));
+      return null;
     }
-  } catch (error: any) {
-    setSubmitting(false);
-    Alert.alert(
-      t("common.error"),
-      error?.message || t("asset.failedToSaveAsset")
-    );
-  }
-};
 
-const handleFinish = async () => {
-  await saveDraftWithAction(onSubmit);
-};
+    const cleanedNotes = (draft.notes || "").trim();
 
-const handleFooterSave = async () => {
-  if (mode === "edit") {
-    await saveDraftWithAction(onSaveAndNext || onSubmit, false);
-    return;
-  }
+    const isVehicleDraft =
+      String((draft as any).assetType || "").toLowerCase() === "vehicle";
 
-  await saveDraftWithAction(onSaveAndCreate || onSubmit, false);
-};
+    if (!isVehicleDraft) {
+      const otherDraft = cleanOtherAssetDraft(draft);
 
+      if (!otherDraft) {
+        showSnackbar("Asset type is required", "error");
+        return null;
+      }
 
+      return {
+        ...otherDraft,
+        notes: cleanedNotes || undefined,
+        hasNotes: cleanedNotes.length > 0,
+      } as any;
+    }
 
-const saveEditedSubAssetType = async () => {
-  const oldValue = String(editingSubAssetType || "").trim().toLowerCase();
-  const newValue = editingSubAssetTypeText.trim().toLowerCase();
+    return {
+      ...draft,
 
-  if (!oldValue) return;
+      notes: cleanedNotes || undefined,
+      hasNotes: cleanedNotes.length > 0,
 
-  if (!newValue) {
-    showSnackbar("Please enter asset type", "error");
-    return;
-  }
+      quantity: undefined,
+      subAssetType: undefined,
 
-  try {
-    if (oldValue !== newValue && onRenameSubAssetType) {
-      await onRenameSubAssetType(oldValue, newValue);
+      brand: draft.brand || undefined,
+      model: draft.model || undefined,
+      manufactureYear: draft.manufactureYear || undefined,
+      kilometersDriven: draft.kilometersDriven || undefined,
+
+      rawData: cleanAssetRawData((draft as any).rawData),
+    } as any;
+  };
+
+  const saveDraftWithAction = async (
+    action?: (draft: AssetDraft) => Promise<void> | void,
+    closeAfterSave = true
+  ) => {
+    if (submitting) return;
+
+    if (isRecording) {
+      Alert.alert(
+        t("asset.recordingInProgress"),
+        t("asset.stopRecordingBeforeSaving"),
+        [
+          {
+            text: t("asset.stopRecordingAndSave"),
+            onPress: async () => {
+              try {
+                await stopRecording();
+                saveDraftWithAction(action, closeAfterSave);
+              } catch {
+                Alert.alert(t("common.error"), t("asset.couldNotStopRecording"));
+              }
+            },
+          },
+          {
+            text: t("common.cancel"),
+            style: "cancel",
+          },
+        ]
+      );
+
+      return;
+    }
+
+    const cleanDraft = buildCleanDraft();
+
+    if (!cleanDraft) return;
+
+    setSubmitting(true);
+
+    try {
+      await (action ? action(cleanDraft) : onSubmit(cleanDraft));
+
+      if (closeAfterSave) {
+        await handleClose();
+      } else {
+        setSubmitting(false);
+      }
+    } catch (error: any) {
+      setSubmitting(false);
+      Alert.alert(
+        t("common.error"),
+        error?.message || t("asset.failedToSaveAsset")
+      );
+    }
+  };
+
+  const handleFinish = async () => {
+    await saveDraftWithAction(onSubmit);
+  };
+
+  const handleFooterSave = async () => {
+    if (mode === "edit") {
+      await saveDraftWithAction(onSaveAndNext || onSubmit, false);
+      return;
+    }
+
+    await saveDraftWithAction(onSaveAndCreate || onSubmit, false);
+  };
+
+  const saveNewCondition = () => {
+    const value = newConditionText.trim();
+
+    if (!value) {
+      showSnackbar("Please enter condition", "error");
+      return;
     }
 
     setDraft((prev) => ({
       ...prev,
-      assetType: "other",
-      subAssetType:
-        String((prev as any).subAssetType || "").trim().toLowerCase() ===
-        oldValue
-          ? newValue
-          : (prev as any).subAssetType,
-      rawData: cleanAssetRawData((prev as any).rawData),
-    } as any));
+      condition: value,
+    }));
 
-    setEditingSubAssetType(null);
-    setEditingSubAssetTypeText("");
-    setAssetTypeDropdownOpen(false);
-
-    showSnackbar("Asset type updated", "success");
-  } catch (error: any) {
-    showSnackbar(error?.message || "Failed to update asset type", "error");
-  }
-};
-
-
-
-const saveNewCondition = () => {
-  const value = newConditionText.trim();
-
-  if (!value) {
-    showSnackbar("Please enter condition", "error");
-    return;
-  }
-
-  setDraft((prev) => ({
-    ...prev,
-    condition: value,
-  }));
-
-  setNewConditionText("");
-  setAddConditionMode(false);
-  setConditionModalOpen(false);
-};
-
+    setNewConditionText("");
+    setAddConditionMode(false);
+    setConditionModalOpen(false);
+  };
 
   return (
     <>
@@ -1036,79 +644,61 @@ const saveNewCondition = () => {
         animationType="fade"
         statusBarTranslucent
       >
-       <TouchableWithoutFeedback
-  onPress={() => {
-    Keyboard.dismiss();
-    setAssetTypeDropdownOpen(false);
-    setBrandDropdownOpen(false);
-    setModelDropdownOpen(false);
-  }}
->
+        <TouchableWithoutFeedback
+          onPress={() => {
+            Keyboard.dismiss();
+          }}
+        >
           <View style={styles.overlay}>
             <KeyboardAvoidingView
               style={styles.keyboardWrap}
-               behavior={Platform.OS === "ios" ? "padding" : "height"}
-               keyboardVerticalOffset={Platform.OS === "ios" ? 20 : 0}
-              enabled={true}
+              behavior={Platform.OS === "ios" ? "padding" : "height"}
+              keyboardVerticalOffset={Platform.OS === "ios" ? 20 : 0}
+              enabled
             >
               <TouchableWithoutFeedback>
                 <View
                   style={[
                     styles.modalCard,
-                        {
-  width: modalWidth,
-  maxHeight: modalMaxHeight,
-  minHeight: modalMinHeight,
-  borderRadius: isSmallScreen ? 18 : 24,
-  padding: isSmallScreen ? 12 : 16,
-},
-!detailsExpanded && styles.modalCardCompact,
-
+                    {
+                      width: modalWidth,
+                      maxHeight: modalMaxHeight,
+                      minHeight: modalMinHeight,
+                      borderRadius: isSmallScreen ? 18 : 24,
+                      padding: isSmallScreen ? 12 : 16,
+                    },
+                    !detailsExpanded && styles.modalCardCompact,
                   ]}
                 >
                   <View style={styles.header}>
-<View style={{ flex: 1 }}>
-  <View style={styles.titleRow}>
-    <Text style={styles.title}>
-      {mode === "edit" ? t("asset.editAsset") : t("asset.createAsset")}
-    </Text>
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.titleRow}>
+                        <Text style={styles.title}>
+                          {mode === "edit"
+                            ? t("asset.editAsset")
+                            : t("asset.createAsset")}
+                        </Text>
 
-    <View style={styles.categoryBadge}>
-      <Text style={styles.categoryBadgeText} numberOfLines={1}>
-        {displayCategory}
-      </Text>
-    </View>
-  </View>
+                        <View style={styles.categoryBadge}>
+                          <Text
+                            style={styles.categoryBadgeText}
+                            numberOfLines={1}
+                          >
+                            {displayCategory}
+                          </Text>
+                        </View>
+                      </View>
 
-{!isVehicleAsset && (
-  <OtherAssetForm
-    draft={draft}
-    setDraft={setDraft}
-    projectAssetTypes={projectAssetTypes}
-    subAssetType={subAssetType}
-    assetTypeDropdownOpen={assetTypeDropdownOpen}
-    setAssetTypeDropdownOpen={setAssetTypeDropdownOpen}
-    setAddTypeModalOpen={setAddTypeModalOpen}
-    setNewSubAssetTypeText={setNewSubAssetTypeText}
-    editingSubAssetType={editingSubAssetType}
-    setEditingSubAssetType={setEditingSubAssetType}
-    editingSubAssetTypeText={editingSubAssetTypeText}
-    setEditingSubAssetTypeText={setEditingSubAssetTypeText}
-    saveEditedSubAssetType={saveEditedSubAssetType}
-    getQuantity={getQuantity}
-    updateQuantity={updateQuantity}
-    cleanAssetRawData={cleanAssetRawData}
-    formatSubAssetTypeLabel={formatSubAssetTypeLabel}
-  />
-)}
-
-   
-
-
-</View>
-
-
-
+                      {!isVehicleAsset && (
+                        <OtherAssetForm
+                          draft={draft}
+                          setDraft={setDraft}
+                          subAssetTypes={subAssetTypes}
+                          onRenameSubAssetType={onRenameSubAssetType}
+                          showSnackbar={showSnackbar}
+                        />
+                      )}
+                    </View>
 
                     <TouchableOpacity
                       onPress={handleClose}
@@ -1119,10 +709,6 @@ const saveNewCondition = () => {
                     </TouchableOpacity>
                   </View>
 
-                  {/* <Text style={styles.step}>
-                    {t("asset.stepOf", { step, total: totalSteps })}
-                  </Text> */}
-                  
                   <ScrollView
                     ref={scrollRef}
                     style={styles.scrollView}
@@ -1130,548 +716,460 @@ const saveNewCondition = () => {
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
                     keyboardDismissMode="on-drag"
-                    nestedScrollEnabled={true}
+                    nestedScrollEnabled
                   >
-                  <>
-<View style={styles.topQuickRow}>
- <View style={{ flex: 1 }} onLayout={setFieldPosition("name")}>
-  <Text style={styles.fieldLabel}>Asset name</Text>
+                    <>
+                      <View style={styles.topQuickRow}>
+                        <View
+                          style={{ flex: 1 }}
+                          onLayout={setFieldPosition("name")}
+                        >
+                          <Text style={styles.fieldLabel}>Asset name</Text>
 
-  <View style={styles.assetNameInputWrap}>
-    <TextInput
-      ref={firstInputRef}
-      placeholder={t("asset.assetName")}
-      placeholderTextColor="#767B91"
-      value={draft.name}
-      onChangeText={(text) => {
-        setDraft((prev) => ({
-          ...prev,
-          name: text,
-        }));
-      }}
-      editable
-      selectTextOnFocus
-      style={[
-        styles.input,
-        styles.compactInput,
-        styles.assetNameInputWithClear,
-        disableAssetName && styles.inputDisabled,
-      ]}
-      returnKeyType="done"
-      onFocus={() => scrollToField("name")}
-    />
+                          <View style={styles.assetNameInputWrap}>
+                            <TextInput
+                              ref={firstInputRef}
+                              placeholder={t("asset.assetName")}
+                              placeholderTextColor="#767B91"
+                              value={draft.name}
+                              onChangeText={(text) => {
+                                setDraft((prev) => ({
+                                  ...prev,
+                                  name: text,
+                                }));
+                              }}
+                              editable
+                              selectTextOnFocus
+                              style={[
+                                styles.input,
+                                styles.compactInput,
+                                styles.assetNameInputWithClear,
+                                disableAssetName && styles.inputDisabled,
+                              ]}
+                              returnKeyType="done"
+                              onFocus={() => scrollToField("name")}
+                            />
 
-    {!!draft.name?.trim() && !disableAssetName && (
-      <TouchableOpacity
-        style={styles.assetNameClearBtn}
-        onPress={() => {
-          setDraft((prev) => ({
-            ...prev,
-            name: "",
-          }));
+                            {!!draft.name?.trim() && !disableAssetName && (
+                              <TouchableOpacity
+                                style={styles.assetNameClearBtn}
+                                onPress={() => {
+                                  setDraft((prev) => ({
+                                    ...prev,
+                                    name: "",
+                                  }));
 
-          setTimeout(() => {
-            firstInputRef?.current?.focus?.();
-          }, 50);
-        }}
-        activeOpacity={0.8}
-      >
-        <Ionicons name="close-circle" size={25} color={MUTED} />
-      </TouchableOpacity>
-    )}
-  </View>
-</View>
-</View>
+                                  setTimeout(() => {
+                                    firstInputRef?.current?.focus?.();
+                                  }, 50);
+                                }}
+                                activeOpacity={0.8}
+                              >
+                                <Ionicons
+                                  name="close-circle"
+                                  size={25}
+                                  color={MUTED}
+                                />
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        </View>
+                      </View>
 
-<TouchableOpacity
-  style={styles.addDetailsBtn}
-  onPress={() => setDetailsExpanded((prev) => !prev)}
-  activeOpacity={0.85}
->
-  <Ionicons
-    name={detailsExpanded ? "remove-circle-outline" : "add-circle-outline"}
-    size={18}
-    color={ACC}
-  />
-  <Text style={styles.addDetailsText}>
-    {detailsExpanded ? "Hide details" : "Add details"}
-  </Text>
-</TouchableOpacity>
+                      {isVehicle && (
+                        <VehicleAssetForm
+                          draft={draft}
+                          setDraft={setDraft}
+                          detailsExpanded={detailsExpanded}
+                          setDetailsExpanded={setDetailsExpanded}
+                          previewSize={previewSize}
+                          imageLoadingMap={imageLoadingMap}
+                          setImageLoading={setImageLoading}
+                          manufactureYears={manufactureYears}
+                          height={height}
+                          openVehiclePhotoCamera={openVehiclePhotoCamera}
+                          t={t}
+                        />
+                      )}
 
-{detailsExpanded && (
-  <>
-<View style={styles.conditionBoxFull}>
-  <Text style={styles.fieldLabel}>{t("asset.condition")}</Text>
+                      {!isVehicle && (
+                        <TouchableOpacity
+                          style={styles.addDetailsBtn}
+                          onPress={() =>
+                            setDetailsExpanded((prev) => !prev)
+                          }
+                          activeOpacity={0.85}
+                        >
+                          <Ionicons
+                            name={
+                              detailsExpanded
+                                ? "remove-circle-outline"
+                                : "add-circle-outline"
+                            }
+                            size={18}
+                            color={ACC}
+                          />
 
-  <TouchableOpacity
-    style={styles.conditionSelectInput}
-    onPress={() => {
-      setConditionModalOpen(true);
-      setAddConditionMode(false);
-      setNewConditionText("");
-      Keyboard.dismiss();
-    }}
-    activeOpacity={0.85}
-  >
-    <Text
-      style={[
-        styles.conditionSelectText,
-        !draft.condition && styles.vehicleDropdownPlaceholder,
-      ]}
-      numberOfLines={1}
-    >
-      {draft.condition || "Choose condition"}
-    </Text>
+                          <Text style={styles.addDetailsText}>
+                            {detailsExpanded ? "Hide details" : "Add details"}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
 
-    <Ionicons name="chevron-down" size={16} color={TEXT} />
-  </TouchableOpacity>
-</View>
+                      {detailsExpanded && (
+                        <>
+                          <View style={styles.conditionBoxFull}>
+                            <Text style={styles.fieldLabel}>
+                              {t("asset.condition")}
+                            </Text>
 
+                            <TouchableOpacity
+                              style={styles.conditionSelectInput}
+                              onPress={() => {
+                                setConditionModalOpen(true);
+                                setAddConditionMode(false);
+                                setNewConditionText("");
+                                Keyboard.dismiss();
+                              }}
+                              activeOpacity={0.85}
+                            >
+                              <Text
+                                style={[
+                                  styles.conditionSelectText,
+                                  !draft.condition &&
+                                    styles.vehicleDropdownPlaceholder,
+                                ]}
+                                numberOfLines={1}
+                              >
+                                {draft.condition || "Choose condition"}
+                              </Text>
 
+                              <Ionicons
+                                name="chevron-down"
+                                size={16}
+                                color={TEXT}
+                              />
+                            </TouchableOpacity>
+                          </View>
 
+                          <View style={styles.notesInputWrap}>
+                            <Text style={styles.fieldLabel}>Notes</Text>
 
-<View style={styles.notesInputWrap}>
-  <Text style={styles.fieldLabel}>Notes</Text>
+                            <TextInput
+                              placeholder="Type notes here..."
+                              placeholderTextColor="#767B91"
+                              value={draft.notes || ""}
+                              onChangeText={(text) => {
+                                const hasNotes = text.trim().length > 0;
 
-  <TextInput
-    placeholder="Type notes here..."
-    placeholderTextColor="#767B91"
-    value={draft.notes || ""}
-    onChangeText={(text) => {
-      const hasNotes = text.trim().length > 0;
+                                setDraft((prev) => ({
+                                  ...prev,
+                                  notes: text,
+                                  hasNotes,
+                                }));
+                              }}
+                              style={styles.notesTextArea}
+                              multiline
+                              textAlignVertical="top"
+                            />
+                          </View>
 
-      setDraft((prev) => ({
-        ...prev,
-        notes: text,
-        hasNotes,
-      }));
-    }}
-    style={styles.notesTextArea}
-    multiline
-    textAlignVertical="top"
-  />
-</View>
+                          <View style={styles.recordDoneRow}>
+                            <View style={styles.voiceCompactRow}>
+                              <TouchableOpacity
+                                style={[
+                                  styles.voiceIconBtn,
+                                  isRecording && styles.voiceRecordingBtn,
+                                ]}
+                                onPress={
+                                  isRecording ? stopRecording : startRecording
+                                }
+                                activeOpacity={0.85}
+                              >
+                                <Ionicons
+                                  name={isRecording ? "stop" : "mic-outline"}
+                                  size={18}
+                                  color="#ffffff"
+                                />
+                              </TouchableOpacity>
 
-{isVehicle && (
-  <VehicleAssetForm
-    draft={draft}
-    setDraft={setDraft}
-    brandDropdownOpen={brandDropdownOpen}
-    setBrandDropdownOpen={setBrandDropdownOpen}
-    modelDropdownOpen={modelDropdownOpen}
-    setModelDropdownOpen={setModelDropdownOpen}
-    sortedVehicleBrands={sortedVehicleBrands}
-    sortedVehicleModels={sortedVehicleModels}
-    favoriteBrands={favoriteBrands}
-    selectedBrandFavoriteModels={selectedBrandFavoriteModels}
-    selectedBrand={selectedBrand}
-    selectVehicleBrand={selectVehicleBrand}
-    selectVehicleModel={selectVehicleModel}
-    toggleFavoriteBrand={toggleFavoriteBrand}
-    toggleFavoriteModel={toggleFavoriteModel}
-    manufactureYears={manufactureYears}
-    height={height}
-    t={t}
-  />
-)}
+                              {!!draft.voiceNotes?.[0] && !isRecording && (
+                                <TouchableOpacity
+                                  style={[
+                                    styles.voiceSmallAction,
+                                    styles.voicePlayAction,
+                                  ]}
+                                  onPress={() => {
+                                    const note = draft.voiceNotes?.[0];
+                                    const uri = note?.uri || note?.url || "";
+                                    if (!uri) return;
 
+                                    playVoiceNote(uri, 0);
+                                  }}
+                                  activeOpacity={0.85}
+                                >
+                                  <Ionicons
+                                    name={
+                                      playingIndex === 0
+                                        ? "pause-circle"
+                                        : "play-circle"
+                                    }
+                                    size={18}
+                                    color={ACC}
+                                  />
+                                </TouchableOpacity>
+                              )}
 
+                              <Text
+                                style={styles.voiceCompactText}
+                                numberOfLines={1}
+                              >
+                                {getShortVoiceName()}
+                              </Text>
 
+                              {!!draft.voiceNotes?.[0] && !isRecording && (
+                                <TouchableOpacity
+                                  style={styles.voiceSmallAction}
+                                  onPress={() => removeVoiceNote(0)}
+                                  activeOpacity={0.85}
+                                >
+                                  <Ionicons
+                                    name="trash-outline"
+                                    size={18}
+                                    color="#FF4444"
+                                  />
+                                </TouchableOpacity>
+                              )}
+                            </View>
+                          </View>
 
-<View style={styles.recordDoneRow}>
-  <View style={styles.voiceCompactRow}>
-    <TouchableOpacity
-      style={[
-        styles.voiceIconBtn,
-        isRecording && styles.voiceRecordingBtn,
-      ]}
-      onPress={isRecording ? stopRecording : startRecording}
-      activeOpacity={0.85}
-    >
-      <Ionicons
-        name={isRecording ? "stop" : "mic-outline"}
-        size={18}
-        color="#ffffff"
-      />
-    </TouchableOpacity>
+                          {mode === "edit" && (
+                            <View style={styles.statusInlineRow}>
+                              <TouchableOpacity
+                                style={styles.doneInlineBtn}
+                                onPress={() =>
+                                  setDraft((prev) => ({
+                                    ...prev,
+                                    isDone: !prev.isDone,
+                                  }))
+                                }
+                                activeOpacity={0.75}
+                              >
+                                <View
+                                  style={[
+                                    styles.smallCheckbox,
+                                    draft.isDone &&
+                                      styles.smallCheckboxChecked,
+                                  ]}
+                                >
+                                  {draft.isDone && (
+                                    <Text style={styles.smallCheckmark}>✓</Text>
+                                  )}
+                                </View>
 
-    {!!draft.voiceNotes?.[0] && !isRecording && (
-     <TouchableOpacity
-  style={[styles.voiceSmallAction, styles.voicePlayAction]}
-  onPress={() => {
-    const note = draft.voiceNotes?.[0];
-    const uri = note?.uri || note?.url || "";
-    if (!uri) return;
+                                <Text style={styles.statusInlineText}>
+                                  {t("asset.markAsDone") || "Mark as done"}
+                                </Text>
+                              </TouchableOpacity>
 
-    playVoiceNote(uri, 0);
-  }}
-  activeOpacity={0.85}
->
-        <Ionicons
-          name={playingIndex === 0 ? "pause-circle" : "play-circle"}
-          size={18}
-          color={ACC}
-          // style= {styles.playVoiceIcon} 
-        />
-      </TouchableOpacity>
-    )}
+                              <View style={styles.statusDivider} />
 
-    <Text style={styles.voiceCompactText} numberOfLines={1}>
-      {getShortVoiceName()}
-    </Text>
+                              <View style={styles.presentInlineGroup}>
+                                <Text style={styles.statusInlineText}>
+                                  {t("asset.assetIsPresent") ||
+                                    "Asset is present"}
+                                </Text>
 
-    {!!draft.voiceNotes?.[0] && !isRecording && (
-      <TouchableOpacity
-        style={styles.voiceSmallAction}
-        onPress={() => removeVoiceNote(0)}
-        activeOpacity={0.85}
-      >
-        <Ionicons name="trash-outline" size={18} color="#FF4444" />
-      </TouchableOpacity>
-    )}
-  </View>
-</View>
+                                <TouchableOpacity
+                                  style={styles.smallRadioOption}
+                                  onPress={() =>
+                                    setDraft((prev) => ({
+                                      ...prev,
+                                      isPresent: true,
+                                    }))
+                                  }
+                                  activeOpacity={0.75}
+                                >
+                                  <Ionicons
+                                    name={
+                                      draft.isPresent
+                                        ? "radio-button-on"
+                                        : "radio-button-off"
+                                    }
+                                    size={15}
+                                    color={ACC}
+                                  />
+                                  <Text style={styles.smallRadioText}>
+                                    {t("common.yes") || "Yes"}
+                                  </Text>
+                                </TouchableOpacity>
 
-{mode === "edit" && (
-  <View style={styles.statusInlineRow}>
-    <TouchableOpacity
-      style={styles.doneInlineBtn}
-      onPress={() =>
-        setDraft((prev) => ({
-          ...prev,
-          isDone: !prev.isDone,
-        }))
-      }
-      activeOpacity={0.75}
-    >
-      <View
-        style={[
-          styles.smallCheckbox,
-          draft.isDone && styles.smallCheckboxChecked,
-        ]}
-      >
-        {draft.isDone && <Text style={styles.smallCheckmark}>✓</Text>}
-      </View>
+                                <TouchableOpacity
+                                  style={styles.smallRadioOption}
+                                  onPress={() =>
+                                    setDraft((prev) => ({
+                                      ...prev,
+                                      isPresent: false,
+                                    }))
+                                  }
+                                  activeOpacity={0.75}
+                                >
+                                  <Ionicons
+                                    name={
+                                      !draft.isPresent
+                                        ? "radio-button-on"
+                                        : "radio-button-off"
+                                    }
+                                    size={15}
+                                    color={ACC}
+                                  />
+                                  <Text style={styles.smallRadioText}>
+                                    {t("common.no") || "No"}
+                                  </Text>
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+                          )}
 
-      <Text style={styles.statusInlineText}>
-        {t("asset.markAsDone") || "Mark as done"}
-      </Text>
-    </TouchableOpacity>
+                          {!isVehicle && (
+                            <>
+                              <Text style={styles.helper}>
+                                {t("asset.imagesSelected", {
+                                  count: draft.images.length,
+                                })}
+                              </Text>
 
-    <View style={styles.statusDivider} />
+                              {draft.images.length > 0 && (
+                                <View style={styles.previewGrid}>
+                                  {draft.images.map((img, index) => {
+                                    const imageUri = img.uri || img.url;
+                                    if (!imageUri) return null;
 
-    <View style={styles.presentInlineGroup}>
-      <Text style={styles.statusInlineText}>
-        {t("asset.assetIsPresent") || "Asset is present"}
-      </Text>
+                                    const imageKey = getImageKey(
+                                      imageUri,
+                                      index
+                                    );
+                                    const isImageLoading =
+                                      imageLoadingMap[imageKey] !== false;
 
-      <TouchableOpacity
-        style={styles.smallRadioOption}
-        onPress={() =>
-          setDraft((prev) => ({
-            ...prev,
-            isPresent: true,
-          }))
-        }
-        activeOpacity={0.75}
-      >
-        <Ionicons
-          name={draft.isPresent ? "radio-button-on" : "radio-button-off"}
-          size={15}
-          color={ACC}
-        />
-        <Text style={styles.smallRadioText}>
-          {t("common.yes") || "Yes"}
-        </Text>
-      </TouchableOpacity>
+                                    return (
+                                      <View
+                                        key={imageKey}
+                                        style={[
+                                          styles.previewItem,
+                                          {
+                                            width: previewSize,
+                                            height: previewSize,
+                                          },
+                                        ]}
+                                      >
+                                        <Image
+                                          source={{ uri: imageUri }}
+                                          style={[
+                                            styles.previewImage,
+                                            isImageLoading &&
+                                              styles.previewImageLoading,
+                                          ]}
+                                          resizeMode="cover"
+                                          fadeDuration={150}
+                                          onLoadStart={() =>
+                                            setImageLoading(imageKey, true)
+                                          }
+                                          onLoadEnd={() =>
+                                            setImageLoading(imageKey, false)
+                                          }
+                                          onError={() =>
+                                            setImageLoading(imageKey, false)
+                                          }
+                                        />
 
-      <TouchableOpacity
-        style={styles.smallRadioOption}
-        onPress={() =>
-          setDraft((prev) => ({
-            ...prev,
-            isPresent: false,
-          }))
-        }
-        activeOpacity={0.75}
-      >
-        <Ionicons
-          name={!draft.isPresent ? "radio-button-on" : "radio-button-off"}
-          size={15}
-          color={ACC}
-        />
-        <Text style={styles.smallRadioText}>
-          {t("common.no") || "No"}
-        </Text>
-      </TouchableOpacity>
-    </View>
-  </View>
-)}
+                                        {isImageLoading && (
+                                          <View
+                                            style={styles.imageLoaderOverlay}
+                                          >
+                                            <ActivityIndicator
+                                              size="small"
+                                              color="#ffffff"
+                                            />
+                                          </View>
+                                        )}
 
-<Text style={styles.helper}>
-  {isVehicle
-    ? `Vehicle photos ${draft.images.length}/5`
-    : t("asset.imagesSelected", { count: draft.images.length })}
-</Text>
-
-{isVehicle ? (
-  <View style={styles.vehiclePreviewGrid}>
-    {vehiclePreviewSlots.map((slot, index) => {
-      const img =
-      slot.index === null
-    ? draft.images[3]
-    : draft.images[slot.index];
-      const imageUri = img?.uri || img?.url;
-      const realIndex = slot.index === null ? 3 : slot.index;
-const imageKey = imageUri ? getImageKey(imageUri, realIndex) : slot.key;
-      const isImageLoading = imageUri
-        ? imageLoadingMap[imageKey] !== false
-        : false;
-
-      return (
-        <TouchableOpacity
-          key={slot.key}
-          style={[
-            styles.vehiclePreviewItem,
-            {
-              width: previewSize,
-              height: previewSize + 18,
-            },
-          ]}
-          onPress={() => openVehiclePhotoCamera(slot.key as VehiclePhotoSlot)}
-          activeOpacity={0.85}
-        >
-          <View style={styles.vehiclePreviewBox}>
-            {imageUri ? (
-              <>
-                <Image
-                  source={{ uri: imageUri }}
-                  style={[
-                    styles.previewImage,
-                    isImageLoading && styles.previewImageLoading,
-                  ]}
-                  resizeMode="cover"
-                  fadeDuration={150}
-                  onLoadStart={() => setImageLoading(imageKey, true)}
-                  onLoadEnd={() => setImageLoading(imageKey, false)}
-                  onError={() => setImageLoading(imageKey, false)}
-                />
-
-                {isImageLoading && (
-                  <View style={styles.imageLoaderOverlay}>
-                    <ActivityIndicator size="small" color="#ffffff" />
-                  </View>
-                )}
-
-                <TouchableOpacity
-                  style={styles.removeBadge}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                   removeImage(realIndex);
-                  }}
-                >
-                  <Text style={styles.removeBadgeText}>✕</Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              <View style={styles.vehiclePlaceholderContent}>
-                <Ionicons name={slot.icon as any} size={20} color={MUTED} />
-                <Ionicons name="add-circle" size={13} color={ACC} />
-              </View>
-            )}
-          </View>
-
-          <Text style={styles.vehiclePreviewLabel} numberOfLines={1}>
-            {slot.label}
-          </Text>
-        </TouchableOpacity>
-      );
-    })}
-
-    {draft.images.slice(4).map((img, extraIndex) => {
-  const realIndex = extraIndex + 4;
-      const imageUri = img.uri || img.url;
-      if (!imageUri) return null;
-
-      const imageKey = getImageKey(imageUri, realIndex);
-      const isImageLoading = imageLoadingMap[imageKey] !== false;
-
-      return (
-        <View
-          key={imageKey}
-          style={[
-            styles.previewItem,
-            {
-              width: previewSize,
-              height: previewSize,
-            },
-          ]}
-        >
-          <Image
-            source={{ uri: imageUri }}
-            style={[
-              styles.previewImage,
-              isImageLoading && styles.previewImageLoading,
-            ]}
-            resizeMode="cover"
-            fadeDuration={150}
-            onLoadStart={() => setImageLoading(imageKey, true)}
-            onLoadEnd={() => setImageLoading(imageKey, false)}
-            onError={() => setImageLoading(imageKey, false)}
-          />
-
-          {isImageLoading && (
-            <View style={styles.imageLoaderOverlay}>
-              <ActivityIndicator size="small" color="#ffffff" />
-            </View>
-          )}
-
-          <TouchableOpacity
-            style={styles.removeBadge}
-            onPress={() => removeImage(realIndex)}
-          >
-            <Text style={styles.removeBadgeText}>✕</Text>
-          </TouchableOpacity>
-        </View>
-      );
-    })}
-  </View>
-) : (
-  draft.images.length > 0 && (
-    <View style={styles.previewGrid}>
-      {draft.images.map((img, index) => {
-        const imageUri = img.uri || img.url;
-        if (!imageUri) return null;
-
-        const imageKey = getImageKey(imageUri, index);
-        const isImageLoading = imageLoadingMap[imageKey] !== false;
-
-        return (
-          <View
-            key={imageKey}
-            style={[
-              styles.previewItem,
-              {
-                width: previewSize,
-                height: previewSize,
-              },
-            ]}
-          >
-            <Image
-              source={{ uri: imageUri }}
-              style={[
-                styles.previewImage,
-                isImageLoading && styles.previewImageLoading,
-              ]}
-              resizeMode="cover"
-              fadeDuration={150}
-              onLoadStart={() => setImageLoading(imageKey, true)}
-              onLoadEnd={() => setImageLoading(imageKey, false)}
-              onError={() => setImageLoading(imageKey, false)}
-            />
-
-            {isImageLoading && (
-              <View style={styles.imageLoaderOverlay}>
-                <ActivityIndicator size="small" color="#ffffff" />
-              </View>
-            )}
-
-            <TouchableOpacity
-              style={styles.removeBadge}
-              onPress={() => removeImage(index)}
-            >
-              <Text style={styles.removeBadgeText}>✕</Text>
-            </TouchableOpacity>
-          </View>
-        );
-      })}
-    </View>
-  )
-)}
-
-
-  </>
-)}
-</>
+                                        <TouchableOpacity
+                                          style={styles.removeBadge}
+                                          onPress={() => removeImage(index)}
+                                        >
+                                          <Text
+                                            style={styles.removeBadgeText}
+                                          >
+                                            ✕
+                                          </Text>
+                                        </TouchableOpacity>
+                                      </View>
+                                    );
+                                  })}
+                                </View>
+                              )}
+                            </>
+                          )}
+                        </>
+                      )}
+                    </>
                   </ScrollView>
 
-<View style={styles.footer}>
-  <TouchableOpacity
-  style={[styles.footerIconBtn]}
-  onPress={openPhotoCamera}
-  activeOpacity={0.85}
->
-  <MaterialIcons name="photo-camera" size={18} color="#fff" />
-  <Text style={styles.footerIconBtnText}>{t("asset.openCamera")}</Text>
-</TouchableOpacity>
+                  <View style={styles.footer}>
+                    {!isVehicle && (
+                      <TouchableOpacity
+                        style={[styles.footerIconBtn]}
+                        onPress={openPhotoCamera}
+                        activeOpacity={0.85}
+                      >
+                        <MaterialIcons
+                          name="photo-camera"
+                          size={18}
+                          color="#fff"
+                        />
+                        <Text style={styles.footerIconBtnText}>
+                          {t("asset.openCamera")}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
 
-<TouchableOpacity
-  style={[styles.primaryBtn, styles.finishBtn, submitting && { opacity: 0.6 }]}
-  onPress={handleFooterSave}
-  disabled={submitting}
->
-  <Text style={styles.primaryText}>
-    {submitting
-      ? t("asset.saving") || "Saving..."
-      : mode === "edit"
-      ? "Save & Next"
-      : "Save & New Asset"}
-  </Text>
-</TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.primaryBtn,
+                        styles.finishBtn,
+                        submitting && { opacity: 0.6 },
+                      ]}
+                      onPress={handleFooterSave}
+                      disabled={submitting}
+                    >
+                      <Text style={styles.primaryText}>
+                        {submitting
+                          ? t("asset.saving") || "Saving..."
+                          : mode === "edit"
+                          ? "Save & Next"
+                          : "Save & New Asset"}
+                      </Text>
+                    </TouchableOpacity>
 
-
- {/* <TouchableOpacity
-  style={[styles.primaryBtn, styles.finishBtn, submitting && { opacity: 0.6 }]}
-  onPress={handleFooterSave}
-  disabled={submitting}
->
-  <Text style={styles.primaryText}>
-    {submitting
-      ? t("asset.saving") || "Saving..."
-      : mode === "edit"
-      ? "Save and Next"
-      : "Save and Create"}
-  </Text>
-</TouchableOpacity> */}
-{/* 
-  <TouchableOpacity
-    style={styles.footerIconBtn}
-    onPress={pickImagesFromLibrary}
-    activeOpacity={0.85}
-  >
-    <Ionicons name="image-outline" size={18} color={TEXT} />
-    <Text style={styles.footerIconBtnTextDark}>
-      {t("asset.uploadFromPhone")}
-    </Text>
-  </TouchableOpacity> */}
-
-  {/* <TouchableOpacity
-    style={styles.footerIconBtn}
-    onPress={openScanCamera}
-    activeOpacity={0.85}
-  >
-    <Ionicons name="scan-outline" size={18} color={TEXT} />
-    <Text style={styles.footerIconBtnTextDark}>
-      {t("asset.scanText") || "Scan"}
-    </Text>
-  </TouchableOpacity> */}
-
-  <TouchableOpacity
-    style={[styles.primaryBtn, styles.finishBtn, submitting && { opacity: 0.6 }]}
-    onPress={handleFinish}
-    disabled={submitting}
-  >
-    <Text style={styles.primaryText}>
-      {submitting
-        ? t("asset.saving") || "Saving..."
-        : mode === "edit"
-        ? t("asset.saveChanges")
-        : t("asset.finish")}
-    </Text>
-  </TouchableOpacity>
-</View>
-
-
+                    <TouchableOpacity
+                      style={[
+                        styles.primaryBtn,
+                        styles.finishBtn,
+                        submitting && { opacity: 0.6 },
+                      ]}
+                      onPress={handleFinish}
+                      disabled={submitting}
+                    >
+                      <Text style={styles.primaryText}>
+                        {submitting
+                          ? t("asset.saving") || "Saving..."
+                          : mode === "edit"
+                          ? t("asset.saveChanges")
+                          : t("asset.finish")}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </TouchableWithoutFeedback>
             </KeyboardAvoidingView>
@@ -1679,385 +1177,237 @@ const imageKey = imageUri ? getImageKey(imageUri, realIndex) : slot.key;
         </TouchableWithoutFeedback>
       </Modal>
 
-
       <Modal
-  visible={addTypeModalOpen}
-  transparent
-  animationType="fade"
-  statusBarTranslucent
-  onRequestClose={() => {
-    setAddTypeModalOpen(false);
-    setNewSubAssetTypeText("");
-  }}
->
-  <TouchableWithoutFeedback
-    onPress={() => {
-      setAddTypeModalOpen(false);
-      setNewSubAssetTypeText("");
-    }}
-  >
-    <View style={styles.vehicleSelectOverlay}>
-     <TouchableWithoutFeedback onPress={() => {}}>
-        <View style={styles.addTypeModalCard}>
-          <View style={styles.vehicleSelectHeader}>
-            <Text style={styles.vehicleSelectTitle}>Add asset type</Text>
-
-            <TouchableOpacity
-              onPress={() => {
-                setAddTypeModalOpen(false);
-                setNewSubAssetTypeText("");
-              }}
-              style={styles.vehicleSelectCloseBtn}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="close" size={18} color="#2b2b2d" />
-            </TouchableOpacity>
-          </View>
-
-          <View style={{ padding: 14 }}>
-            <Text style={styles.fieldLabel}>Asset type</Text>
-
-            <TextInput
-              placeholder="e.g. Sofa, Chair, TV"
-              placeholderTextColor="#767B91"
-              value={newSubAssetTypeText}
-              onChangeText={setNewSubAssetTypeText}
-              style={[styles.input, styles.compactInput, { marginBottom: 16 }]}
-              autoFocus
-              autoCapitalize="words"
-            />
-
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "flex-end",
-                gap: 8,
-              }}
-            >
-              <TouchableOpacity
-                style={styles.secondaryBtn}
-                onPress={() => {
-                  setAddTypeModalOpen(false);
-                  setNewSubAssetTypeText("");
-                }}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.secondaryText}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.primaryBtn}
-                onPress={saveNewSubAssetType}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.primaryText}>Add</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </TouchableWithoutFeedback>
-    </View>
-  </TouchableWithoutFeedback>
-</Modal>
-
-
-<Modal
-  visible={conditionModalOpen}
-  transparent
-  animationType="fade"
-  statusBarTranslucent
-  onRequestClose={() => {
-    setConditionModalOpen(false);
-    setAddConditionMode(false);
-    setNewConditionText("");
-  }}
->
-  <TouchableWithoutFeedback
-    onPress={() => {
-      setConditionModalOpen(false);
-      setAddConditionMode(false);
-      setNewConditionText("");
-    }}
-  >
-    <View style={styles.vehicleSelectOverlay}>
-      <TouchableWithoutFeedback onPress={() => {}}>
-        <View style={styles.conditionModalCard}>
-          <View style={styles.vehicleSelectHeader}>
-            <Text style={styles.vehicleSelectTitle}>Choose condition</Text>
-
-            <TouchableOpacity
-              onPress={() => {
-                setConditionModalOpen(false);
-                setAddConditionMode(false);
-                setNewConditionText("");
-              }}
-              style={styles.vehicleSelectCloseBtn}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="close" size={18} color="#2b2b2d" />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView
-            style={styles.vehicleSelectScroll}
-            contentContainerStyle={styles.vehicleSelectScrollContent}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator
-          >
-            {!addConditionMode ? (
-              <TouchableOpacity
-                style={styles.conditionAddRow}
-                onPress={() => {
-                  setAddConditionMode(true);
-                  setNewConditionText("");
-                }}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="add-circle-outline" size={18} color={ACC} />
-                <Text style={styles.conditionAddRowText}>Add a Condition</Text>
-              </TouchableOpacity>
-            ) : (
-              <View style={styles.conditionInputRow}>
-                <TextInput
-                  value={newConditionText}
-                  onChangeText={setNewConditionText}
-                  placeholder="e.g. Needs Repair"
-                  placeholderTextColor="#767B91"
-                  style={styles.conditionInput}
-                  autoFocus
-                  returnKeyType="done"
-                  onSubmitEditing={saveNewCondition}
-                />
-
-                <TouchableOpacity
-                  style={styles.conditionTickBtn}
-                  onPress={saveNewCondition}
-                  activeOpacity={0.85}
-                >
-                  <Ionicons name="checkmark" size={19} color="#ffffff" />
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {projectConditions.map((condition) => {
-              const isSelected =
-                String(draft.condition || "").trim().toLowerCase() ===
-                condition.trim().toLowerCase();
-
-              return (
-                <TouchableOpacity
-                  key={condition}
-                  style={[
-                    styles.conditionOptionRow,
-                    isSelected && styles.conditionOptionRowSelected,
-                  ]}
-                  onPress={() => {
-                    setDraft((prev) => ({
-                      ...prev,
-                      condition,
-                    }));
-
-                    setConditionModalOpen(false);
-                    setAddConditionMode(false);
-                    setNewConditionText("");
-                  }}
-                  activeOpacity={0.85}
-                >
-                  <Text
-                    style={[
-                      styles.conditionOptionText,
-                      isSelected && styles.conditionOptionTextSelected,
-                    ]}
-                  >
-                    {condition}
+        visible={conditionModalOpen}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => {
+          setConditionModalOpen(false);
+          setAddConditionMode(false);
+          setNewConditionText("");
+        }}
+      >
+        <TouchableWithoutFeedback
+          onPress={() => {
+            setConditionModalOpen(false);
+            setAddConditionMode(false);
+            setNewConditionText("");
+          }}
+        >
+          <View style={styles.vehicleSelectOverlay}>
+            <TouchableWithoutFeedback onPress={() => {}}>
+              <View style={styles.conditionModalCard}>
+                <View style={styles.vehicleSelectHeader}>
+                  <Text style={styles.vehicleSelectTitle}>
+                    Choose condition
                   </Text>
 
-                  {isSelected && (
-                    <Ionicons name="checkmark" size={18} color={ACC} />
-                    
+                  <TouchableOpacity
+                    onPress={() => {
+                      setConditionModalOpen(false);
+                      setAddConditionMode(false);
+                      setNewConditionText("");
+                    }}
+                    style={styles.vehicleSelectCloseBtn}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name="close" size={18} color="#2b2b2d" />
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView
+                  style={styles.vehicleSelectScroll}
+                  contentContainerStyle={styles.vehicleSelectScrollContent}
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator
+                >
+                  {!addConditionMode ? (
+                    <TouchableOpacity
+                      style={styles.conditionAddRow}
+                      onPress={() => {
+                        setAddConditionMode(true);
+                        setNewConditionText("");
+                      }}
+                      activeOpacity={0.85}
+                    >
+                      <Ionicons
+                        name="add-circle-outline"
+                        size={18}
+                        color={ACC}
+                      />
+                      <Text style={styles.conditionAddRowText}>
+                        Add a Condition
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={styles.conditionInputRow}>
+                      <TextInput
+                        value={newConditionText}
+                        onChangeText={setNewConditionText}
+                        placeholder="e.g. Needs Repair"
+                        placeholderTextColor="#767B91"
+                        style={styles.conditionInput}
+                        autoFocus
+                        returnKeyType="done"
+                        onSubmitEditing={saveNewCondition}
+                      />
+
+                      <TouchableOpacity
+                        style={styles.conditionTickBtn}
+                        onPress={saveNewCondition}
+                        activeOpacity={0.85}
+                      >
+                        <Ionicons
+                          name="checkmark"
+                          size={19}
+                          color="#ffffff"
+                        />
+                      </TouchableOpacity>
+                    </View>
                   )}
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </View>
-      </TouchableWithoutFeedback>
-    </View>
-  </TouchableWithoutFeedback>
-</Modal>
+
+                  {projectConditions.map((condition) => {
+                    const isSelected =
+                      String(draft.condition || "").trim().toLowerCase() ===
+                      condition.trim().toLowerCase();
+
+                    return (
+                      <TouchableOpacity
+                        key={condition}
+                        style={[
+                          styles.conditionOptionRow,
+                          isSelected && styles.conditionOptionRowSelected,
+                        ]}
+                        onPress={() => {
+                          setDraft((prev) => ({
+                            ...prev,
+                            condition,
+                          }));
+
+                          setConditionModalOpen(false);
+                          setAddConditionMode(false);
+                          setNewConditionText("");
+                        }}
+                        activeOpacity={0.85}
+                      >
+                        <Text
+                          style={[
+                            styles.conditionOptionText,
+                            isSelected && styles.conditionOptionTextSelected,
+                          ]}
+                        >
+                          {condition}
+                        </Text>
+
+                        {isSelected && (
+                          <Ionicons
+                            name="checkmark"
+                            size={18}
+                            color={ACC}
+                          />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
 
       <AssetCameraModal
-  visible={cameraOpen}
-  mode={cameraMode}
-  onClose={() => setCameraOpen(false)}
-onDone={(media: any[]) => {
-  if (cameraMode !== "photos") return;
+        visible={cameraOpen}
+        mode={cameraMode}
+        onClose={() => setCameraOpen(false)}
+        onDone={(media: any[]) => {
+          if (cameraMode !== "photos") return;
 
-  const mapped: AssetMediaInput[] = media.map((item: any, index: number) => {
-    const isVideo = item.mediaType === "video";
+          const mapped: AssetMediaInput[] = media.map(
+            (item: any, index: number) => {
+              const isVideo = item.mediaType === "video";
 
-    return {
-      uri: item.path?.startsWith("file://")
-        ? item.path
-        : `file://${item.path}`,
-      name: isVideo
-        ? `video_${Date.now()}_${index}.mp4`
-        : `photo_${Date.now()}_${index}.jpg`,
-      type: isVideo ? "video/mp4" : "image/jpeg",
-      mediaType: isVideo ? "video" : "image",
-    };
-  });
+              return {
+                uri: item.path?.startsWith("file://")
+                  ? item.path
+                  : `file://${item.path}`,
+                name: isVideo
+                  ? `video_${Date.now()}_${index}.mp4`
+                  : `photo_${Date.now()}_${index}.jpg`,
+                type: isVideo ? "video/mp4" : "image/jpeg",
+                mediaType: isVideo ? "video" : "image",
+              };
+            }
+          );
 
-  if (!mapped.length) return;
+          if (!mapped.length) return;
 
-  setDraft((prev): AssetDraft => {
-    const currentImages: AssetMediaInput[] = [...prev.images];
+          setDraft((prev): AssetDraft => {
+            const currentImages: AssetMediaInput[] = [...prev.images];
 
-    if (isVehicle) {
-      if (vehiclePhotoSlot === "plate") {
-        currentImages[0] = mapped[0];
-      } else if (vehiclePhotoSlot === "details") {
-        currentImages[1] = mapped[0];
-      } else if (vehiclePhotoSlot === "odometer") {
-        currentImages[2] = mapped[0];
-      } else if (vehiclePhotoSlot === "other") {
-        currentImages.push(...mapped);
-      } else {
-        currentImages.push(...mapped);
-      }
+            if (isVehicle) {
+              if (vehiclePhotoSlot === "plate") {
+                currentImages[0] = mapped[0];
+              } else if (vehiclePhotoSlot === "details") {
+                currentImages[1] = mapped[0];
+              } else if (vehiclePhotoSlot === "odometer") {
+                currentImages[2] = mapped[0];
+              } else if (vehiclePhotoSlot === "other") {
+                currentImages.push(...mapped);
+              } else {
+                currentImages.push(...mapped);
+              }
 
-      return {
-        ...prev,
-        images: currentImages.filter(Boolean) as AssetMediaInput[],
-      };
-    }
+              return {
+                ...prev,
+                images: currentImages.filter(Boolean) as AssetMediaInput[],
+              };
+            }
 
-    return {
-      ...prev,
-      images: [...prev.images, ...mapped],
-    };
-  });
+            return {
+              ...prev,
+              images: [...prev.images, ...mapped],
+            };
+          });
 
-  setVehiclePhotoSlot(null);
-}}
-  onScanText={(text: string) => {
-    if (cameraMode !== "scan") return;
+          setVehiclePhotoSlot(null);
+        }}
+        onScanText={(text: string) => {
+          if (cameraMode !== "scan") return;
 
-    appendScannedTextToDescription(text);
-    setCameraOpen(false);
-  }}
-/>
+          appendScannedTextToDescription(text);
+          setCameraOpen(false);
+        }}
+      />
 
-
-
-<Modal
-  visible={!!snackbar}
-  transparent
-  animationType="fade"
-  statusBarTranslucent
-  onRequestClose={() => setSnackbar(null)}
->
-  <View style={styles.snackbarModalOverlay} pointerEvents="none">
-    {snackbar && (
-      <View
-        style={[
-          styles.snackbar,
-          snackbar.type === "error"
-            ? styles.snackbarError
-            : snackbar.type === "success"
-            ? styles.snackbarSuccess
-            : styles.snackbarInfo,
-        ]}
+      <Modal
+        visible={!!snackbar}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setSnackbar(null)}
       >
-        <Text style={styles.snackbarText}>{snackbar.message}</Text>
-      </View>
-    )}
-  </View>
-</Modal>
+        <View style={styles.snackbarModalOverlay} pointerEvents="none">
+          {snackbar && (
+            <View
+              style={[
+                styles.snackbar,
+                snackbar.type === "error"
+                  ? styles.snackbarError
+                  : snackbar.type === "success"
+                  ? styles.snackbarSuccess
+                  : styles.snackbarInfo,
+              ]}
+            >
+              <Text style={styles.snackbarText}>{snackbar.message}</Text>
+            </View>
+          )}
+        </View>
+      </Modal>
     </>
   );
 }
-
-const NotesModal: React.FC<{
-  visible: boolean;
-  notes: string;
-  onSave: (notes: string) => void;
-  onCancel: () => void;
-}> = ({ visible, notes, onSave, onCancel }) => {
-  const [currentNotes, setCurrentNotes] = useState(notes);
- const { t, i18n } = useTranslation();
-const isRTL = i18n.language === "ar" || i18n.dir?.() === "rtl";
-
-const { width, height } = useWindowDimensions();
-
-const isSmallScreen = width < 380 || height < 700;
-const isTablet = width >= 768;
-
-const notesModalWidth = Math.min(width * 0.92, isTablet ? 480 : 420);
-const notesModalMaxHeight = height * 0.78;
-
-
-  useEffect(() => {
-    setCurrentNotes(notes);
-  }, [notes]);
-
-  return (
-    <Modal visible={visible} transparent animationType="fade">
-      <TouchableWithoutFeedback onPress={onCancel}>
-        <View style={styles.overlay}>
-          <TouchableWithoutFeedback>
-            <View
-  style={[
-    styles.modalCardSmall,
-    {
-      width: notesModalWidth,
-      maxHeight: notesModalMaxHeight,
-      borderRadius: isSmallScreen ? 18 : 24,
-      padding: isSmallScreen ? 12 : 16,
-    },
-  ]}
->
-              <View style={styles.header}>
-                <Text style={styles.title}>Notes</Text>
-                <TouchableOpacity onPress={onCancel} style={styles.closeBtn}>
-                 
-                  <Text style={styles.closeText}>✕</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.notesBox}>
-                <TextInput
-                  value={currentNotes}
-                  onChangeText={setCurrentNotes}
-                  placeholder="Write notes..."
-                  placeholderTextColor="#767B91"
-                  multiline
-                  scrollEnabled
-                  textAlignVertical="top"
-                  style={styles.notesInput}
-                />
-              </View>
-              <View style={styles.modalActions}>
-                <TouchableOpacity
-                  style={styles.secondaryBtn}
-                  onPress={onCancel}
-                >
-                  <Text style={styles.secondaryText}>Cancel</Text>
-                  
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.primaryBtn}
-                  onPress={() => onSave(currentNotes)}
-                >
-                  <Text style={styles.primaryText}>Save</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </TouchableWithoutFeedback>
-        </View>
-      </TouchableWithoutFeedback>
-    </Modal>
-  );
-};
 
 const ACC = "#2A324B";
 const SURFACE = "#E1E5EE";
@@ -2072,444 +1422,177 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(42,50,75,0.55)",
     paddingHorizontal: 10,
     paddingVertical: 1,
-    justifyContent: "flex-start",   // vertical center
-    alignItems: "center",       // horizontal center
+    justifyContent: "flex-start",
+    alignItems: "center",
   },
 
-  assetTypeQuantityRow: {
-  flexDirection: "row",
-  alignItems: "flex-start",
-},
-
-assetTypeFieldWrap: {
-  width: 200,
-  marginRight: 5,
-},
-
-quantityFieldWrap: {
-  flex: 1,
-},
-
-
-
-keyboardWrap: {
-  width: "100%",
-  flex: 1,
-  justifyContent: "flex-start",
-  alignItems: "center",
-},
-
-modalCard: {
-  backgroundColor: "#ffffff",
-  borderWidth: 1,
-  borderColor: BORDER,
-  borderRadius: 24,
-  padding: 16,
-  alignSelf: "center",
-  flexShrink: 1,
-  overflow: "visible",
-  marginTop: 40,
-},
-
-scrollView: {
-  flex: 1,
-  width: "100%",
-},
-
-scrollContent: {
-  paddingBottom: 100,
-  flexGrow: 1,
-},
-
-modalCardSmall: {
-  backgroundColor: "#ffffff",
-  borderWidth: 1,
-  borderColor: BORDER,
-  borderRadius: 24,
-  padding: 16,
-  alignSelf: "center",
-
-  ...Platform.select({
-    ios: {
-      shadowColor: "#000",
-      shadowOpacity: 0.1,
-      shadowRadius: 10,
-      shadowOffset: { width: 0, height: 5 },
-    },
-    android: {
-      elevation: 6,
-    },
-  }),
-},
-
-
-
-  addTypeDropdownWrap: {
-  position: "relative",
-  zIndex: 999,
-},
-
-addTypeDropdownMenu: {
-  position: "absolute",
-  top: 30,
-  right: 0,
-  width: 175,
-  maxHeight: 230,
-  backgroundColor: "#ffffff",
-  borderWidth: 1,
-  borderColor: BORDER,
-  borderRadius: 14,
-  paddingVertical: 6,
-  zIndex: 9999,
-  elevation: 12,
-  shadowColor: "#000",
-  shadowOffset: { width: 0, height: 8 },
-  shadowOpacity: 0.15,
-  shadowRadius: 12,
-},
-
-addTypeDropdownTitle: {
-  color: MUTED,
-  fontSize: 11,
-  fontWeight: "800",
-  paddingHorizontal: 10,
-  paddingBottom: 6,
-  borderBottomWidth: 1,
-  borderBottomColor: BORDER,
-  marginBottom: 4,
-},
-
-addTypeDropdownOption: {
-  minHeight: 36,
-  paddingHorizontal: 10,
-  paddingVertical: 8,
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: 8,
-},
-
-addTypeDropdownOptionText: {
-  flex: 1,
-  color: TEXT,
-  fontSize: 12,
-  fontWeight: "700",
-},
-
-assetTypeChooseWrap: {
-  position: "relative",
-  zIndex: 999,
-},
-
-assetTypeChooseControl: {
-  height: 28,
-  minWidth: 106,
-  borderRadius: 999,
-  backgroundColor: SOFT,
-  borderWidth: 1,
-  borderColor: BORDER,
-  flexDirection: "row",
-  alignItems: "center",
-  overflow: "hidden",
-},
-
-
-assetNameInputWrap: {
-  position: "relative",
-  justifyContent: "center",
-  
-},
-
-assetNameInputWithClear: {
-  paddingRight: 30,
-  
-},
-
-assetNameClearBtn: {
-  
-  position: "absolute",
-  right: 5,
-  top: 5,
-  bottom: 10,
-  width: 35,
-  alignItems: "center",
-  justifyContent: "center",
-},
-assetTypeChooseBtn: {
-  flex: 1,
-  height: "100%",
-  paddingLeft: 9,
-  paddingRight: 5,
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: 3,
-},
-
-assetTypeChooseText: {
-  color: TEXT,
-  fontSize: 10,
-  fontWeight: "800",
-},
-
-assetTypeChooseDivider: {
-  width: 1,
-  height: 16,
-  backgroundColor: BORDER,
-},
-
-
-
-vehiclePreviewGrid: {
-  flexDirection: "row",
-  flexWrap: "wrap",
-  gap: 6,
-  marginTop: 6,
-  marginBottom: 8,
-},
-
-vehiclePreviewItem: {
-  alignItems: "center",
-  justifyContent: "flex-start",
-},
-
-vehiclePreviewBox: {
-  width: "100%",
-  aspectRatio: 1,
-  borderRadius: 10,
-  borderWidth: 1,
-  borderColor: BORDER,
-  backgroundColor: SURFACE,
-  overflow: "hidden",
-  alignItems: "center",
-  justifyContent: "center",
-  position: "relative",
-},
-
-vehiclePlaceholderContent: {
-  flex: 1,
-  width: "100%",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: 2,
-},
-
-vehiclePreviewLabel: {
-  marginTop: 3,
-  color: TEXT,
-  fontSize: 8,
-  fontWeight: "800",
-  textAlign: "center",
-},
-
-vehicleSelectOverlay: {
-  flex: 1,
-  backgroundColor: "rgba(0,0,0,0.18)",
-  alignItems: "center",
-  justifyContent: "center",
-  paddingHorizontal: 20,
-},
-
-vehicleSelectCard: {
-  width: "100%",
-  maxWidth: 420,
-  backgroundColor: "#ffffff",
-  borderRadius: 18,
-  overflow: "hidden",
-  elevation: 20,
-  shadowColor: "#000",
-  shadowOpacity: 0.16,
-  shadowRadius: 16,
-  shadowOffset: { width: 0, height: 8 },
-},
-
-vehicleSelectHeader: {
-  minHeight: 48,
-  paddingHorizontal: 14,
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "space-between",
-  borderBottomWidth: 1,
-  borderBottomColor: "rgba(42,50,75,0.08)",
-},
-
-vehicleSelectTitle: {
-  color: TEXT,
-  fontSize: 15,
-  fontWeight: "800",
-},
-
-otherAssetControls: {
-  marginTop: 8,
-  gap: 8,
-},
-
-vehicleSelectCloseBtn: {
-  width: 34,
-  height: 34,
-  borderRadius: 17,
-  alignItems: "center",
-  justifyContent: "center",
-  backgroundColor: "#F3F4F6",
-},
-
-vehicleSelectScroll: {
-  width: "100%",
-},
-
-vehicleSelectScrollContent: {
-  paddingVertical: 4,
-},
-
-vehicleSelectOption: {
-  minHeight: 46,
-  paddingHorizontal: 14,
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "space-between",
-  borderBottomWidth: 1,
-  borderBottomColor: "rgba(42,50,75,0.06)",
-},
-
-vehicleSelectOptionText: {
-  flex: 1,
-  color: TEXT,
-  fontSize: 14,
-  fontWeight: "700",
-  marginRight: 10,
-},
-
-addDetailsBtn: {
-  flexDirection: "row",
-  alignItems: "center",
-  alignSelf: "flex-start",
-  gap: 7,
-  marginTop: 4,
-  marginBottom: 10,
-  paddingHorizontal: 14,
-  paddingVertical: 8,
-  borderRadius: 999,
-  backgroundColor: "rgba(247,197,159,0.55)",
-  borderWidth: 1,
-  borderColor: SOFT,
-},
-
-addDetailsText: {
-  color: TEXT,
-  fontSize: 12,
-  fontWeight: "800",
-},
-
-conditionBoxFull: {
-  marginBottom: 8,
-},
-
-assetTypePlusBtn: {
-  width: 30,
-  height: "100%",
-  alignItems: "center",
-  justifyContent: "center",
-  backgroundColor:ACC
-},
-
-modalCardCompact: {
-  alignSelf: "center",
-},
-
-
-
-
-previewImageLoading: {
-  opacity: 0.35,
-},
-
-vehicleSelectOptionRow: {
-  flexDirection: "row",
-  alignItems: "center",
-  borderBottomWidth: 1,
-  borderBottomColor: "#EEF2F7",
-},
-
-vehicleSelectOptionMain: {
-  flex: 1,
-  minHeight: 46,
-  paddingHorizontal: 14,
-  paddingVertical: 12,
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "space-between",
-},
-
-vehicleFavoriteBtn: {
-  width: 48,
-  minHeight: 46,
-  alignItems: "center",
-  justifyContent: "center",
-},
-
-addTypeModalCard: {
-  width: "100%",
-  maxWidth: 360,
-  backgroundColor: "#ffffff",
-  borderRadius: 18,
-  overflow: "hidden",
-  elevation: 20,
-  shadowColor: "#000",
-  shadowOpacity: 0.16,
-  shadowRadius: 16,
-  shadowOffset: { width: 0, height: 8 },
-  marginBottom:60,
-},
-
-
-snackbarModalOverlay: {
-  flex: 1,
-  alignItems: "center",
-},
-
-snackbar: {
-  position: "absolute",
-  top: Platform.OS === "ios" ? 60 : 30,
-  left: 16,
-  right: 16,
-  minHeight: 30,
-  justifyContent: "center",
-  alignItems: "center",
-  paddingVertical: 10,
-  paddingHorizontal: 14,
-  borderRadius: 12,
-  zIndex: 9999,
-  elevation: 9999,
-},
-snackbarText: {
-  color: "#fff",
-  fontSize: 12,
-  fontWeight: "500",
-  textAlign: "center",
-},
-
-snackbarSuccess: {
-  backgroundColor: ACC,
-},
-
-snackbarError: {
-  backgroundColor: "#FF6B6B",
-},
-
-
-
-snackbarInfo: {
-  backgroundColor: MUTED,
-},
-
-
+  keyboardWrap: {
+    width: "100%",
+    flex: 1,
+    justifyContent: "flex-start",
+    alignItems: "center",
+  },
+
+  modalCard: {
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 24,
+    padding: 16,
+    alignSelf: "center",
+    flexShrink: 1,
+    overflow: "visible",
+    marginTop: 40,
+  },
+
+  scrollView: {
+    flex: 1,
+    width: "100%",
+  },
+
+  scrollContent: {
+    paddingBottom: 100,
+    flexGrow: 1,
+  },
+
+  assetNameInputWrap: {
+    position: "relative",
+    justifyContent: "center",
+  },
+
+  assetNameInputWithClear: {
+    paddingRight: 30,
+  },
+
+  assetNameClearBtn: {
+    position: "absolute",
+    right: 5,
+    top: 5,
+    bottom: 10,
+    width: 35,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  vehicleSelectOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.18)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+  },
+
+  vehicleSelectHeader: {
+    minHeight: 48,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(42,50,75,0.08)",
+  },
+
+  vehicleSelectTitle: {
+    color: TEXT,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+
+  vehicleSelectCloseBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F3F4F6",
+  },
+
+  vehicleSelectScroll: {
+    width: "100%",
+  },
+
+  vehicleSelectScrollContent: {
+    paddingVertical: 4,
+  },
+
+  addDetailsBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 7,
+    marginTop: 4,
+    marginBottom: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(247,197,159,0.55)",
+    borderWidth: 1,
+    borderColor: SOFT,
+  },
+
+  addDetailsText: {
+    color: TEXT,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+
+  conditionBoxFull: {
+    marginBottom: 8,
+  },
+
+  modalCardCompact: {
+    alignSelf: "center",
+  },
+
+  previewImageLoading: {
+    opacity: 0.35,
+  },
+
+  snackbarModalOverlay: {
+    flex: 1,
+    alignItems: "center",
+  },
+
+  snackbar: {
+    position: "absolute",
+    top: Platform.OS === "ios" ? 60 : 30,
+    left: 16,
+    right: 16,
+    minHeight: 30,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    zIndex: 9999,
+    elevation: 9999,
+  },
+
+  snackbarText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "500",
+    textAlign: "center",
+  },
+
+  snackbarSuccess: {
+    backgroundColor: ACC,
+  },
+
+  snackbarError: {
+    backgroundColor: "#FF6B6B",
+  },
+
+  snackbarInfo: {
+    backgroundColor: MUTED,
+  },
 
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 2,
-    gap:5
+    gap: 5,
   },
 
   title: {
@@ -2530,828 +1613,246 @@ snackbarInfo: {
     justifyContent: "center",
   },
 
-
-  radioRow: {
-  flexDirection: "row",
-  gap: 10,
-  marginBottom: 12,
-},
-
-
-
-
-vehicleDropdownInput: {
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "space-between",
-  paddingHorizontal: 12,
-},
-
-vehicleDropdownDisabled: {
-  backgroundColor: "#F3F4F6",
-  borderColor: "rgba(156,163,175,0.35)",
-},
-
-vehicleDropdownText: {
-  flex: 1,
-  color: TEXT,
-  fontSize: 13,
-  fontWeight: "700",
-  marginRight: 8,
-},
-
-vehicleDropdownPlaceholder: {
-  color: "#767B91",
-  fontWeight: "500",
-},
-
-
-
-vehicleFieldDropdownTop: {
-  zIndex: 30,
-  elevation: 30,
-},
-
-vehicleFieldDropdownMiddle: {
-  zIndex: 20,
-  elevation: 20,
-},
-
-radioOption: {
-  flex: 1,
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 1,
-},
-
-radioText: {
-  color: TEXT,
-  fontSize: 14,
-  fontWeight: "600",
-},
-
-notesCheckRow: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 8,
-  marginTop: 10,
-  marginBottom: 10,
-  backgroundColor: SURFACE,
-  borderWidth: 1,
-  borderColor: BORDER,
-  borderRadius: 12,
-  paddingHorizontal: 10,
-  paddingVertical: 9,
-},
-
-notesPreview: {
-  color: MUTED,
-  fontSize: 11,
-  marginTop: 2,
-},
-
-notesRemoveBtn: {
-  width: 24,
-  height: 24,
-  borderRadius: 12,
-  backgroundColor: "#ffffff",
-  borderWidth: 1,
-  borderColor: BORDER,
-  alignItems: "center",
-  justifyContent: "center",
-},
-
-notesRemoveText: {
-  color: "#ff6b6b",
-  fontSize: 12,
-  fontWeight: "700",
-},
-
-
-notesInputWrap: {
-  marginBottom: 8,
-},
-
-notesTextArea: {
-  minHeight: 54,
-  maxHeight: 80,
-  backgroundColor: SURFACE,
-  borderWidth: 1,
-  borderColor: BORDER,
-  borderRadius: 12,
-  paddingHorizontal: 10,
-  paddingVertical: 8,
-  color: TEXT,
-  fontSize: 12,
-  fontWeight: "600",
-},
-
-notesModalCard: {
-  width: "88%",
-  maxWidth: 360,
-  alignSelf: "center",
-  backgroundColor: "#ffffff",
-  borderWidth: 1,
-  borderColor: BORDER,
-  borderRadius: 18,
-  padding: 14,
-},
-
-notesBox: {
-  height: 120,
-  backgroundColor: SURFACE,
-  borderWidth: 1,
-  borderColor: BORDER,
-  borderRadius: 14,
-  padding: 10,
-  marginBottom: 8,
-},
-
-
-
-titleRow: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 6,
-  marginBottom: 6,
-},
-
-categoryBadge: {
-  backgroundColor: SOFT,
-  borderRadius: 999,
-  paddingHorizontal: 8,
-  paddingVertical: 3,
-  borderWidth: 1,
-  borderColor: BORDER,
-},
-
-categoryBadgeText: {
-  color: TEXT,
-  fontSize: 8,
-  fontWeight: "300",
-},
-
-voiceCompactRow: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 8,
-  backgroundColor: SURFACE,
-  borderWidth: 1,
-  borderColor: BORDER,
-  borderRadius: 14,
-  paddingHorizontal: 10,
-  paddingVertical: 5,
-  marginBottom: 5,
-},
-
-imageLoaderOverlay: {
-  position: "absolute",
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  alignItems: "center",
-  justifyContent: "center",
-  backgroundColor: "rgba(42,50,75,0.35)",
-  zIndex: 5,
-},
-
-voiceIconBtn: {
-  width: 30,
-  height: 30,
-  borderRadius: 17,
-  backgroundColor: ACC,
-  alignItems: "center",
-  justifyContent: "center",
-},
-
-voiceRecordingBtn: {
-  backgroundColor: "#FF4444",
-},
-
-voiceCompactText: {
-  flex: 1,
-  color: TEXT,
-  fontSize: 12,
-  fontWeight: "600",
-},
-
-voiceSmallAction: {
-  width: 30,
-  height: 30,
-  borderRadius: 17,
-  backgroundColor: "#ffffff",
-  borderWidth: 1,
-  borderColor: BORDER,
-  alignItems: "center",
-  justifyContent: "center",
-  marginRight:15
-},
-
-voicePlayAction: {
-  marginLeft: 40,
-},
-
-
-compactInput: {
-  minHeight: 40,
-  paddingVertical: 8,
-  marginBottom: 8,
-},
-
-topQuickRow: {
-  flexDirection: "row",
-  gap: 10,
-  alignItems: "flex-start",
-},
-
-quantityBox: {
-  width: 70,
-  marginTop:10
-},
-
-quantityControl: {
-  height: 40,
-  width: '100%',
-  flexDirection: "row",
-  alignItems: "center",
-  backgroundColor: SURFACE,
-  borderWidth: 1,
-  borderColor: BORDER,
-  borderRadius: 14,
-  overflow: "hidden",
-},
-
-
-
-
-
-assetTypeInputLikeWrap: {
-  height: 40,
-  borderRadius: 14,
-  backgroundColor: SURFACE,
-  borderWidth: 1,
-  borderColor: BORDER,
-  flexDirection: "row",
-  alignItems: "center",
-  overflow: "visible",
-},
-
-assetTypeInputChoose: {
-  flex: 1,
-  height: "100%",
-  paddingHorizontal: 12,
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "space-between",
-},
-
-assetTypeInputText: {
-  flex: 1,
-  color: TEXT,
-  fontSize: 13,
-  fontWeight: "700",
-},
-
-assetTypeInputDivider: {
-  width: 1,
-  height: 22,
-  backgroundColor: BORDER,
-},
-
-assetTypeInputPlus: {
-  width: 42,
-  height: "100%",
-  alignItems: "center",
-  justifyContent: "center",
-},
-
-assetTypeDropdownMenuFull: {
-  position: "absolute",
-  top: 62,
-  left: 0,
-  right: 0,
-  backgroundColor: "#ffffff",
-  borderWidth: 1,
-  borderColor: BORDER,
-  borderRadius: 14,
-  paddingVertical: 5,
-  zIndex: 9999,
-  elevation: 12,
-  shadowColor: "#000",
-  shadowOffset: { width: 0, height: 8 },
-  shadowOpacity: 0.15,
-  shadowRadius: 12,
-},
-
-conditionQuantityRow: {
-  flexDirection: "row",
-  alignItems: "flex-start",
-  gap: 8,
-  marginBottom: 8,
-},
-
-conditionBox: {
-  flex: 0.5,
-},
-
-compactPickerWrap: {
-  height: 40,
-  borderRadius: 14,
-  backgroundColor: SURFACE,
-  borderWidth: 1,
-  borderColor: BORDER,
-  overflow: "hidden",
-  justifyContent: "center",
-},
-compactPicker: {
-  height: Platform.OS === "android" ? 55 : 44,
-  color: TEXT,
-  fontSize: 8,
-  transform: Platform.OS === "android" ? [{ scale: 0.80 }] : undefined,
-  marginLeft: Platform.OS === "android" ? -10 : 0,
-  marginRight: Platform.OS === "android" ? -10 : 0,
-},
-
-compactPickerItem: {
-  fontSize: 8,
-  color: TEXT,
-},
-
-
-quantityIconBtn: {
-  width: 36,
-  height: 36,
-  borderRadius: 8,
-  alignItems: 'center',
-  justifyContent: 'center',
-},
-
-quantityInput: {
-  flex: 1,
-  height: "100%",
-  textAlign: "center",
-  color: TEXT,
-  fontSize: 13,
-  fontWeight: "700",
-},
-
-
-
-categoryHeaderRow: {
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "space-between",
-  marginTop: 4,
-  marginBottom: 6,
-},
-
-addTypeBtn: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 4,
-  backgroundColor: SOFT,
-  borderRadius: 999,
-  paddingHorizontal: 10,
-  paddingVertical: 6,
-},
-
-addTypeText: {
-  color: TEXT,
-  fontSize: 11,
-  fontWeight: "700",
-},
-
-categoryChipRow: {
-  flexDirection: "row",
-  gap: 8,
-  marginBottom: 10,
-},
-
-categoryChip: {
-  flex: 1,
-  minHeight: 42,
-  borderRadius: 14,
-  borderWidth: 1,
-  borderColor: BORDER,
-  backgroundColor: SURFACE,
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: 8,
-},
-
-categoryChipActive: {
-  backgroundColor: ACC,
-  borderColor: ACC,
-},
-
-categoryChipText: {
-  color: TEXT,
-  fontSize: 13,
-  fontWeight: "800",
-},
-
-categoryChipTextActive: {
-  color: "#ffffff",
-},
-
-customTypeRow: {
-  flexDirection: "row",
-  gap: 8,
-  alignItems: "center",
-  marginBottom: 8,
-},
-
-addTypeSaveBtn: {
-  backgroundColor: ACC,
-  minHeight: 40,
-  paddingHorizontal: 14,
-  borderRadius: 12,
-  alignItems: "center",
-  justifyContent: "center",
-},
-
-vehicleYearPickerWrap: {
-  height: 40,
-  borderRadius: 14,
-  backgroundColor: SURFACE,
-  borderWidth: 1,
-  borderColor: BORDER,
-  overflow: "hidden",
-  justifyContent: "center",
-},
-
-vehicleYearPicker: {
-  height: Platform.OS === "android" ? 55 : 40,
-  color: TEXT,
-  fontSize: 8,
-  transform: Platform.OS === "android" ? [{ scale: 0.80 }] : undefined,
-  marginLeft: Platform.OS === "android" ? -10 : 0,
-  marginRight: Platform.OS === "android" ? -10 : 0,
-},
-
-vehicleYearPickerItem: {
-  fontSize: 10,
-  color: TEXT,
-},
-
-vehicleGrid: {
-  flexDirection: "row",
-  flexWrap: "wrap",
-  gap: 4,
-  overflow: "visible",
-  zIndex: 10,
-},
-
-vehicleField: {
-  width: "48%",
-  position: "relative",
-  zIndex: 1,
-},
-
-recordDoneRow: {
-  flexDirection: "row",
-  gap: 8,
-  alignItems: "center",
-  marginBottom: 8,
-},
-
-footer: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 6,
-  width: "100%",
-  marginTop: 10,
-  paddingTop: 8,
-  borderTopWidth: 1,
-  borderTopColor: BORDER,
-},
-
-footerIconBtn: {
-  flex: 0.9,
-  minHeight: 44,
-  borderRadius: 12,
-  borderWidth: 1,
-  borderColor: BORDER,
-  backgroundColor: ACC,
-  alignItems: "center",
-  justifyContent: "center",
-  paddingHorizontal: 6,
-},
-
-finishBtn: {
-  flex: 1.3,
-  minHeight: 44,
-  paddingHorizontal: 8,
-},
-
-footerIconBtnText: {
-  color: "#ffffff",
-  fontSize: 9,
-  fontWeight: "700",
-  marginTop: 2,
-  textAlign: "center",
-},
-
-footerIconBtnTextDark: {
-  color: TEXT,
-  fontSize: 9,
-  fontWeight: "700",
-  marginTop: 2,
-  textAlign: "center",
-},
-
-
-
-
-
-addTypeHeaderBtn: {
-  width: 24,
-  height: 24,
-  borderRadius: 12,
-  backgroundColor: SURFACE,
-  borderWidth: 1,
-  borderColor: BORDER,
-  alignItems: "center",
-  justifyContent: "center",
-},
-
-headerTypeInputRow: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 3,
-  marginTop: 2,
-  marginBottom: 3,
-},
-
-headerTypeInput: {
-  flex: 1,
-  height: 36,
-  borderRadius: 12,
-  backgroundColor: SURFACE,
-  borderWidth: 1,
-  borderColor: BORDER,
-  paddingHorizontal: 10,
-  color: TEXT,
-  fontSize: 12,
-},
-
-headerTypeSaveBtn: {
-  height: 36,
-  paddingHorizontal: 12,
-  borderRadius: 12,
-  backgroundColor: ACC,
-  alignItems: "center",
-  justifyContent: "center",
-},
-
-headerTypeSaveText: {
-  color: "#ffffff",
-  fontSize: 12,
-  fontWeight: "800",
-},
-
-
-
-
-
-statusInlineRow: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 8,
-  backgroundColor: SURFACE,
-  borderWidth: 1,
-  borderColor: BORDER,
-  borderRadius: 12,
-  paddingHorizontal: 8,
-  paddingVertical: 7,
-  marginBottom: 8,
-},
-
-doneInlineBtn: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 5,
-  flexShrink: 0,
-},
-
-presentInlineGroup: {
-  flex: 1,
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "flex-end",
-  gap: 5,
-},
-
-statusInlineText: {
-  color: TEXT,
-  fontSize: 10,
-  fontWeight: "700",
-},
-
-smallCheckbox: {
-  width: 16,
-  height: 16,
-  borderRadius: 4,
-  borderWidth: 1,
-  borderColor: ACC,
-  alignItems: "center",
-  justifyContent: "center",
-  backgroundColor: "#ffffff",
-},
-
-smallCheckboxChecked: {
-  backgroundColor: ACC,
-},
-
-smallCheckmark: {
-  color: "#ffffff",
-  fontSize: 10,
-  fontWeight: "900",
-  lineHeight: 12,
-},
-
-
-
-smallRadioOption: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 2,
-},
-
-smallRadioText: {
-  color: TEXT,
-  fontSize: 10,
-  fontWeight: "700",
-},
-
-
-
-
-statusDivider: {
-  width: 1,
-  height: 18,
-  backgroundColor: BORDER,
-},
-
-
-
-notesInput: {
-  flex: 1,
-  color: TEXT,
-  fontSize: 14,
-  minHeight: 100,
-  textAlignVertical: "top",
-},
-
-modalActions: {
-  flexDirection: "row",
-  justifyContent: "flex-end",
-  gap: 10,
-  marginTop: 8,
-},
-
-
-notesCheckText: {
-  color: TEXT,
-  fontSize: 12,
-  fontWeight: "600",
-},
-
-
-
-
+  vehicleDropdownPlaceholder: {
+    color: "#767B91",
+    fontWeight: "500",
+  },
+
+  notesInputWrap: {
+    marginBottom: 8,
+  },
+
+  notesTextArea: {
+    minHeight: 54,
+    maxHeight: 80,
+    backgroundColor: SURFACE,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    color: TEXT,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 6,
+  },
+
+  categoryBadge: {
+    backgroundColor: SOFT,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+
+  categoryBadgeText: {
+    color: TEXT,
+    fontSize: 8,
+    fontWeight: "300",
+  },
+
+  voiceCompactRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: SURFACE,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    marginBottom: 5,
+  },
+
+  imageLoaderOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(42,50,75,0.35)",
+    zIndex: 5,
+  },
+
+  voiceIconBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 17,
+    backgroundColor: ACC,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  voiceRecordingBtn: {
+    backgroundColor: "#FF4444",
+  },
+
+  voiceCompactText: {
+    flex: 1,
+    color: TEXT,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+
+  voiceSmallAction: {
+    width: 30,
+    height: 30,
+    borderRadius: 17,
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: BORDER,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 15,
+  },
+
+  voicePlayAction: {
+    marginLeft: 40,
+  },
+
+  compactInput: {
+    minHeight: 40,
+    paddingVertical: 8,
+    marginBottom: 8,
+  },
+
+  topQuickRow: {
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "flex-start",
+  },
+
+  recordDoneRow: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center",
+    marginBottom: 8,
+  },
+
+  footer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    width: "100%",
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: BORDER,
+  },
+
+  footerIconBtn: {
+    flex: 0.9,
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: ACC,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+  },
+
+  finishBtn: {
+    flex: 1.3,
+    minHeight: 44,
+    paddingHorizontal: 8,
+  },
+
+  footerIconBtnText: {
+    color: "#ffffff",
+    fontSize: 9,
+    fontWeight: "700",
+    marginTop: 2,
+    textAlign: "center",
+  },
+
+  statusInlineRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: SURFACE,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    marginBottom: 8,
+  },
+
+  doneInlineBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    flexShrink: 0,
+  },
+
+  presentInlineGroup: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 5,
+  },
+
+  statusInlineText: {
+    color: TEXT,
+    fontSize: 10,
+    fontWeight: "700",
+  },
+
+  smallCheckbox: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: ACC,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#ffffff",
+  },
+
+  smallCheckboxChecked: {
+    backgroundColor: ACC,
+  },
+
+  smallCheckmark: {
+    color: "#ffffff",
+    fontSize: 10,
+    fontWeight: "900",
+    lineHeight: 12,
+  },
+
+  smallRadioOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+  },
+
+  smallRadioText: {
+    color: TEXT,
+    fontSize: 10,
+    fontWeight: "700",
+  },
+
+  statusDivider: {
+    width: 1,
+    height: 18,
+    backgroundColor: BORDER,
+  },
 
   closeText: {
     color: TEXT,
     fontSize: 12,
     fontWeight: "700",
-  },
-
-  step: {
-    color: MUTED,
-    fontSize: 10,
-    marginTop: 2,
-    marginBottom: 10,
-  },
-
-  label: {
-    color: TEXT,
-    fontSize: 8,
-    marginBottom: 5,
-    fontWeight: "300",
-  },
-
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 16,
-  },
-
-  notesTextWrap: {
-  flex: 1,
-},
-
-
-
-  roww: {
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "space-between",
-},
-
-
-  checkboxIsPresent: {
-    width: 22,
-    height: 22,
-    borderWidth: 2,
-    borderColor: MUTED,
-    borderRadius: 4,
-    marginRight: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  checkboxActive: {
-    backgroundColor: ACC,
-    borderColor: ACC,
-  },
-
-  checkmarkIsPresent: {
-    color: "#ffffff",
-    fontSize: 14,
-    fontWeight: "bold",
-  },
-
-  checkboxLabelIsPresent: {
-    fontSize: 16,
-    color: TEXT,
-  },
-
-  checkboxWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 12,
-    padding: 12,
-    backgroundColor: SURFACE,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: BORDER,
-  },
-
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: MUTED,
-    backgroundColor: "#ffffff",
-    marginRight: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  checkboxChecked: {
-    borderColor: ACC,
-    backgroundColor: ACC,
-  },
-
-  checkmark: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-
-  checkboxLabel: {
-    color: TEXT,
-    fontSize: 14,
-    fontWeight: "500",
-  },
-
-  descriptionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 2,
-  },
-
-  scanBtn: {
-    backgroundColor: SOFT,
-    minHeight: 38,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: SOFT,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 8,
-  },
-
-  scanBtnText: {
-    color: TEXT,
-    fontSize: 12,
-    fontWeight: "600",
   },
 
   input: {
@@ -3370,49 +1871,12 @@ notesCheckText: {
     opacity: 0.55,
   },
 
-  textArea: {
-    minHeight: 110,
-  },
-
-  pickerWrap: {
-    backgroundColor: SURFACE,
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 10,
-    marginBottom: 7,
-    height: 40,
-  },
-
-  picker: {
-    color: TEXT,
-    height: 58,
-    width: "100%",
-    overflow: "hidden",
-    marginLeft: 0,
-    marginTop: Platform.OS === "android" ? -6 : 0,
-    marginBottom: Platform.OS === "android" ? -6 : 0,
-  },
-
-  footerRTL: {
-  flexDirection: "row-reverse",
-},
-
-  imageActionRow: {
+  previewGrid: {
     flexDirection: "row",
-    gap: 8,
-    marginBottom: 4,
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 6,
   },
-
-  flexBtn: {
-    flex: 1,
-  },
-
- previewGrid: {
-  flexDirection: "row",
-  flexWrap: "wrap",
-  gap: 6,
-  marginTop: 6,
-},
 
   previewItem: {
     borderRadius: 12,
@@ -3453,47 +1917,10 @@ notesCheckText: {
     justifyContent: "center",
   },
 
-  nextBtn: {
-    minWidth: 110,
-  },
-
   primaryText: {
     color: "#ffffff",
     fontSize: 10,
     fontWeight: "500",
-  },
-
-  darkBtn: {
-    backgroundColor: SURFACE,
-    minHeight: 46,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: BORDER,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  darkBtnText: {
-    color: TEXT,
-    fontSize: 13,
-    fontWeight: "500",
-  },
-
-  secondaryBtn: {
-    minHeight: 46,
-    paddingHorizontal: 12,
-    justifyContent: "center",
-    borderColor: BORDER,
-    borderWidth: 1,
-    borderRadius: 8,
-    backgroundColor: "#ffffff",
-  },
-
-  secondaryText: {
-    color: TEXT,
-    fontWeight: "600",
-    fontSize: 14,
   },
 
   helper: {
@@ -3509,243 +1936,116 @@ notesCheckText: {
     fontWeight: "500",
   },
 
-  modelInput: {
-    minHeight: 54,
-  },
-
-  descriptionInputWrapper: {
-    maxHeight: 150,
-    marginBottom: 12,
-  },
-
-
-  footerSide: {
-    flex: 1,
-    alignItems: "flex-start",
-  },
-
-  footerSideRight: {
-    flex: 1,
-    alignItems: "flex-end",
-  },
-
-  voiceItem: {
-    marginTop: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderRadius: 12,
+  conditionSelectInput: {
+    minHeight: 40,
+    borderRadius: 14,
+    backgroundColor: SURFACE,
     borderWidth: 1,
     borderColor: BORDER,
-    backgroundColor: SURFACE,
+    paddingHorizontal: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 10,
+    marginBottom: 8,
   },
 
-  voiceActionsLeft: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  voiceTextContainer: {
+  conditionSelectText: {
     flex: 1,
-    marginHorizontal: 8,
-  },
-
-  voiceText: {
     color: TEXT,
     fontSize: 13,
+    fontWeight: "700",
+    marginRight: 8,
   },
 
-  voiceActionsRight: {
+  conditionModalCard: {
+    width: "100%",
+    maxWidth: 380,
+    maxHeight: "68%",
+    backgroundColor: "#ffffff",
+    borderRadius: 18,
+    overflow: "hidden",
+    elevation: 20,
+    shadowColor: "#000",
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+  },
+
+  conditionAddRow: {
+    minHeight: 46,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#EEF2F7",
+    backgroundColor: "rgba(247,197,159,0.25)",
+  },
+
+  conditionAddRowText: {
+    color: TEXT,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+
+  conditionInputRow: {
+    minHeight: 52,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#EEF2F7",
+    backgroundColor: "rgba(247,197,159,0.25)",
+  },
+
+  conditionInput: {
+    flex: 1,
+    minHeight: 38,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: "#ffffff",
+    paddingHorizontal: 10,
+    color: TEXT,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+
+  conditionTickBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: ACC,
     alignItems: "center",
     justifyContent: "center",
   },
 
-  voiceRemoteText: {
-    color: MUTED,
-    fontSize: 12,
-    fontStyle: "italic",
+  conditionOptionRow: {
+    minHeight: 46,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderBottomWidth: 1,
+    borderBottomColor: "#EEF2F7",
   },
 
+  conditionOptionRowSelected: {
+    backgroundColor: "rgba(42,50,75,0.06)",
+  },
 
+  conditionOptionText: {
+    flex: 1,
+    color: TEXT,
+    fontSize: 13,
+    fontWeight: "700",
+  },
 
-  isPresentRow: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 8,
-  marginTop: 12,
-  marginBottom: 4,
-  backgroundColor: SURFACE,
-  borderWidth: 1,
-  borderColor: BORDER,
-  borderRadius: 12,
-  paddingHorizontal: 10,
-  paddingVertical: 10,
-},
-
-isPresentText: {
-  color: TEXT,
-  fontSize: 14,
-  fontWeight: "600",
-},
-
-
-
-
-assetTypeOptionMain: {
-  flex: 1,
-  minHeight: 36,
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: 8,
-},
-
-assetTypeMiniAction: {
-  width: 32,
-  height: 32,
-  borderRadius: 16,
-  alignItems: "center",
-  justifyContent: "center",
-  backgroundColor: "rgba(42,50,75,0.06)",
-},
-
-assetTypeEditInput: {
-  flex: 1,
-  minHeight: 34,
-  borderRadius: 10,
-  borderWidth: 1,
-  borderColor: ACC,
-  backgroundColor: "#ffffff",
-  paddingHorizontal: 10,
-  color: TEXT,
-  fontSize: 12,
-  fontWeight: "700",
-},
-
-addTypeDropdownOptionEditing: {
-  backgroundColor: "rgba(247,197,159,0.35)",
-},
-
-addTypeDropdownOptionTextSelected: {
-  color: ACC,
-  fontWeight: "900",
-},
-
-conditionSelectInput: {
-  minHeight: 40,
-  borderRadius: 14,
-  backgroundColor: SURFACE,
-  borderWidth: 1,
-  borderColor: BORDER,
-  paddingHorizontal: 12,
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "space-between",
-  marginBottom: 8,
-},
-
-conditionSelectText: {
-  flex: 1,
-  color: TEXT,
-  fontSize: 13,
-  fontWeight: "700",
-  marginRight: 8,
-},
-
-conditionModalCard: {
-  width: "100%",
-  maxWidth: 380,
-  maxHeight: "68%",
-  backgroundColor: "#ffffff",
-  borderRadius: 18,
-  overflow: "hidden",
-  elevation: 20,
-  shadowColor: "#000",
-  shadowOpacity: 0.16,
-  shadowRadius: 16,
-  shadowOffset: { width: 0, height: 8 },
-},
-
-conditionAddRow: {
-  minHeight: 46,
-  paddingHorizontal: 14,
-  paddingVertical: 12,
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 8,
-  borderBottomWidth: 1,
-  borderBottomColor: "#EEF2F7",
-  backgroundColor: "rgba(247,197,159,0.25)",
-},
-
-conditionAddRowText: {
-  color: TEXT,
-  fontSize: 13,
-  fontWeight: "800",
-},
-
-conditionInputRow: {
-  minHeight: 52,
-  paddingHorizontal: 12,
-  paddingVertical: 8,
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 8,
-  borderBottomWidth: 1,
-  borderBottomColor: "#EEF2F7",
-  backgroundColor: "rgba(247,197,159,0.25)",
-},
-
-conditionInput: {
-  flex: 1,
-  minHeight: 38,
-  borderRadius: 12,
-  borderWidth: 1,
-  borderColor: BORDER,
-  backgroundColor: "#ffffff",
-  paddingHorizontal: 10,
-  color: TEXT,
-  fontSize: 13,
-  fontWeight: "700",
-},
-
-conditionTickBtn: {
-  width: 38,
-  height: 38,
-  borderRadius: 19,
-  backgroundColor: ACC,
-  alignItems: "center",
-  justifyContent: "center",
-},
-
-conditionOptionRow: {
-  minHeight: 46,
-  paddingHorizontal: 14,
-  paddingVertical: 12,
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "space-between",
-  borderBottomWidth: 1,
-  borderBottomColor: "#EEF2F7",
-},
-
-conditionOptionRowSelected: {
-  backgroundColor: "rgba(42,50,75,0.06)",
-},
-
-conditionOptionText: {
-  flex: 1,
-  color: TEXT,
-  fontSize: 13,
-  fontWeight: "700",
-},
-
-conditionOptionTextSelected: {
-  fontWeight: "900",
-},
-
-
+  conditionOptionTextSelected: {
+    fontWeight: "900",
+  },
 });
