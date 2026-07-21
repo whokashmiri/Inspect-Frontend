@@ -353,4 +353,174 @@ export const formStyles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+
+  
+  helper: {
+    color: MUTED,
+    marginTop: 8,
+    fontSize: 12,
+  },
+
+  vehiclePreviewGrid: {
+  flexDirection: "row",
+  flexWrap: "wrap",
+  gap: 6,
+  marginTop: 6,
+  marginBottom: 8,
+},
+
+
+
+
+vehiclePreviewItem: {
+  alignItems: "center",
+  justifyContent: "flex-start",
+},
+
+
+vehiclePreviewBox: {
+  width: "100%",
+  aspectRatio: 1,
+  borderRadius: 10,
+  borderWidth: 1,
+  borderColor: BORDER,
+  backgroundColor: SURFACE,
+  overflow: "hidden",
+  alignItems: "center",
+  justifyContent: "center",
+  position: "relative",
+},
+
+ previewImage: {
+    width: "100%",
+    height: "100%",
+  },
+
+
+  previewImageLoading: {
+  opacity: 0.35,
+},
+
+imageLoaderOverlay: {
+  position: "absolute",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundColor: "rgba(42,50,75,0.35)",
+  zIndex: 5,
+},
+
+ removeBadge: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "rgba(42,50,75,0.75)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  vehiclePlaceholderContent: {
+  flex: 1,
+  width: "100%",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 2,
+},
+vehiclePreviewLabel: {
+  marginTop: 3,
+  color: TEXT,
+  fontSize: 8,
+  fontWeight: "800",
+  textAlign: "center",
+},
+
+
+addDetailsBtn: {
+  flexDirection: "row",
+  alignItems: "center",
+  alignSelf: "flex-start",
+  gap: 7,
+  marginTop: 4,
+  marginBottom: 10,
+  paddingHorizontal: 14,
+  paddingVertical: 8,
+  borderRadius: 999,
+  backgroundColor: "rgba(247,197,159,0.55)",
+  borderWidth: 1,
+  borderColor: SOFT,
+},
+
+  secondaryText: {
+    color: TEXT,
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  primaryBtn: {
+    backgroundColor: ACC,
+    minHeight: 40,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+    secondaryBtn: {
+    minHeight: 46,
+    paddingHorizontal: 12,
+    justifyContent: "center",
+    borderColor: BORDER,
+    borderWidth: 1,
+    borderRadius: 8,
+    backgroundColor: "#ffffff",
+  },
+
+  addTypeModalCard: {
+  width: "100%",
+  maxWidth: 360,
+  backgroundColor: "#ffffff",
+  borderRadius: 18,
+  overflow: "hidden",
+  elevation: 20,
+  shadowColor: "#000",
+  shadowOpacity: 0.16,
+  shadowRadius: 16,
+  shadowOffset: { width: 0, height: 8 },
+  marginBottom:60,
+},
+
+
+ primaryText: {
+    color: "#ffffff",
+    fontSize: 10,
+    fontWeight: "500",
+  },
+
+addDetailsText: {
+  color: TEXT,
+  fontSize: 12,
+  fontWeight: "800",
+},
+
+
+ previewItem: {
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: SURFACE,
+    position: "relative",
+  },
+
+  
+  removeBadgeText: {
+    color: "#ffffff",
+    fontSize: 10,
+    fontWeight: "700",
+  }
+
+
 });
