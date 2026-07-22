@@ -17,18 +17,32 @@ export type AssetMediaInput = {
   url?: string;
   name?: string;
   type?: string;
+
   publicId?: string | null;
   duration?: number | null;
   existing?: boolean;
 
-  // for video/image support
   mediaType?: "image" | "video";
   mimeType?: string | null;
   thumbnailUrl?: string | null;
 };
 
+export type AssetImagesInput = {
+  // Vehicle-only image slots
+  plate: AssetMediaInput | null;
+  odometer: AssetMediaInput | null;
+
+  // Shared by vehicle and other assets
+  details: AssetMediaInput | null;
+  other: AssetMediaInput[];
+
+  // Other-asset-only image slot
+  brand: AssetMediaInput | null;
+};
+
 export type AssetDraft = {
-  images: AssetMediaInput[];
+  images: AssetImagesInput;
+
   name: string;
   writtenDescription: string;
 
