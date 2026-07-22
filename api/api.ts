@@ -1,5 +1,3 @@
-
-
 //api/api.ts
 
 import * as SecureStore from "expo-secure-store";
@@ -42,6 +40,14 @@ export interface AssetMediaInput {
   mediaType?: "image" | "video";
   mimeType?: string | null;
   thumbnailUrl?: string | null;
+}
+
+export interface AssetImagesInput {
+  plate: AssetMediaInput | null;
+  details: AssetMediaInput | null;
+  odometer: AssetMediaInput | null;
+  brand: AssetMediaInput | null;
+  other: AssetMediaInput[];
 }
 
 
@@ -537,11 +543,23 @@ export const mediaApi = {
 };
 
 
+function uploadSingleFileToCloudinary(params: {
+  file: UploadFileInput;
+  projectId: string;
+  mediaType: "voice";
+}): Promise<UploadedVoiceMedia>;
+
+function uploadSingleFileToCloudinary(params: {
+  file: UploadFileInput;
+  projectId: string;
+  mediaType: "image" | "video";
+}): Promise<UploadedAssetMedia>;
+
 async function uploadSingleFileToCloudinary(params: {
   file: UploadFileInput;
   projectId: string;
   mediaType: "image" | "voice" | "video";
-}) {
+}): Promise<UploadedVoiceMedia | UploadedAssetMedia> {
   const signData = await mediaApi.signUpload({
     projectId: params.projectId,
     mediaType: params.mediaType,
@@ -557,8 +575,8 @@ async function uploadSingleFileToCloudinary(params: {
       (params.mediaType === "voice"
         ? "audio/m4a"
         : params.mediaType === "video"
-          ? "video/mp4"
-          : "image/jpeg"),
+        ? "video/mp4"
+        : "image/jpeg"),
   } as any);
 
   form.append("api_key", signData.apiKey);
@@ -567,7 +585,9 @@ async function uploadSingleFileToCloudinary(params: {
   form.append("folder", signData.folder);
   form.append("public_id", signData.publicId);
 
-  const uploadUrl = `https://api.cloudinary.com/v1_1/${signData.cloudName}/${signData.resourceType}/upload`;
+  const uploadUrl =
+    `https://api.cloudinary.com/v1_1/${signData.cloudName}` +
+    `/${signData.resourceType}/upload`;
 
   const response = await fetch(uploadUrl, {
     method: "POST",
@@ -589,32 +609,35 @@ async function uploadSingleFileToCloudinary(params: {
       url: data.secure_url,
       publicId: data.public_id,
       duration:
-        typeof data.duration === "number" ? Math.round(data.duration) : null,
+        typeof data.duration === "number"
+          ? Math.round(data.duration)
+          : null,
     };
   }
 
-  const isVideo = params.mediaType === "video";
+const mediaType: "image" | "video" =
+  params.mediaType === "video" ? "video" : "image";
 
   return {
     url: data.secure_url,
     publicId: data.public_id,
-    mediaType: isVideo ? "video" : "image",
+    mediaType,
     mimeType: params.file.type,
     duration:
-      isVideo && typeof data.duration === "number"
+      mediaType === "video" &&
+      typeof data.duration === "number"
         ? Math.round(data.duration)
         : null,
-    thumbnailUrl: isVideo
-      ? data.secure_url.replace(
-        "/video/upload/",
-        "/video/upload/so_1,f_jpg/"
-      )
-      : null,
+    thumbnailUrl:
+      mediaType === "video"
+        ? data.secure_url.replace(
+            "/video/upload/",
+            "/video/upload/so_1,f_jpg/"
+          )
+        : null,
+    existing: true,
   };
-
-
 }
-
 
 
 export const projectApi = {
@@ -719,15 +742,30 @@ export interface DeleteAssetResponse {
 }
 
 export interface AssetImageItem {
-  id: string;
-  url: string;
+  id?: string;
+  url?: string;
   uri?: string;
-  publicId: string | null;
-  createdAt: string;
+
+  name?: string;
+  type?: string;
+
+  publicId?: string | null;
+  createdAt?: string;
+
+  existing?: boolean;
+
   mediaType?: "image" | "video";
   mimeType?: string | null;
   duration?: number | null;
   thumbnailUrl?: string | null;
+}
+
+export interface StructuredAssetImages {
+  plate: AssetImageItem | null;
+  details: AssetImageItem | null;
+  odometer: AssetImageItem | null;
+  brand: AssetImageItem | null;
+  other: AssetImageItem[];
 }
 
 export interface AssetVoiceNoteItem {
@@ -737,6 +775,18 @@ export interface AssetVoiceNoteItem {
   duration: number | null;
   createdAt: string;
 }
+
+type UploadedVoiceMedia = {
+  url: string;
+  publicId: string;
+  duration: number | null;
+};
+
+type UploadedAssetMedia = AssetMediaInput & {
+  url: string;
+  publicId: string;
+  mediaType: "image" | "video";
+};
 
 
 export type AssetCondition = string | null; 
@@ -781,7 +831,7 @@ export interface AssetItem {
     email: string;
   };
 
-  images: AssetImageItem[];
+ images: StructuredAssetImages | AssetImageItem[];
   voiceNotes: AssetVoiceNoteItem[];
 }
 
@@ -948,6 +998,134 @@ const getPayloadSubAssetType = (payload: {
   );
 };
 
+
+
+type FixedAssetImageSlot = "plate" | "details" | "odometer" | "brand";
+
+const createEmptyAssetImages = (): AssetImagesInput => ({
+  plate: null,
+  details: null,
+  odometer: null,
+  brand: null,
+  other: [],
+});
+
+const normalizeAssetImagesInput = (
+  images?: AssetImagesInput | AssetMediaInput[] | null
+): AssetImagesInput => {
+  if (!images) return createEmptyAssetImages();
+
+  if (Array.isArray(images)) {
+    return {
+      ...createEmptyAssetImages(),
+      other: images.filter(Boolean),
+    };
+  }
+
+  return {
+    plate: images.plate || null,
+    details: images.details || null,
+    odometer: images.odometer || null,
+    brand: images.brand || null,
+    other: Array.isArray(images.other) ? images.other.filter(Boolean) : [],
+  };
+};
+
+const isExistingAssetMedia = (media?: AssetMediaInput | null) => {
+  if (!media) return false;
+
+  return (
+    media.existing === true ||
+    !!media.publicId ||
+    isRemoteUrl(media.url) ||
+    isRemoteUrl(media.uri)
+  );
+};
+
+const normalizeExistingAssetMedia = (
+  media: AssetMediaInput
+): AssetMediaInput => {
+  const existing = getExistingUploadedMedia([media])[0];
+
+  return (
+    existing || {
+      ...media,
+      url: media.url || media.uri,
+      existing: true,
+    }
+  );
+};
+
+const uploadOneAssetMedia = async (
+  media: AssetMediaInput | null,
+  projectId: string
+): Promise<AssetMediaInput | null> => {
+  if (!media) return null;
+
+  if (isExistingAssetMedia(media)) {
+    return normalizeExistingAssetMedia(media);
+  }
+
+  const localFile = getLocalUploadFiles([media])[0];
+
+  if (!localFile) {
+    return null;
+  }
+
+  const mediaType: "image" | "video" =
+    isVideoFile(localFile) ? "video" : "image";
+
+  return uploadSingleFileToCloudinary({
+    file: localFile,
+    projectId,
+    mediaType,
+  });
+};
+
+
+const resolveStructuredAssetImages = async (
+  images: AssetImagesInput | AssetMediaInput[] | null | undefined,
+  projectId: string
+): Promise<AssetImagesInput> => {
+  const normalized = normalizeAssetImagesInput(images);
+  const slots: FixedAssetImageSlot[] = [
+    "plate",
+    "details",
+    "odometer",
+    "brand",
+  ];
+
+  const fixedEntries = await Promise.all(
+    slots.map(async (slot) => [
+      slot,
+      await uploadOneAssetMedia(normalized[slot], projectId),
+    ] as const)
+  );
+
+  const resolvedOther: Array<AssetMediaInput | null> = [];
+
+  for (let index = 0; index < normalized.other.length; index += 3) {
+    const batch = normalized.other.slice(index, index + 3);
+    const uploadedBatch = await Promise.all(
+      batch.map((media) => uploadOneAssetMedia(media, projectId))
+    );
+
+    resolvedOther.push(...uploadedBatch);
+  }
+
+  const result = createEmptyAssetImages();
+
+  fixedEntries.forEach(([slot, media]) => {
+    result[slot] = media;
+  });
+
+  result.other = resolvedOther.filter(
+    (media): media is AssetMediaInput => Boolean(media)
+  );
+
+  return result;
+};
+
 export const projectContentApi = {
   createFolder: (payload: {
     projectId: string;
@@ -1008,7 +1186,7 @@ renameProjectSubAssetType: (payload: {
   subAssetType?: string | null;
   quantity?: number | string | null;
 
-  images?: AssetMediaInput[];
+ images?: AssetImagesInput;
   voiceNotes?: AssetMediaInput[];
 
   condition?: string | null;
@@ -1025,35 +1203,12 @@ renameProjectSubAssetType: (payload: {
 
   notes?: string | null;
 }) => {
-    const localMedia = getLocalUploadFiles(payload.images);
-    const localImages = localMedia.filter((file) => !isVideoFile(file));
-    const localVideos = localMedia.filter(isVideoFile);
-
-    const existingMedia = getExistingUploadedMedia(payload.images);
+    const resolvedImages = await resolveStructuredAssetImages(
+      payload.images,
+      payload.projectId
+    );
 
     const localVoiceNotes = getLocalUploadFiles(payload.voiceNotes);
-    const uploadedImages = await uploadFilesInBatches(
-      localImages,
-      (image) =>
-        uploadSingleFileToCloudinary({
-          file: image,
-          projectId: payload.projectId,
-          mediaType: "image",
-        }),
-      3
-    );
-
-    const uploadedVideos = await uploadFilesInBatches(
-      localVideos,
-      (video) =>
-        uploadSingleFileToCloudinary({
-          file: video,
-          projectId: payload.projectId,
-          mediaType: "video",
-        }),
-      1
-    );
-
     const uploadedVoiceNotes = await uploadFilesInBatches(
       localVoiceNotes,
       (voice) =>
@@ -1106,7 +1261,7 @@ const finalRawData = {
 
   notes: payload.notes?.trim() || null,
 
-  images: [...existingMedia, ...uploadedImages, ...uploadedVideos],
+  images: resolvedImages,
   voiceNotes: uploadedVoiceNotes,
 },
       }
@@ -1170,7 +1325,7 @@ const finalRawData = {
   subAssetType?: string | null;
   quantity?: number | string | null;
 
-  images?: AssetMediaInput[];
+  images?: AssetImagesInput;
   voiceNotes?: AssetMediaInput[];
 
   condition?: string | null;
@@ -1188,35 +1343,12 @@ const finalRawData = {
   isPresent?: boolean;
 }) => {
 
-    const localMedia = getLocalUploadFiles(payload.images);
-    const localImages = localMedia.filter((file) => !isVideoFile(file));
-    const localVideos = localMedia.filter(isVideoFile);
-
-    const existingMedia = getExistingUploadedMedia(payload.images);
+    const resolvedImages = await resolveStructuredAssetImages(
+      payload.images,
+      payload.projectId
+    );
 
     const localVoiceNotes = getLocalUploadFiles(payload.voiceNotes);
-    const uploadedImages = await uploadFilesInBatches(
-      localImages,
-      (image) =>
-        uploadSingleFileToCloudinary({
-          file: image,
-          projectId: payload.projectId,
-          mediaType: "image",
-        }),
-      3
-    );
-
-    const uploadedVideos = await uploadFilesInBatches(
-      localVideos,
-      (video) =>
-        uploadSingleFileToCloudinary({
-          file: video,
-          projectId: payload.projectId,
-          mediaType: "video",
-        }),
-      1
-    );
-
     const uploadedVoiceNotes = await uploadFilesInBatches(
       localVoiceNotes,
       (voice) =>
@@ -1262,7 +1394,7 @@ const finalRawData = {
   isDone: payload.isDone,
   isPresent: payload.isPresent,
 
-  images: [...existingMedia, ...uploadedImages, ...uploadedVideos],
+  images: resolvedImages,
 
 
   voiceNotes: uploadedVoiceNotes,
