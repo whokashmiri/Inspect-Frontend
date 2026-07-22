@@ -35,6 +35,9 @@ type OtherAssetFormProps = {
   draft: AssetDraft;
   setDraft: React.Dispatch<React.SetStateAction<AssetDraft>>;
 
+  detailsExpanded: boolean;
+setDetailsExpanded: React.Dispatch<React.SetStateAction<boolean>>;
+
   subAssetTypes?: string[];
 
   onRenameSubAssetType?: (
@@ -54,6 +57,9 @@ type OtherAssetFormProps = {
 
   openOtherPhotoCamera: (slot: OtherPhotoSlot) => void;
 };
+
+
+
 
 const cleanAssetRawData = (rawData?: Record<string, any> | null) => {
   const source =
@@ -129,6 +135,8 @@ export function cleanOtherAssetDraft(draft: AssetDraft): AssetDraft | null {
 export default function OtherAssetForm({
   draft,
   setDraft,
+  detailsExpanded,
+  setDetailsExpanded,
   subAssetTypes = [],
   onRenameSubAssetType,
   showSnackbar,
@@ -142,6 +150,8 @@ export default function OtherAssetForm({
   const [addTypeModalOpen, setAddTypeModalOpen] = useState(false);
   const [newSubAssetTypeText, setNewSubAssetTypeText] = useState("");
   const [otherPhotosOpen, setOtherPhotosOpen] = useState(false);
+
+  const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
 
   const [editingSubAssetType, setEditingSubAssetType] = useState<string | null>(
     null
@@ -267,111 +277,10 @@ export default function OtherAssetForm({
     }));
   };
 
+
   return (
     <>
-      <Text style={styles.helper}>Asset photos {imageCount}</Text>
-
-      <View style={styles.vehiclePreviewGrid}>
-        {otherPreviewSlots.map((slot) => {
-          const isOtherSlot = slot.key === "other";
-          const image = isOtherSlot
-            ? otherPhotos[0] || null
-            : draft.images[slot.key];
-
-          const imageUri = image?.uri || image?.url;
-          const imageKey = imageUri
-            ? getImageKey(slot.key, imageUri)
-            : slot.key;
-          const isImageLoading = imageUri
-            ? imageLoadingMap[imageKey] !== false
-            : false;
-          const extraCount = isOtherSlot
-            ? Math.max(otherPhotos.length - 1, 0)
-            : 0;
-
-          return (
-            <TouchableOpacity
-              key={slot.key}
-              style={[
-                styles.vehiclePreviewItem,
-                { width: previewSize, height: previewSize + 18 },
-              ]}
-              onPress={() => {
-                if (isOtherSlot && otherPhotos.length > 0) {
-                  setOtherPhotosOpen(true);
-                  return;
-                }
-
-                openOtherPhotoCamera(slot.key);
-              }}
-              activeOpacity={0.85}
-            >
-              <View style={styles.vehiclePreviewBox}>
-                {imageUri ? (
-                  <>
-                    <Image
-                      source={{ uri: imageUri }}
-                      style={[
-                        styles.previewImage,
-                        isImageLoading && styles.previewImageLoading,
-                      ]}
-                      resizeMode="cover"
-                      fadeDuration={150}
-                      onLoadStart={() => setImageLoading(imageKey, true)}
-                      onLoadEnd={() => setImageLoading(imageKey, false)}
-                      onError={() => setImageLoading(imageKey, false)}
-                    />
-
-                    {isImageLoading && (
-                      <View style={styles.imageLoaderOverlay}>
-                        <ActivityIndicator size="small" color="#ffffff" />
-                      </View>
-                    )}
-
-                    {isOtherSlot && extraCount > 0 && (
-                      <View style={styles.countBadge}>
-                        <Text style={styles.countBadgeText}>+{extraCount}</Text>
-                      </View>
-                    )}
-
-                    {!isOtherSlot && (
-                      <TouchableOpacity
-                        style={styles.removeBadge}
-                        onPress={(event) => {
-                          event.stopPropagation();
-                          removeSingleSlotImage(slot.key as "details" | "brand");
-                        }}
-                        activeOpacity={0.85}
-                      >
-                        <Text style={styles.removeBadgeText}>✕</Text>
-                      </TouchableOpacity>
-                    )}
-
-                    {isOtherSlot && (
-                      <View style={styles.otherAddBadge}>
-                        <Ionicons name="add" size={14} color="#ffffff" />
-                      </View>
-                    )}
-                  </>
-                ) : (
-                  <View style={styles.vehiclePlaceholderContent}>
-                    <Ionicons
-                      name={slot.icon as any}
-                      size={20}
-                      color="#767B91"
-                    />
-                    <Ionicons name="add-circle" size={13} color={ACC} />
-                  </View>
-                )}
-              </View>
-
-              <Text style={styles.vehiclePreviewLabel} numberOfLines={1}>
-                {slot.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+     
 
       <View style={styles.otherAssetControls}>
         <View style={styles.assetTypeQuantityRow}>
@@ -447,6 +356,144 @@ export default function OtherAssetForm({
             </View>
           </View>
         </View>
+
+         <Text style={styles.helper}>Asset photos {imageCount}</Text>
+
+      <View style={styles.vehiclePreviewGrid}>
+        {otherPreviewSlots.map((slot) => {
+          const isOtherSlot = slot.key === "other";
+          const image = isOtherSlot
+            ? otherPhotos[0] || null
+            : draft.images[slot.key];
+
+          const imageUri = image?.uri || image?.url;
+          const imageKey = imageUri
+            ? getImageKey(slot.key, imageUri)
+            : slot.key;
+          const isImageLoading = imageUri
+            ? imageLoadingMap[imageKey] !== false
+            : false;
+          const extraCount = isOtherSlot
+            ? Math.max(otherPhotos.length - 1, 0)
+            : 0;
+
+          return (
+            <TouchableOpacity
+              key={slot.key}
+              style={[
+                styles.vehiclePreviewItem,
+                { width: previewSize, height: previewSize + 18 },
+              ]}
+onPress={() => {
+  if (!isOtherSlot && imageUri) {
+    setSelectedImageUri(imageUri);
+    return;
+  }
+
+  if (isOtherSlot && otherPhotos.length === 1 && imageUri) {
+    setSelectedImageUri(imageUri);
+    return;
+  }
+
+  if (isOtherSlot && otherPhotos.length > 1) {
+    setOtherPhotosOpen(true);
+    return;
+  }
+
+  openOtherPhotoCamera(slot.key);
+}}
+              activeOpacity={0.85}
+            >
+              <View style={styles.vehiclePreviewBox}>
+                {imageUri ? (
+                  <>
+                    <Image
+                      source={{ uri: imageUri }}
+                      style={[
+                        styles.previewImage,
+                        isImageLoading && styles.previewImageLoading,
+                      ]}
+                      resizeMode="cover"
+                      fadeDuration={150}
+                      onLoadStart={() => setImageLoading(imageKey, true)}
+                      onLoadEnd={() => setImageLoading(imageKey, false)}
+                      onError={() => setImageLoading(imageKey, false)}
+                    />
+
+                    {isImageLoading && (
+                      <View style={styles.imageLoaderOverlay}>
+                        <ActivityIndicator size="small" color="#ffffff" />
+                      </View>
+                    )}
+
+                    {isOtherSlot && extraCount > 0 && (
+                      <View style={styles.countBadge}>
+                        <Text style={styles.countBadgeText}>+{extraCount}</Text>
+                      </View>
+                    )}
+
+                    {!isOtherSlot && (
+                      <TouchableOpacity
+                        style={styles.removeBadge}
+                        onPress={(event) => {
+                          event.stopPropagation();
+                          removeSingleSlotImage(slot.key as "details" | "brand");
+                        }}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.removeBadgeText}>✕</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {isOtherSlot && (
+                      <View style={styles.otherAddBadge}>
+                        <Ionicons name="add" size={14} color="#ffffff" />
+                      </View>
+                    )}
+                  </>
+                ) : (
+                  <View style={styles.vehiclePlaceholderContent}>
+                    <Ionicons
+                      name={slot.icon as any}
+                      size={20}
+                      color="#767B91"
+                    />
+                    <Ionicons name="add-circle" size={13} color={ACC} />
+                  </View>
+                )}
+              </View>
+
+              <Text style={styles.vehiclePreviewLabel} numberOfLines={1}>
+                {slot.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      <TouchableOpacity
+  style={styles.addDetailsBtn}
+  onPress={() => setDetailsExpanded((prev) => !prev)}
+  activeOpacity={0.85}
+>
+  <Ionicons
+    name={
+      detailsExpanded
+        ? "remove-circle-outline"
+        : "add-circle-outline"
+    }
+    size={18}
+    color={ACC}
+  />
+
+  <Text style={styles.addDetailsText}>
+    {detailsExpanded
+      ? "Hide details"
+      : "Add asset details"}
+  </Text>
+</TouchableOpacity>
+
+      
 
         {assetTypeDropdownOpen && (
           <View style={styles.assetTypeDropdownMenuFull}>
@@ -600,40 +647,52 @@ export default function OtherAssetForm({
                     const isImageLoading = imageLoadingMap[imageKey] !== false;
 
                     return (
-                      <View
-                        key={imageKey}
-                        style={[
-                          styles.previewItem,
-                          { width: previewSize, height: previewSize },
-                        ]}
-                      >
-                        <Image
-                          source={{ uri: imageUri }}
-                          style={[
-                            styles.previewImage,
-                            isImageLoading && styles.previewImageLoading,
-                          ]}
-                          resizeMode="cover"
-                          fadeDuration={150}
-                          onLoadStart={() => setImageLoading(imageKey, true)}
-                          onLoadEnd={() => setImageLoading(imageKey, false)}
-                          onError={() => setImageLoading(imageKey, false)}
-                        />
+                    
+                      <TouchableOpacity
+  key={imageKey}
+  style={[
+    styles.previewItem,
+    { width: previewSize, height: previewSize },
+  ]}
+  onPress={() => {
+    setOtherPhotosOpen(false);
 
-                        {isImageLoading && (
-                          <View style={styles.imageLoaderOverlay}>
-                            <ActivityIndicator size="small" color="#ffffff" />
-                          </View>
-                        )}
+    setTimeout(() => {
+      setSelectedImageUri(imageUri);
+    }, 100);
+  }}
+  activeOpacity={0.9}
+>
+  <Image
+    source={{ uri: imageUri }}
+    style={[
+      styles.previewImage,
+      isImageLoading && styles.previewImageLoading,
+    ]}
+    resizeMode="cover"
+    fadeDuration={150}
+    onLoadStart={() => setImageLoading(imageKey, true)}
+    onLoadEnd={() => setImageLoading(imageKey, false)}
+    onError={() => setImageLoading(imageKey, false)}
+  />
 
-                        <TouchableOpacity
-                          style={styles.removeBadge}
-                          onPress={() => removeOtherImage(index)}
-                          activeOpacity={0.85}
-                        >
-                          <Text style={styles.removeBadgeText}>✕</Text>
-                        </TouchableOpacity>
-                      </View>
+  {isImageLoading && (
+    <View style={styles.imageLoaderOverlay}>
+      <ActivityIndicator size="small" color="#ffffff" />
+    </View>
+  )}
+
+  <TouchableOpacity
+    style={styles.removeBadge}
+    onPress={(event) => {
+      event.stopPropagation();
+      removeOtherImage(index);
+    }}
+    activeOpacity={0.85}
+  >
+    <Text style={styles.removeBadgeText}>✕</Text>
+  </TouchableOpacity>
+</TouchableOpacity>
                     );
                   })}
 
@@ -657,6 +716,54 @@ export default function OtherAssetForm({
           </View>
         </TouchableWithoutFeedback>
       </Modal>
+
+      <Modal
+  visible={Boolean(selectedImageUri)}
+  transparent={false}
+  animationType="fade"
+  statusBarTranslucent
+  onRequestClose={() => setSelectedImageUri(null)}
+>
+  <View
+    style={{
+      flex: 1,
+      backgroundColor: "#000000",
+      justifyContent: "center",
+      alignItems: "center",
+    }}
+  >
+    {selectedImageUri && (
+      <Image
+        source={{ uri: selectedImageUri }}
+        style={{
+          width: "100%",
+          height: "100%",
+        }}
+        resizeMode="contain"
+      />
+    )}
+
+    <TouchableOpacity
+      style={{
+        position: "absolute",
+        top: 50,
+        right: 20,
+        width: 42,
+        height: 42,
+        borderRadius: 21,
+        backgroundColor: "rgba(0, 0, 0, 0.65)",
+        justifyContent: "center",
+        alignItems: "center",
+      }}
+      onPress={() => setSelectedImageUri(null)}
+      activeOpacity={0.85}
+    >
+      <Ionicons name="close" size={28} color="#ffffff" />
+    </TouchableOpacity>
+  </View>
+</Modal>
+
+
 
       <Modal
         visible={addTypeModalOpen}
