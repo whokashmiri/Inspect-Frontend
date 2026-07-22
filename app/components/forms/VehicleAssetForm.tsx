@@ -1,4 +1,4 @@
-//app/forms/VehiclesAssetForm.tsx
+//VehiclesAssetForm.tsx
 import React, { useMemo, useState } from "react";
 import {
   View,
@@ -10,7 +10,6 @@ import {
   TouchableWithoutFeedback,
   Image,
   ActivityIndicator,
-  StyleSheet,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Picker } from "@react-native-picker/picker";
@@ -24,38 +23,31 @@ import {
 import { formStyles as styles, ACC, TEXT, MUTED } from "./formStyles";
 
 type VehiclePhotoSlot = "plate" | "details" | "odometer" | "other";
+type VehicleSinglePhotoSlot = Exclude<VehiclePhotoSlot, "other">;
 
 const FAVORITE_VEHICLE_BRANDS_KEY = "favorite_vehicle_brands";
 const FAVORITE_VEHICLE_MODELS_KEY = "favorite_vehicle_models_by_brand";
-
-// Fixed slot indices in draft.images:
-// 0 = plate, 1 = details, 2 = odometer, 3+ = "other" (can hold many photos)
-const OTHER_SLOT_START_INDEX = 3;
 
 const vehiclePreviewSlots = [
   {
     key: "plate",
     label: "Car Plate",
     icon: "car-sport-outline",
-    index: 0,
   },
   {
     key: "details",
     label: "Car Details",
     icon: "document-text",
-    index: 1,
   },
   {
     key: "odometer",
     label: "Odometer",
     icon: "speedometer-outline",
-    index: 2,
   },
   {
     key: "other",
     label: "Other",
     icon: "images-outline",
-    index: null,
   },
 ] as const;
 
@@ -82,18 +74,12 @@ function normalizeVehicleSearch(value: string) {
   return String(value || "")
     .toLowerCase()
     .trim()
-
-    // Remove Arabic diacritics
     .replace(/[\u064B-\u065F\u0670]/g, "")
-
-    // Normalize Arabic letter variations
     .replace(/[أإآ]/g, "ا")
     .replace(/ى/g, "ي")
     .replace(/ؤ/g, "و")
     .replace(/ئ/g, "ي")
     .replace(/ة/g, "ه")
-
-    // Make separators and extra spaces consistent
     .replace(/[-_/\\|,().]/g, " ")
     .replace(/\s+/g, " ");
 }
@@ -129,8 +115,8 @@ function moveFavoritesToTop(items: string[], favorites: string[]) {
   return [...favoriteItems, ...normalItems];
 }
 
-function getImageKey(uri: string, index: number) {
-  return `${uri}-${index}`;
+function getImageKey(slot: VehiclePhotoSlot, uri: string, index?: number) {
+  return index === undefined ? `${slot}-${uri}` : `${slot}-${index}-${uri}`;
 }
 
 export default function VehicleAssetForm({
@@ -148,7 +134,6 @@ export default function VehicleAssetForm({
 }: VehicleAssetFormProps) {
   const [brandDropdownOpen, setBrandDropdownOpen] = useState(false);
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
-
   const [vehicleSearch, setVehicleSearch] = useState("");
 
   const [favoriteBrands, setFavoriteBrands] = useState<string[]>([]);
@@ -156,7 +141,6 @@ export default function VehicleAssetForm({
     Record<string, string[]>
   >({});
 
-  // Controls the "Other Photos" gallery modal
   const [otherPhotosOpen, setOtherPhotosOpen] = useState(false);
 
   React.useEffect(() => {
@@ -180,8 +164,7 @@ export default function VehicleAssetForm({
     loadVehicleFavorites();
   }, []);
 
-  const selectedBrand = String((draft as any).brand || "").trim();
-
+  const selectedBrand = String(draft.brand || "").trim();
   const availableVehicleModels = getVehicleModelsByBrand(selectedBrand);
 
   const sortedVehicleBrands = useMemo(
@@ -194,16 +177,18 @@ export default function VehicleAssetForm({
     : [];
 
   const sortedVehicleModels = useMemo(
-    () => moveFavoritesToTop(availableVehicleModels, selectedBrandFavoriteModels),
+    () =>
+      moveFavoritesToTop(
+        availableVehicleModels,
+        selectedBrandFavoriteModels
+      ),
     [availableVehicleModels, selectedBrandFavoriteModels]
   );
 
   const normalizedVehicleSearch = normalizeVehicleSearch(vehicleSearch);
 
   const filteredVehicleBrands = useMemo(() => {
-    if (!normalizedVehicleSearch) {
-      return sortedVehicleBrands;
-    }
+    if (!normalizedVehicleSearch) return sortedVehicleBrands;
 
     return sortedVehicleBrands.filter((brand) =>
       normalizeVehicleSearch(brand).includes(normalizedVehicleSearch)
@@ -211,9 +196,7 @@ export default function VehicleAssetForm({
   }, [sortedVehicleBrands, normalizedVehicleSearch]);
 
   const filteredVehicleModels = useMemo(() => {
-    if (!normalizedVehicleSearch) {
-      return sortedVehicleModels;
-    }
+    if (!normalizedVehicleSearch) return sortedVehicleModels;
 
     return sortedVehicleModels.filter((model) =>
       normalizeVehicleSearch(model).includes(normalizedVehicleSearch)
@@ -298,38 +281,58 @@ export default function VehicleAssetForm({
     }
   };
 
-  const removeImage = (index: number) => {
+  const removeVehicleSlotImage = (slot: VehicleSinglePhotoSlot) => {
     setDraft((prev) => ({
       ...prev,
-      images: prev.images.filter((_, i) => i !== index),
+      images: {
+        ...prev.images,
+        [slot]: null,
+      },
     }));
   };
 
-  // All photos that live in the "Other" bucket (index 3 and beyond)
-  const otherPhotos = draft.images.slice(OTHER_SLOT_START_INDEX);
+  const removeOtherImage = (index: number) => {
+    setDraft((prev) => ({
+      ...prev,
+      images: {
+        ...prev.images,
+        other: prev.images.other.filter((_, itemIndex) => itemIndex !== index),
+      },
+    }));
+  };
+
+  const otherPhotos = draft.images.other || [];
+
+  const vehicleImageCount =
+    Number(Boolean(draft.images.plate)) +
+    Number(Boolean(draft.images.details)) +
+    Number(Boolean(draft.images.odometer)) +
+    otherPhotos.length;
 
   return (
     <>
-      <Text style={styles.helper}>Vehicle photos {draft.images.length}</Text>
+      <Text style={styles.helper}>Vehicle photos {vehicleImageCount}</Text>
 
-      {/* Always exactly 4 cards, regardless of how many "other" photos exist */}
       <View style={styles.vehiclePreviewGrid}>
         {vehiclePreviewSlots.map((slot) => {
           const isOtherSlot = slot.key === "other";
 
-          const img = isOtherSlot
-            ? draft.images[OTHER_SLOT_START_INDEX]
-            : draft.images[slot.index as number];
+          const img: AssetMediaInput | null = isOtherSlot
+            ? otherPhotos[0] || null
+            : draft.images[slot.key];
 
           const imageUri = img?.uri || img?.url;
-          const realIndex = isOtherSlot ? OTHER_SLOT_START_INDEX : (slot.index as number);
-          const imageKey = imageUri ? getImageKey(imageUri, realIndex) : slot.key;
+          const imageKey = imageUri
+            ? getImageKey(slot.key, imageUri)
+            : slot.key;
 
           const isImageLoading = imageUri
             ? imageLoadingMap[imageKey] !== false
             : false;
 
-          const otherExtraCount = isOtherSlot ? Math.max(otherPhotos.length - 1, 0) : 0;
+          const otherExtraCount = isOtherSlot
+            ? Math.max(otherPhotos.length - 1, 0)
+            : 0;
 
           return (
             <TouchableOpacity
@@ -342,11 +345,12 @@ export default function VehicleAssetForm({
                 },
               ]}
               onPress={() => {
-                if (isOtherSlot) {
+                if (isOtherSlot && otherPhotos.length > 0) {
                   setOtherPhotosOpen(true);
-                } else {
-                  openVehiclePhotoCamera(slot.key);
+                  return;
                 }
+
+                openVehiclePhotoCamera(slot.key);
               }}
               activeOpacity={0.85}
             >
@@ -383,10 +387,11 @@ export default function VehicleAssetForm({
                     {!isOtherSlot && (
                       <TouchableOpacity
                         style={styles.removeBadge}
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          removeImage(realIndex);
+                        onPress={(event) => {
+                          event.stopPropagation();
+                          removeVehicleSlotImage(slot.key);
                         }}
+                        activeOpacity={0.85}
                       >
                         <Text style={styles.removeBadgeText}>✕</Text>
                       </TouchableOpacity>
@@ -431,134 +436,127 @@ export default function VehicleAssetForm({
       </TouchableOpacity>
 
       {detailsExpanded && (
-        <>
-          <View style={styles.vehicleGrid}>
-            <View style={[styles.vehicleField, styles.vehicleFieldDropdownTop]}>
-              <Text style={styles.fieldLabel}>{t("asset.brand")}</Text>
-              <TouchableOpacity
-                style={[
-                  styles.input,
-                  styles.compactInput,
-                  styles.vehicleDropdownInput,
-                ]}
-                onPress={() => {
-                  setVehicleSearch("");
-                  setBrandDropdownOpen((prev) => !prev);
-                  setModelDropdownOpen(false);
-                }}
-                activeOpacity={0.85}
-              >
-                <Text
-                  style={[
-                    styles.vehicleDropdownText,
-                    !draft.brand && styles.vehicleDropdownPlaceholder,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {draft.brand || t("asset.brand")}
-                </Text>
-
-                <Ionicons
-                  name={brandDropdownOpen ? "chevron-up" : "chevron-down"}
-                  size={16}
-                  color={TEXT}
-                />
-              </TouchableOpacity>
-            </View>
-
-            <View style={[styles.vehicleField, styles.vehicleFieldDropdownTop]}>
-              <Text style={styles.fieldLabel}>{t("asset.model")}</Text>
-
-              <TouchableOpacity
-                style={[
-                  styles.input,
-                  styles.compactInput,
-                  styles.vehicleDropdownInput,
-                  !draft.brand && styles.vehicleDropdownDisabled,
-                ]}
-                onPress={() => {
-                  if (!draft.brand) return;
-                  setModelDropdownOpen((prev) => !prev);
-                  setBrandDropdownOpen(false);
-                }}
-                activeOpacity={0.85}
-                disabled={!draft.brand}
-              >
-                <Text
-                  style={[
-                    styles.vehicleDropdownText,
-                    !draft.model && styles.vehicleDropdownPlaceholder,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {draft.model ||
-                    (draft.brand ? t("asset.model") : "Choose brand first")}
-                </Text>
-
-                <Ionicons
-                  name={modelDropdownOpen ? "chevron-up" : "chevron-down"}
-                  size={16}
-                  color={!draft.brand ? "#9CA3AF" : TEXT}
-                />
-              </TouchableOpacity>
-            </View>
-
-            <View
-              pointerEvents={
-                brandDropdownOpen || modelDropdownOpen ? "none" : "auto"
-              }
-              style={styles.vehicleField}
+        <View style={styles.vehicleGrid}>
+          <View style={[styles.vehicleField, styles.vehicleFieldDropdownTop]}>
+            <Text style={styles.fieldLabel}>{t("asset.brand")}</Text>
+            <TouchableOpacity
+              style={[
+                styles.input,
+                styles.compactInput,
+                styles.vehicleDropdownInput,
+              ]}
+              onPress={() => {
+                setVehicleSearch("");
+                setBrandDropdownOpen((prev) => !prev);
+                setModelDropdownOpen(false);
+              }}
+              activeOpacity={0.85}
             >
-              <Text style={styles.fieldLabel}>{t("asset.manufactureYear")}</Text>
+              <Text
+                style={[
+                  styles.vehicleDropdownText,
+                  !draft.brand && styles.vehicleDropdownPlaceholder,
+                ]}
+                numberOfLines={1}
+              >
+                {draft.brand || t("asset.brand")}
+              </Text>
 
-              <View style={styles.vehicleYearPickerWrap}>
-                <Picker
-                  selectedValue={draft.manufactureYear || ""}
-                  onValueChange={(value) =>
-                    setDraft((prev) => ({
-                      ...prev,
-                      manufactureYear: value,
-                    }))
-                  }
-                  dropdownIconColor={TEXT}
-                  style={styles.vehicleYearPicker}
-                  itemStyle={styles.vehicleYearPickerItem}
-                >
-                  <Picker.Item label="Year" value="" />
-                  {manufactureYears.map((year) => (
-                    <Picker.Item key={year} label={year} value={year} />
-                  ))}
-                </Picker>
-              </View>
-            </View>
+              <Ionicons
+                name={brandDropdownOpen ? "chevron-up" : "chevron-down"}
+                size={16}
+                color={TEXT}
+              />
+            </TouchableOpacity>
+          </View>
 
-            <View
-              pointerEvents={
-                brandDropdownOpen || modelDropdownOpen ? "none" : "auto"
-              }
-              style={styles.vehicleField}
+          <View style={[styles.vehicleField, styles.vehicleFieldDropdownTop]}>
+            <Text style={styles.fieldLabel}>{t("asset.model")}</Text>
+
+            <TouchableOpacity
+              style={[
+                styles.input,
+                styles.compactInput,
+                styles.vehicleDropdownInput,
+                !draft.brand && styles.vehicleDropdownDisabled,
+              ]}
+              onPress={() => {
+                if (!draft.brand) return;
+                setModelDropdownOpen((prev) => !prev);
+                setBrandDropdownOpen(false);
+              }}
+              activeOpacity={0.85}
+              disabled={!draft.brand}
             >
-              <Text style={styles.fieldLabel}>{t("asset.kilometersDriven")}</Text>
+              <Text
+                style={[
+                  styles.vehicleDropdownText,
+                  !draft.model && styles.vehicleDropdownPlaceholder,
+                ]}
+                numberOfLines={1}
+              >
+                {draft.model ||
+                  (draft.brand ? t("asset.model") : "Choose brand first")}
+              </Text>
 
-              <TextInput
-                placeholder={t("asset.kilometersDriven")}
-                placeholderTextColor="#767B91"
-                value={draft.kilometersDriven}
-                keyboardType="numeric"
-                onChangeText={(text) =>
+              <Ionicons
+                name={modelDropdownOpen ? "chevron-up" : "chevron-down"}
+                size={16}
+                color={!draft.brand ? "#9CA3AF" : TEXT}
+              />
+            </TouchableOpacity>
+          </View>
+
+          <View
+            pointerEvents={brandDropdownOpen || modelDropdownOpen ? "none" : "auto"}
+            style={styles.vehicleField}
+          >
+            <Text style={styles.fieldLabel}>{t("asset.manufactureYear")}</Text>
+
+            <View style={styles.vehicleYearPickerWrap}>
+              <Picker
+                selectedValue={draft.manufactureYear || ""}
+                onValueChange={(value) =>
                   setDraft((prev) => ({
                     ...prev,
-                    kilometersDriven: text,
+                    manufactureYear: value,
                   }))
                 }
-                style={[styles.input, styles.compactInput]}
-              />
+                dropdownIconColor={TEXT}
+                style={styles.vehicleYearPicker}
+                itemStyle={styles.vehicleYearPickerItem}
+              >
+                <Picker.Item label="Year" value="" />
+                {manufactureYears.map((year) => (
+                  <Picker.Item key={year} label={year} value={year} />
+                ))}
+              </Picker>
             </View>
           </View>
-        </>
+
+          <View
+            pointerEvents={brandDropdownOpen || modelDropdownOpen ? "none" : "auto"}
+            style={styles.vehicleField}
+          >
+            <Text style={styles.fieldLabel}>{t("asset.kilometersDriven")}</Text>
+
+            <TextInput
+              placeholder={t("asset.kilometersDriven")}
+              placeholderTextColor="#767B91"
+              value={draft.kilometersDriven}
+              keyboardType="numeric"
+              onChangeText={(text) =>
+                setDraft((prev) => ({
+                  ...prev,
+                  kilometersDriven: text,
+                }))
+              }
+              style={[styles.input, styles.compactInput]}
+            />
+          </View>
+        </View>
       )}
 
-      {/* Brand / Model select modal */}
       <Modal
         visible={brandDropdownOpen || modelDropdownOpen}
         transparent
@@ -581,9 +579,7 @@ export default function VehicleAssetForm({
               <View
                 style={[
                   styles.vehicleSelectCard,
-                  {
-                    maxHeight: Math.min(height * 0.55, 360),
-                  },
+                  { maxHeight: Math.min(height * 0.55, 360) },
                 ]}
               >
                 <View style={styles.vehicleSelectHeader}>
@@ -642,11 +638,9 @@ export default function VehicleAssetForm({
                   {displayedVehicleOptions.length === 0 ? (
                     <View style={styles.vehicleSearchEmpty}>
                       <Ionicons name="search-outline" size={28} color="#A0A5B4" />
-
                       <Text style={styles.vehicleSearchEmptyTitle}>
                         No results found
                       </Text>
-
                       <Text style={styles.vehicleSearchEmptyText}>
                         Try searching in English or Arabic
                       </Text>
@@ -676,10 +670,7 @@ export default function VehicleAssetForm({
                             }}
                             activeOpacity={0.85}
                           >
-                            <Text style={styles.vehicleSelectOptionText}>
-                              {item}
-                            </Text>
-
+                            <Text style={styles.vehicleSelectOptionText}>{item}</Text>
                             {isSelected && (
                               <Ionicons name="checkmark" size={18} color={ACC} />
                             )}
@@ -713,7 +704,6 @@ export default function VehicleAssetForm({
         </TouchableWithoutFeedback>
       </Modal>
 
-      {/* "Other Photos" gallery modal — holds any number of extra photos */}
       <Modal
         visible={otherPhotosOpen}
         transparent
@@ -726,9 +716,7 @@ export default function VehicleAssetForm({
               <View
                 style={[
                   styles.vehicleSelectCard,
-                  {
-                    maxHeight: Math.min(height * 0.65, 460),
-                  },
+                  { maxHeight: Math.min(height * 0.65, 460) },
                 ]}
               >
                 <View style={styles.vehicleSelectHeader}>
@@ -747,12 +735,11 @@ export default function VehicleAssetForm({
                   contentContainerStyle={styles.otherGrid}
                   showsVerticalScrollIndicator
                 >
-                  {otherPhotos.map((img: AssetMediaInput, i) => {
-                    const realIndex = OTHER_SLOT_START_INDEX + i;
+                  {otherPhotos.map((img: AssetMediaInput, index) => {
                     const imageUri = img.uri || img.url;
                     if (!imageUri) return null;
 
-                    const imageKey = getImageKey(imageUri, realIndex);
+                    const imageKey = getImageKey("other", imageUri, index);
                     const isImageLoading = imageLoadingMap[imageKey] !== false;
 
                     return (
@@ -760,10 +747,7 @@ export default function VehicleAssetForm({
                         key={imageKey}
                         style={[
                           styles.previewItem,
-                          {
-                            width: previewSize,
-                            height: previewSize,
-                          },
+                          { width: previewSize, height: previewSize },
                         ]}
                       >
                         <Image
@@ -787,7 +771,7 @@ export default function VehicleAssetForm({
 
                         <TouchableOpacity
                           style={styles.removeBadge}
-                          onPress={() => removeImage(realIndex)}
+                          onPress={() => removeOtherImage(index)}
                         >
                           <Text style={styles.removeBadgeText}>✕</Text>
                         </TouchableOpacity>
@@ -795,20 +779,15 @@ export default function VehicleAssetForm({
                     );
                   })}
 
-                  {/* Add-more tile */}
                   <TouchableOpacity
                     style={[
                       styles.addOtherTile,
-                      {
-                        width: previewSize,
-                        height: previewSize,
-                      },
+                      { width: previewSize, height: previewSize },
                     ]}
                     onPress={() => openVehiclePhotoCamera("other")}
                     activeOpacity={0.85}
                   >
                     <Ionicons name="add-circle-outline" size={26} color={ACC} />
-                    {/* <Text style={localStyles.addOtherTileText}>Add photo</Text> */}
                   </TouchableOpacity>
                 </ScrollView>
               </View>
@@ -819,4 +798,3 @@ export default function VehicleAssetForm({
     </>
   );
 }
-
