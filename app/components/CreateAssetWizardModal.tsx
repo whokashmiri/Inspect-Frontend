@@ -228,9 +228,13 @@ export default function CreateAssetWizardModal({
   const isSmallScreen = width < 380 || height < 700;
   const isTablet = width >= 768;
 
-  const modalWidth = Math.min(width * 0.95, isTablet ? 720 : 520);
-  const modalMaxHeight = detailsExpanded ? height * 0.95 : height * 0.55;
-  const modalMinHeight = detailsExpanded ? height * 0.88 : height * 0.45;
+  const modalWidth = Math.min(width * 0.97, isTablet ? 900 : 650);
+
+const modalMaxHeight =
+  detailsExpanded ? height * 0.92 : height * 0.82;
+
+const modalMinHeight =
+  detailsExpanded ? height * 0.90 : height * 0.55;
 
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
@@ -300,14 +304,46 @@ export default function CreateAssetWizardModal({
     }
   }, [visible, initialData, mode, autoOpenCamera]);
 
-  const previewSize = useMemo(() => {
-    const columns = width < 360 ? 4 : width < 600 ? 5 : 6;
-    const cardPadding = 32;
-    const gaps = (columns - 1) * 6;
-    const available = modalWidth - cardPadding - gaps;
+  // const previewSize = useMemo(() => {
+  //   const columns = width < 360 ? 4 : width < 600 ? 5 : 6;
+  //   const cardPadding = 32;
+  //   const gaps = (columns - 1) * 6;
+  //   const available = modalWidth - cardPadding - gaps;
 
-    return Math.max(44, Math.min(62, Math.floor(available / columns)));
-  }, [width, modalWidth]);
+  //   return Math.max(44, Math.min(62, Math.floor(available / columns)));
+  // }, [width, modalWidth]);
+
+const previewSize = useMemo(() => {
+  const columns = width < 600 ? 4 : 5;
+  const cardPadding =  isSmallScreen ? 28 : 44;
+  const gaps = (columns - 1) * 8;
+  const available = modalWidth - cardPadding - gaps;
+
+  return Math.max(
+  110,
+  Math.min(100, Math.floor(available / columns))
+);
+}, [isSmallScreen, modalWidth]);
+
+
+  const otherPreviewSize = useMemo(() => {
+  const columns = 4;
+  const gridGap = 8;
+
+  // modalCard horizontal padding:
+  const modalHorizontalPadding = isSmallScreen ? 28 : 44;
+
+  const availableWidth =
+    modalWidth -
+    modalHorizontalPadding -
+    gridGap * (columns - 1);
+
+  return Math.max(
+    110,
+    Math.min(100, Math.floor(availableWidth / columns))
+  );
+}, [modalWidth, isSmallScreen]);
+
 
   const projectConditions = useMemo(() => {
     const unique = new Map<string, string>();
@@ -717,8 +753,9 @@ export default function CreateAssetWizardModal({
                       width: modalWidth,
                       maxHeight: modalMaxHeight,
                       minHeight: modalMinHeight,
+                      //  height: detailsExpanded ? height * 0.92 : height * 0.78,
                       borderRadius: isSmallScreen ? 18 : 24,
-                      padding: isSmallScreen ? 12 : 16,
+                      padding: isSmallScreen ? 14 : 22,
                     },
                     !detailsExpanded && styles.modalCardCompact,
                   ]}
@@ -742,20 +779,7 @@ export default function CreateAssetWizardModal({
                         </View>
                       </View>
 
-                      {!isVehicleAsset && (
-                        <OtherAssetForm
-  draft={draft}
-  setDraft={setDraft}
-  subAssetTypes={subAssetTypes}
-  onRenameSubAssetType={onRenameSubAssetType}
-  showSnackbar={showSnackbar}
-  previewSize={previewSize}
-  imageLoadingMap={imageLoadingMap}
-  setImageLoading={setImageLoading}
-  height={height}
-  openOtherPhotoCamera={openOtherPhotoCamera}
-/>
-                      )}
+   
                     </View>
 
                     <TouchableOpacity
@@ -834,13 +858,32 @@ export default function CreateAssetWizardModal({
                         </View>
                       </View>
 
-                      {isVehicle && (
+
+                                         {!isVehicleAsset && (
+                        <OtherAssetForm
+  draft={draft}
+  setDraft={setDraft}
+  detailsExpanded={detailsExpanded}
+  setDetailsExpanded={setDetailsExpanded}
+  subAssetTypes={subAssetTypes}
+  onRenameSubAssetType={onRenameSubAssetType}
+  showSnackbar={showSnackbar}
+  previewSize={otherPreviewSize}
+  imageLoadingMap={imageLoadingMap}
+  setImageLoading={setImageLoading}
+  height={height}
+  openOtherPhotoCamera={openOtherPhotoCamera}
+/>
+                      )}
+
+                                            {isVehicle && (
                         <VehicleAssetForm
                           draft={draft}
                           setDraft={setDraft}
                           detailsExpanded={detailsExpanded}
-                          setDetailsExpanded={setDetailsExpanded}
                           previewSize={previewSize}
+                          setDetailsExpanded={setDetailsExpanded}
+                          
                           imageLoadingMap={imageLoadingMap}
                           setImageLoading={setImageLoading}
                           manufactureYears={manufactureYears}
@@ -850,29 +893,8 @@ export default function CreateAssetWizardModal({
                         />
                       )}
 
-                      {!isVehicle && (
-                        <TouchableOpacity
-                          style={styles.addDetailsBtn}
-                          onPress={() =>
-                            setDetailsExpanded((prev) => !prev)
-                          }
-                          activeOpacity={0.85}
-                        >
-                          <Ionicons
-                            name={
-                              detailsExpanded
-                                ? "remove-circle-outline"
-                                : "add-circle-outline"
-                            }
-                            size={18}
-                            color={ACC}
-                          />
 
-                          <Text style={styles.addDetailsText}>
-                            {detailsExpanded ? "Hide details" : "Add details"}
-                          </Text>
-                        </TouchableOpacity>
-                      )}
+
 
                       {detailsExpanded && (
                         <>
@@ -1395,29 +1417,27 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(42,50,75,0.55)",
     paddingHorizontal: 10,
     paddingVertical: 1,
-    justifyContent: "flex-start",
+    justifyContent: "center",
     alignItems: "center",
   },
 
   keyboardWrap: {
     width: "100%",
     flex: 1,
-    justifyContent: "flex-start",
+    justifyContent: "center",
     alignItems: "center",
   },
 
-  modalCard: {
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 24,
-    padding: 16,
-    alignSelf: "center",
-    flexShrink: 1,
-    overflow: "visible",
-    marginTop: 40,
-  },
-
+ modalCard: {
+  backgroundColor: "#fff",
+  borderWidth: 1,
+  borderColor: BORDER,
+  borderRadius: 24,
+  padding: 16,
+  alignSelf: "center",
+  flexShrink: 1,
+  overflow: "visible",
+},
   scrollView: {
     flex: 1,
     width: "100%",
@@ -1560,13 +1580,13 @@ const styles = StyleSheet.create({
     backgroundColor: MUTED,
   },
 
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 2,
-    gap: 5,
-  },
+ header: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  marginBottom: 8,
+  gap: 8,
+},
 
   title: {
     color: TEXT,
@@ -1574,17 +1594,17 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 
-  closeBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 12,
-    backgroundColor: SURFACE,
-    borderWidth: 1,
-    borderColor: BORDER,
-    marginBottom: 50,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+closeBtn: {
+  width: 32,
+  height: 32,
+  borderRadius: 12,
+  backgroundColor: SURFACE,
+  borderWidth: 1,
+  borderColor: BORDER,
+  alignItems: "center",
+  justifyContent: "center",
+  alignSelf: "flex-start",
+},
 
   vehicleDropdownPlaceholder: {
     color: "#767B91",
