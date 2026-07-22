@@ -37,7 +37,7 @@ import { AudioModule, RecordingPresets, useAudioRecorder } from "expo-audio";
 
 type CameraMode = "photos" | "scan";
 
-type VehiclePhotoSlot = "plate" | "details" | "odometer" | "other" | null;
+type PhotoSlot = "plate" | "details" | "odometer" | "brand" | "other" | null;
 
 
 
@@ -88,6 +88,57 @@ const cleanAssetRawData = (rawData?: Record<string, any> | null) => {
 };
 
 
+const createEmptyImages = () => ({
+  plate: null,
+  details: null,
+  odometer: null,
+  brand: null,
+  other: [],
+});
+
+const normalizeInitialImages = (
+  images: any,
+  assetType?: string
+): AssetDraft["images"] => {
+  const empty = createEmptyImages();
+
+  if (!images) return empty;
+
+  // Current API format
+  if (!Array.isArray(images) && typeof images === "object") {
+    return {
+      plate: images.plate || null,
+      details: images.details || null,
+      odometer: images.odometer || null,
+      brand: images.brand || null,
+      other: Array.isArray(images.other) ? images.other.filter(Boolean) : [],
+    };
+  }
+
+  // Backward compatibility for old drafts that used a flat array.
+  if (Array.isArray(images)) {
+    const clean = images.filter(Boolean);
+    const isVehicle = String(assetType || "").toLowerCase() === "vehicle";
+
+    if (isVehicle) {
+      return {
+        ...empty,
+        plate: clean[0] || null,
+        details: clean[1] || null,
+        odometer: clean[2] || null,
+        other: clean.slice(3),
+      };
+    }
+
+    return {
+      ...empty,
+      other: clean,
+    };
+  }
+
+  return empty;
+};
+
 const getInitialDraft = (
   initialData?: Partial<AssetDraft>
 ): AssetDraft => {
@@ -102,12 +153,15 @@ const getInitialDraft = (
   ).trim();
 
   return {
-    images: initialData?.images || [],
+    images: normalizeInitialImages(initialData?.images, initialData?.assetType),
     name: initialData?.name || "",
     writtenDescription: "",
     voiceNotes: initialData?.voiceNotes?.slice(0, 1) || [],
     condition: initialData?.condition || "Good",
-    assetType: initialData?.assetType || "Other",
+    assetType:
+      String(initialData?.assetType || "other").toLowerCase() === "vehicle"
+        ? "vehicle"
+        : "other",
 
     brand: initialData?.brand || "",
     model: initialData?.model || "",
@@ -149,8 +203,8 @@ export default function CreateAssetWizardModal({
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
 
-  const [vehiclePhotoSlot, setVehiclePhotoSlot] =
-    useState<VehiclePhotoSlot>(null);
+  const [photoSlot, setPhotoSlot] =
+    useState<PhotoSlot>(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [detailsExpanded, setDetailsExpanded] = useState(false);
@@ -218,7 +272,7 @@ export default function CreateAssetWizardModal({
       setImageLoadingMap({});
       setIsRecording(false);
       setCameraMode("photos");
-      setVehiclePhotoSlot(null);
+      setPhotoSlot(null);
       setSubmitting(false);
       setDetailsExpanded(false);
       didAutoOpenCameraRef.current = false;
@@ -328,14 +382,20 @@ export default function CreateAssetWizardModal({
     }, 320);
   };
 
-  const openVehiclePhotoCamera = (slot: VehiclePhotoSlot) => {
-    setVehiclePhotoSlot(slot);
+  const openVehiclePhotoCamera = (slot: Exclude<PhotoSlot, "brand" | null>) => {
+    setPhotoSlot(slot);
+    setCameraMode("photos");
+    setCameraOpen(true);
+  };
+
+  const openOtherPhotoCamera = (slot: "details" | "brand" | "other") => {
+    setPhotoSlot(slot);
     setCameraMode("photos");
     setCameraOpen(true);
   };
 
   const openPhotoCamera = () => {
-    setVehiclePhotoSlot(null);
+    setPhotoSlot("other");
     setCameraMode("photos");
     setCameraOpen(true);
   };
@@ -472,13 +532,6 @@ export default function CreateAssetWizardModal({
     }
   };
 
-  const removeImage = (index: number) => {
-    setDraft((prev) => ({
-      ...prev,
-      images: prev.images.filter((_, i) => i !== index),
-    }));
-  };
-
   const removeVoiceNote = (index: number) => {
     setDraft((prev) => ({
       ...prev,
@@ -500,7 +553,7 @@ export default function CreateAssetWizardModal({
     setStep(1);
     setIsRecording(false);
     setCameraMode("photos");
-    setVehiclePhotoSlot(null);
+    setPhotoSlot(null);
 
     Keyboard.dismiss();
     onClose();
@@ -691,12 +744,17 @@ export default function CreateAssetWizardModal({
 
                       {!isVehicleAsset && (
                         <OtherAssetForm
-                          draft={draft}
-                          setDraft={setDraft}
-                          subAssetTypes={subAssetTypes}
-                          onRenameSubAssetType={onRenameSubAssetType}
-                          showSnackbar={showSnackbar}
-                        />
+  draft={draft}
+  setDraft={setDraft}
+  subAssetTypes={subAssetTypes}
+  onRenameSubAssetType={onRenameSubAssetType}
+  showSnackbar={showSnackbar}
+  previewSize={previewSize}
+  imageLoadingMap={imageLoadingMap}
+  setImageLoading={setImageLoading}
+  height={height}
+  openOtherPhotoCamera={openOtherPhotoCamera}
+/>
                       )}
                     </View>
 
@@ -1031,86 +1089,7 @@ export default function CreateAssetWizardModal({
                             </View>
                           )}
 
-                          {!isVehicle && (
-                            <>
-                              <Text style={styles.helper}>
-                                {t("asset.imagesSelected", {
-                                  count: draft.images.length,
-                                })}
-                              </Text>
 
-                              {draft.images.length > 0 && (
-                                <View style={styles.previewGrid}>
-                                  {draft.images.map((img, index) => {
-                                    const imageUri = img.uri || img.url;
-                                    if (!imageUri) return null;
-
-                                    const imageKey = getImageKey(
-                                      imageUri,
-                                      index
-                                    );
-                                    const isImageLoading =
-                                      imageLoadingMap[imageKey] !== false;
-
-                                    return (
-                                      <View
-                                        key={imageKey}
-                                        style={[
-                                          styles.previewItem,
-                                          {
-                                            width: previewSize,
-                                            height: previewSize,
-                                          },
-                                        ]}
-                                      >
-                                        <Image
-                                          source={{ uri: imageUri }}
-                                          style={[
-                                            styles.previewImage,
-                                            isImageLoading &&
-                                              styles.previewImageLoading,
-                                          ]}
-                                          resizeMode="cover"
-                                          fadeDuration={150}
-                                          onLoadStart={() =>
-                                            setImageLoading(imageKey, true)
-                                          }
-                                          onLoadEnd={() =>
-                                            setImageLoading(imageKey, false)
-                                          }
-                                          onError={() =>
-                                            setImageLoading(imageKey, false)
-                                          }
-                                        />
-
-                                        {isImageLoading && (
-                                          <View
-                                            style={styles.imageLoaderOverlay}
-                                          >
-                                            <ActivityIndicator
-                                              size="small"
-                                              color="#ffffff"
-                                            />
-                                          </View>
-                                        )}
-
-                                        <TouchableOpacity
-                                          style={styles.removeBadge}
-                                          onPress={() => removeImage(index)}
-                                        >
-                                          <Text
-                                            style={styles.removeBadgeText}
-                                          >
-                                            ✕
-                                          </Text>
-                                        </TouchableOpacity>
-                                      </View>
-                                    );
-                                  })}
-                                </View>
-                              )}
-                            </>
-                          )}
                         </>
                       )}
                     </>
@@ -1344,34 +1323,28 @@ export default function CreateAssetWizardModal({
           if (!mapped.length) return;
 
           setDraft((prev): AssetDraft => {
-            const currentImages: AssetMediaInput[] = [...prev.images];
+            const slot = photoSlot || "other";
 
-            if (isVehicle) {
-              if (vehiclePhotoSlot === "plate") {
-                currentImages[0] = mapped[0];
-              } else if (vehiclePhotoSlot === "details") {
-                currentImages[1] = mapped[0];
-              } else if (vehiclePhotoSlot === "odometer") {
-                currentImages[2] = mapped[0];
-              } else if (vehiclePhotoSlot === "other") {
-                currentImages.push(...mapped);
-              } else {
-                currentImages.push(...mapped);
-              }
-
+            if (slot === "other") {
               return {
                 ...prev,
-                images: currentImages.filter(Boolean) as AssetMediaInput[],
+                images: {
+                  ...prev.images,
+                  other: [...(prev.images.other || []), ...mapped],
+                },
               };
             }
 
             return {
               ...prev,
-              images: [...prev.images, ...mapped],
+              images: {
+                ...prev.images,
+                [slot]: mapped[0],
+              },
             };
           });
 
-          setVehiclePhotoSlot(null);
+          setPhotoSlot(null);
         }}
         onScanText={(text: string) => {
           if (cameraMode !== "scan") return;
