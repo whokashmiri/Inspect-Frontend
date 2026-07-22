@@ -1,3 +1,5 @@
+
+//OtherAssetForm.tsx
 import React, { useMemo, useState } from "react";
 import {
   View,
@@ -7,10 +9,27 @@ import {
   Modal,
   TouchableWithoutFeedback,
   Keyboard,
+  ScrollView,
+  Image,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { AssetDraft } from "../utils/types";
+import { AssetDraft, AssetMediaInput } from "../utils/types";
 import { formStyles as styles, ACC, TEXT } from "./formStyles";
+
+type OtherPhotoSlot = "details" | "brand" | "other";
+
+
+
+const otherPreviewSlots = [
+  { key: "details", label: "Details", icon: "document-text-outline" },
+  { key: "brand", label: "Brand", icon: "pricetag-outline" },
+  { key: "other", label: "Other", icon: "images-outline" },
+] as const;
+
+function getImageKey(slot: string, uri: string, index = 0) {
+  return `${slot}-${index}-${uri}`;
+}
 
 type OtherAssetFormProps = {
   draft: AssetDraft;
@@ -27,6 +46,13 @@ type OtherAssetFormProps = {
     message: string,
     type?: "success" | "error" | "info"
   ) => void;
+
+  previewSize: number;
+  imageLoadingMap: Record<string, boolean>;
+  setImageLoading: (key: string, loading: boolean) => void;
+  height: number;
+
+  openOtherPhotoCamera: (slot: OtherPhotoSlot) => void;
 };
 
 const cleanAssetRawData = (rawData?: Record<string, any> | null) => {
@@ -91,6 +117,11 @@ export function cleanOtherAssetDraft(draft: AssetDraft): AssetDraft | null {
     model: undefined,
     manufactureYear: undefined,
     kilometersDriven: undefined,
+    images: {
+      ...draft.images,
+      plate: null,
+      odometer: null,
+    },
     rawData: cleanAssetRawData((draft as any).rawData),
   } as any;
 }
@@ -101,10 +132,16 @@ export default function OtherAssetForm({
   subAssetTypes = [],
   onRenameSubAssetType,
   showSnackbar,
+  previewSize,
+  imageLoadingMap,
+  setImageLoading,
+  height,
+  openOtherPhotoCamera,
 }: OtherAssetFormProps) {
   const [assetTypeDropdownOpen, setAssetTypeDropdownOpen] = useState(false);
   const [addTypeModalOpen, setAddTypeModalOpen] = useState(false);
   const [newSubAssetTypeText, setNewSubAssetTypeText] = useState("");
+  const [otherPhotosOpen, setOtherPhotosOpen] = useState(false);
 
   const [editingSubAssetType, setEditingSubAssetType] = useState<string | null>(
     null
@@ -203,8 +240,139 @@ export default function OtherAssetForm({
     }
   };
 
+  const otherPhotos = draft.images.other || [];
+
+  const imageCount =
+    Number(Boolean(draft.images.details)) +
+    Number(Boolean(draft.images.brand)) +
+    otherPhotos.length;
+
+  const removeSingleSlotImage = (slot: "details" | "brand") => {
+    setDraft((prev) => ({
+      ...prev,
+      images: {
+        ...prev.images,
+        [slot]: null,
+      },
+    }));
+  };
+
+  const removeOtherImage = (index: number) => {
+    setDraft((prev) => ({
+      ...prev,
+      images: {
+        ...prev.images,
+        other: prev.images.other.filter((_, itemIndex) => itemIndex !== index),
+      },
+    }));
+  };
+
   return (
     <>
+      <Text style={styles.helper}>Asset photos {imageCount}</Text>
+
+      <View style={styles.vehiclePreviewGrid}>
+        {otherPreviewSlots.map((slot) => {
+          const isOtherSlot = slot.key === "other";
+          const image = isOtherSlot
+            ? otherPhotos[0] || null
+            : draft.images[slot.key];
+
+          const imageUri = image?.uri || image?.url;
+          const imageKey = imageUri
+            ? getImageKey(slot.key, imageUri)
+            : slot.key;
+          const isImageLoading = imageUri
+            ? imageLoadingMap[imageKey] !== false
+            : false;
+          const extraCount = isOtherSlot
+            ? Math.max(otherPhotos.length - 1, 0)
+            : 0;
+
+          return (
+            <TouchableOpacity
+              key={slot.key}
+              style={[
+                styles.vehiclePreviewItem,
+                { width: previewSize, height: previewSize + 18 },
+              ]}
+              onPress={() => {
+                if (isOtherSlot && otherPhotos.length > 0) {
+                  setOtherPhotosOpen(true);
+                  return;
+                }
+
+                openOtherPhotoCamera(slot.key);
+              }}
+              activeOpacity={0.85}
+            >
+              <View style={styles.vehiclePreviewBox}>
+                {imageUri ? (
+                  <>
+                    <Image
+                      source={{ uri: imageUri }}
+                      style={[
+                        styles.previewImage,
+                        isImageLoading && styles.previewImageLoading,
+                      ]}
+                      resizeMode="cover"
+                      fadeDuration={150}
+                      onLoadStart={() => setImageLoading(imageKey, true)}
+                      onLoadEnd={() => setImageLoading(imageKey, false)}
+                      onError={() => setImageLoading(imageKey, false)}
+                    />
+
+                    {isImageLoading && (
+                      <View style={styles.imageLoaderOverlay}>
+                        <ActivityIndicator size="small" color="#ffffff" />
+                      </View>
+                    )}
+
+                    {isOtherSlot && extraCount > 0 && (
+                      <View style={styles.countBadge}>
+                        <Text style={styles.countBadgeText}>+{extraCount}</Text>
+                      </View>
+                    )}
+
+                    {!isOtherSlot && (
+                      <TouchableOpacity
+                        style={styles.removeBadge}
+                        onPress={(event) => {
+                          event.stopPropagation();
+                          removeSingleSlotImage(slot.key as "details" | "brand");
+                        }}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.removeBadgeText}>✕</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {isOtherSlot && (
+                      <View style={styles.otherAddBadge}>
+                        <Ionicons name="add" size={14} color="#ffffff" />
+                      </View>
+                    )}
+                  </>
+                ) : (
+                  <View style={styles.vehiclePlaceholderContent}>
+                    <Ionicons
+                      name={slot.icon as any}
+                      size={20}
+                      color="#767B91"
+                    />
+                    <Ionicons name="add-circle" size={13} color={ACC} />
+                  </View>
+                )}
+              </View>
+
+              <Text style={styles.vehiclePreviewLabel} numberOfLines={1}>
+                {slot.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
       <View style={styles.otherAssetControls}>
         <View style={styles.assetTypeQuantityRow}>
           <View style={styles.assetTypeFieldWrap}>
@@ -392,6 +560,103 @@ export default function OtherAssetForm({
           </View>
         )}
       </View>
+
+      <Modal
+        visible={otherPhotosOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setOtherPhotosOpen(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setOtherPhotosOpen(false)}>
+          <View style={styles.vehicleSelectOverlay}>
+            <TouchableWithoutFeedback>
+              <View
+                style={[
+                  styles.vehicleSelectCard,
+                  { maxHeight: Math.min(height * 0.65, 460) },
+                ]}
+              >
+                <View style={styles.vehicleSelectHeader}>
+                  <Text style={styles.vehicleSelectTitle}>Other Photos</Text>
+
+                  <TouchableOpacity
+                    onPress={() => setOtherPhotosOpen(false)}
+                    style={styles.vehicleSelectCloseBtn}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name="close" size={18} color="#2b2a4b" />
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView
+                  contentContainerStyle={styles.otherGrid}
+                  showsVerticalScrollIndicator
+                >
+                  {otherPhotos.map((image: AssetMediaInput, index) => {
+                    const imageUri = image.uri || image.url;
+                    if (!imageUri) return null;
+
+                    const imageKey = getImageKey("other", imageUri, index);
+                    const isImageLoading = imageLoadingMap[imageKey] !== false;
+
+                    return (
+                      <View
+                        key={imageKey}
+                        style={[
+                          styles.previewItem,
+                          { width: previewSize, height: previewSize },
+                        ]}
+                      >
+                        <Image
+                          source={{ uri: imageUri }}
+                          style={[
+                            styles.previewImage,
+                            isImageLoading && styles.previewImageLoading,
+                          ]}
+                          resizeMode="cover"
+                          fadeDuration={150}
+                          onLoadStart={() => setImageLoading(imageKey, true)}
+                          onLoadEnd={() => setImageLoading(imageKey, false)}
+                          onError={() => setImageLoading(imageKey, false)}
+                        />
+
+                        {isImageLoading && (
+                          <View style={styles.imageLoaderOverlay}>
+                            <ActivityIndicator size="small" color="#ffffff" />
+                          </View>
+                        )}
+
+                        <TouchableOpacity
+                          style={styles.removeBadge}
+                          onPress={() => removeOtherImage(index)}
+                          activeOpacity={0.85}
+                        >
+                          <Text style={styles.removeBadgeText}>✕</Text>
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })}
+
+                  <TouchableOpacity
+                    style={[
+                      styles.addOtherTile,
+                      { width: previewSize, height: previewSize },
+                    ]}
+                    onPress={() => openOtherPhotoCamera("other")}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons
+                      name="add-circle-outline"
+                      size={26}
+                      color={ACC}
+                    />
+                  </TouchableOpacity>
+                </ScrollView>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
 
       <Modal
         visible={addTypeModalOpen}
