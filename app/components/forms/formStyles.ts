@@ -13,6 +13,15 @@ export const formStyles = StyleSheet.create({
     gap: 8,
   },
 
+
+  otherPreviewGrid: {
+  width: "100%",
+  flexDirection: "row",
+  flexWrap: "wrap",
+  alignItems: "flex-start",
+  justifyContent: "flex-start",
+  gap: 8,
+},
   assetTypeQuantityRow: {
     flexDirection: "row",
     alignItems: "flex-start",
