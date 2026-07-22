@@ -136,12 +136,15 @@ export default function VehicleAssetForm({
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const [vehicleSearch, setVehicleSearch] = useState("");
 
+   
+
   const [favoriteBrands, setFavoriteBrands] = useState<string[]>([]);
   const [favoriteModelsByBrand, setFavoriteModelsByBrand] = useState<
     Record<string, string[]>
   >({});
 
   const [otherPhotosOpen, setOtherPhotosOpen] = useState(false);
+  const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
 
   React.useEffect(() => {
     const loadVehicleFavorites = async () => {
@@ -344,71 +347,90 @@ export default function VehicleAssetForm({
                   height: previewSize + 18,
                 },
               ]}
-              onPress={() => {
-                if (isOtherSlot && otherPhotos.length > 0) {
-                  setOtherPhotosOpen(true);
-                  return;
-                }
+onPress={() => {
+  // Plate, details or odometer already has an image:
+  // open that image instead of reopening the camera.
+  if (!isOtherSlot && imageUri) {
+    setSelectedImageUri(imageUri);
+    return;
+  }
 
-                openVehiclePhotoCamera(slot.key);
-              }}
+  // One Other image: open it directly.
+  if (isOtherSlot && otherPhotos.length === 1 && imageUri) {
+    setSelectedImageUri(imageUri);
+    return;
+  }
+
+  // Multiple Other images: open the gallery.
+  if (isOtherSlot && otherPhotos.length > 1) {
+    setOtherPhotosOpen(true);
+    return;
+  }
+
+  // Empty placeholder: open the correct vehicle camera slot.
+  openVehiclePhotoCamera(slot.key);
+}}
               activeOpacity={0.85}
             >
               <View style={styles.vehiclePreviewBox}>
-                {imageUri ? (
-                  <>
-                    <Image
-                      source={{ uri: imageUri }}
-                      style={[
-                        styles.previewImage,
-                        isImageLoading && styles.previewImageLoading,
-                      ]}
-                      resizeMode="cover"
-                      fadeDuration={150}
-                      onLoadStart={() => setImageLoading(imageKey, true)}
-                      onLoadEnd={() => setImageLoading(imageKey, false)}
-                      onError={() => setImageLoading(imageKey, false)}
-                    />
+           {imageUri ? (
+  <>
+    <Image
+      source={{ uri: imageUri }}
+      style={[
+        styles.previewImage,
+        isImageLoading && styles.previewImageLoading,
+      ]}
+      resizeMode="cover"
+      fadeDuration={150}
+      onLoadStart={() => setImageLoading(imageKey, true)}
+      onLoadEnd={() => setImageLoading(imageKey, false)}
+      onError={() => setImageLoading(imageKey, false)}
+    />
 
-                    {isImageLoading && (
-                      <View style={styles.imageLoaderOverlay}>
-                        <ActivityIndicator size="small" color="#ffffff" />
-                      </View>
-                    )}
+    {isImageLoading && (
+      <View style={styles.imageLoaderOverlay}>
+        <ActivityIndicator size="small" color="#ffffff" />
+      </View>
+    )}
 
-                    {isOtherSlot && otherExtraCount > 0 && (
-                      <View style={styles.countBadge}>
-                        <Text style={styles.countBadgeText}>
-                          +{otherExtraCount}
-                        </Text>
-                      </View>
-                    )}
+    {isOtherSlot && otherExtraCount > 0 && (
+      <View style={styles.countBadge}>
+        <Text style={styles.countBadgeText}>
+          +{otherExtraCount}
+        </Text>
+      </View>
+    )}
 
-                    {!isOtherSlot && (
-                      <TouchableOpacity
-                        style={styles.removeBadge}
-                        onPress={(event) => {
-                          event.stopPropagation();
-                          removeVehicleSlotImage(slot.key);
-                        }}
-                        activeOpacity={0.85}
-                      >
-                        <Text style={styles.removeBadgeText}>✕</Text>
-                      </TouchableOpacity>
-                    )}
+    {!isOtherSlot && (
+      <TouchableOpacity
+        style={styles.removeBadge}
+        onPress={(event) => {
+          event.stopPropagation();
+          removeVehicleSlotImage(slot.key);
+        }}
+        activeOpacity={0.85}
+      >
+        <Text style={styles.removeBadgeText}>✕</Text>
+      </TouchableOpacity>
+    )}
 
-                    {isOtherSlot && (
-                      <View style={styles.otherAddBadge}>
-                        <Ionicons name="add" size={14} color="#ffffff" />
-                      </View>
-                    )}
-                  </>
-                ) : (
-                  <View style={styles.vehiclePlaceholderContent}>
-                    <Ionicons name={slot.icon as any} size={20} color={MUTED} />
-                    <Ionicons name="add-circle" size={13} color={ACC} />
-                  </View>
-                )}
+    {isOtherSlot && (
+      <View style={styles.otherAddBadge}>
+        <Ionicons name="add" size={14} color="#ffffff" />
+      </View>
+    )}
+  </>
+) : (
+  <View style={styles.vehiclePlaceholderContent}>
+    <Ionicons
+      name={slot.icon as any}
+      size={20}
+      color={MUTED}
+    />
+    <Ionicons name="add-circle" size={13} color={ACC} />
+  </View>
+)}
               </View>
 
               <Text style={styles.vehiclePreviewLabel} numberOfLines={1}>
@@ -705,6 +727,52 @@ export default function VehicleAssetForm({
       </Modal>
 
       <Modal
+  visible={Boolean(selectedImageUri)}
+  transparent={false}
+  animationType="fade"
+  statusBarTranslucent
+  onRequestClose={() => setSelectedImageUri(null)}
+>
+  <View
+    style={{
+      flex: 1,
+      backgroundColor: "#000000",
+      alignItems: "center",
+      justifyContent: "center",
+    }}
+  >
+    {selectedImageUri && (
+      <Image
+        source={{ uri: selectedImageUri }}
+        style={{
+          width: "100%",
+          height: "100%",
+        }}
+        resizeMode="contain"
+      />
+    )}
+
+    <TouchableOpacity
+      style={{
+        position: "absolute",
+        top: 48,
+        right: 20,
+        width: 42,
+        height: 42,
+        borderRadius: 21,
+        backgroundColor: "rgba(0,0,0,0.65)",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+      onPress={() => setSelectedImageUri(null)}
+      activeOpacity={0.85}
+    >
+      <Ionicons name="close" size={28} color="#ffffff" />
+    </TouchableOpacity>
+  </View>
+</Modal>
+
+      <Modal
         visible={otherPhotosOpen}
         transparent
         animationType="fade"
@@ -743,13 +811,21 @@ export default function VehicleAssetForm({
                     const isImageLoading = imageLoadingMap[imageKey] !== false;
 
                     return (
-                      <View
-                        key={imageKey}
-                        style={[
-                          styles.previewItem,
-                          { width: previewSize, height: previewSize },
-                        ]}
-                      >
+                    <TouchableOpacity
+  key={imageKey}
+  style={[
+    styles.previewItem,
+    { width: previewSize, height: previewSize },
+  ]}
+  onPress={() => {
+    setOtherPhotosOpen(false);
+
+    setTimeout(() => {
+      setSelectedImageUri(imageUri);
+    }, 100);
+  }}
+  activeOpacity={0.9}
+>
                         <Image
                           source={{ uri: imageUri }}
                           style={[
@@ -769,13 +845,17 @@ export default function VehicleAssetForm({
                           </View>
                         )}
 
-                        <TouchableOpacity
-                          style={styles.removeBadge}
-                          onPress={() => removeOtherImage(index)}
-                        >
-                          <Text style={styles.removeBadgeText}>✕</Text>
-                        </TouchableOpacity>
-                      </View>
+                       <TouchableOpacity
+  style={styles.removeBadge}
+  onPress={(event) => {
+    event.stopPropagation();
+    removeOtherImage(index);
+  }}
+  activeOpacity={0.85}
+>
+  <Text style={styles.removeBadgeText}>✕</Text>
+</TouchableOpacity>
+                      </TouchableOpacity>
                     );
                   })}
 
