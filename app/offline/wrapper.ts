@@ -17,24 +17,89 @@ import * as Crypto from "expo-crypto";
 
 
 
-function extractLocalMediaUris(payload: any, type: OfflineAction): string[] {
-  if ((type !== "createAsset" && type !== "updateAsset") || !payload) return [];
+type OfflineMediaItem = {
+  uri?: string;
+  [key: string]: any;
+};
 
-  const imageUris = Array.isArray(payload.images)
-    ? payload.images
-        .map((item: any) => item?.uri)
-        .filter((uri: any) => typeof uri === "string" && !uri.startsWith("http"))
-    : [];
+type OfflineAssetImages = {
+  plate?: OfflineMediaItem | null;
+  details?: OfflineMediaItem | null;
+  odometer?: OfflineMediaItem | null;
+  brand?: OfflineMediaItem | null;
+  other?: OfflineMediaItem[];
+};
 
-  const voiceUris = Array.isArray(payload.voiceNotes)
-    ? payload.voiceNotes
-        .map((item: any) => item?.uri)
-        .filter((uri: any) => typeof uri === "string" && !uri.startsWith("http"))
-    : [];
+function flattenOfflineAssetImages(
+  images?: OfflineAssetImages | OfflineMediaItem[] | null
+): OfflineMediaItem[] {
+  if (!images) return [];
+
+  // Backward compatibility with old saved payloads.
+  if (Array.isArray(images)) {
+    return images.filter(Boolean);
+  }
+
+  const result: OfflineMediaItem[] = [];
+
+  if (images.plate) {
+    result.push(images.plate);
+  }
+
+  if (images.details) {
+    result.push(images.details);
+  }
+
+  if (images.odometer) {
+    result.push(images.odometer);
+  }
+
+  if (images.brand) {
+    result.push(images.brand);
+  }
+
+  if (Array.isArray(images.other)) {
+    result.push(...images.other.filter(Boolean));
+  }
+
+  return result;
+}
+
+function isLocalMediaUri(uri: unknown): uri is string {
+  return (
+    typeof uri === "string" &&
+    uri.length > 0 &&
+    !uri.startsWith("http://") &&
+    !uri.startsWith("https://") &&
+    !uri.startsWith("//")
+  );
+}
+
+function extractLocalMediaUris(
+  payload: any,
+  type: OfflineAction
+): string[] {
+  if (
+    (type !== "createAsset" && type !== "updateAsset") ||
+    !payload
+  ) {
+    return [];
+  }
+
+  const imageUris = flattenOfflineAssetImages(payload.images)
+    .map((item) => item?.uri)
+    .filter(isLocalMediaUri);
+
+  const voiceUris = (
+    Array.isArray(payload.voiceNotes)
+      ? payload.voiceNotes
+      : []
+  )
+    .map((item: any) => item?.uri)
+    .filter(isLocalMediaUri);
 
   return [...imageUris, ...voiceUris];
 }
-
 function shouldPersistMedia(type: OfflineAction) {
   return type === "createAsset" || type === "updateAsset";
 }
