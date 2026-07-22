@@ -1,4 +1,3 @@
-
 //FolderAndAssetScreen.tsx
 import CreateAssetWizardModal from "./CreateAssetWizardModal";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -206,8 +205,45 @@ const closeMediaViewer = () => {
   );
 };
 
+type StructuredAssetImages = {
+  plate: any | null;
+  details: any | null;
+  odometer: any | null;
+  brand: any | null;
+  other: any[];
+};
+
+const createEmptyAssetImages = (): StructuredAssetImages => ({
+  plate: null,
+  details: null,
+  odometer: null,
+  brand: null,
+  other: [],
+});
+
+const flattenAssetImages = (images: any): any[] => {
+  if (!images) return [];
+
+  // Backward compatibility for older assets that still return a flat array.
+  if (Array.isArray(images)) {
+    return images.filter(Boolean);
+  }
+
+  if (typeof images !== "object") return [];
+
+  return [
+    images.plate,
+    images.details,
+    images.odometer,
+    images.brand,
+    ...(Array.isArray(images.other) ? images.other : []),
+  ].filter(Boolean);
+};
+
 const getAssetImagesOnly = (asset: AssetItem) => {
-  return (asset.images || []).filter((item: any) => !isVideoMedia(item));
+  return flattenAssetImages((asset as any).images).filter(
+    (item: any) => !isVideoMedia(item)
+  );
 };
 
   const extractRawDataKeys = (
@@ -1086,31 +1122,68 @@ const isRemoteMediaUrl = (value?: string | null) => {
   return text.startsWith("http://") || text.startsWith("https://");
 };
 
+const normalizeLocalMediaItem = (item: any, index = 0) => {
+  if (!item) return null;
+
+  const uri = item.uri || item.url || "";
+  const url = item.url || item.uri || "";
+
+  if (!uri && !url) return null;
+
+  const isExisting =
+    item.existing === true ||
+    !!item.publicId ||
+    isRemoteMediaUrl(item.url) ||
+    isRemoteMediaUrl(item.uri);
+
+  return {
+    ...item,
+    uri,
+    url,
+    name: item.name || `media_${Date.now()}_${index}`,
+    type: item.type || item.mimeType || "application/octet-stream",
+    mimeType: item.mimeType ?? item.type ?? null,
+    publicId: item.publicId ?? null,
+    mediaType:
+      item.mediaType ??
+      (item.type?.startsWith?.("video/") ||
+      item.mimeType?.startsWith?.("video/")
+        ? "video"
+        : "image"),
+    thumbnailUrl: item.thumbnailUrl ?? null,
+    duration: item.duration ?? null,
+    existing: isExisting,
+  };
+};
+
 const normalizeLocalMedia = (items: any[] = []) => {
-  return items.map((item, index) => {
-    const uri = item.uri || item.url || "";
-    const url = item.url || item.uri || "";
+  return (Array.isArray(items) ? items : [])
+    .map((item, index) => normalizeLocalMediaItem(item, index))
+    .filter(Boolean);
+};
 
-    const isExisting =
-      item.existing === true ||
-      !!item.publicId ||
-      isRemoteMediaUrl(item.url) ||
-      isRemoteMediaUrl(item.uri);
+const normalizeAssetImages = (images: any): StructuredAssetImages => {
+  const empty = createEmptyAssetImages();
 
+  if (!images) return empty;
+
+  // Legacy flat arrays are kept only in the Other bucket so images are not lost.
+  if (Array.isArray(images)) {
     return {
-      ...item,
-      uri,
-      url,
-      name: item.name || `media_${Date.now()}_${index}`,
-      type: item.type || item.mimeType || "application/octet-stream",
-      mimeType: item.mimeType ?? item.type ?? null,
-      publicId: item.publicId ?? null,
-      mediaType: item.mediaType ?? (item.type?.startsWith("video/") ? "video" : "image"),
-      thumbnailUrl: item.thumbnailUrl ?? null,
-      duration: item.duration ?? null,
-      existing: isExisting,
+      ...empty,
+      other: normalizeLocalMedia(images),
     };
-  });
+  }
+
+  if (typeof images !== "object") return empty;
+
+  return {
+    plate: normalizeLocalMediaItem(images.plate, 0),
+    details: normalizeLocalMediaItem(images.details, 1),
+    odometer: normalizeLocalMediaItem(images.odometer, 2),
+    brand: normalizeLocalMediaItem(images.brand, 3),
+    other: normalizeLocalMedia(images.other),
+  };
 };
 
   const buildLocalAsset = (draft: AssetDraft): AssetItem => {
@@ -1154,7 +1227,7 @@ rawData,
       notes: notesText || null,
       isPresent: draft.isPresent ?? true,
       createdBy: { id: "offline-user", fullName: "You", email: "" },
-     images: normalizeLocalMedia(draft.images || []),
+     images: normalizeAssetImages(draft.images),
     voiceNotes: normalizeLocalMedia(draft.voiceNotes || []),
     };
   };
@@ -1192,7 +1265,7 @@ const normalizeAssetQuantity = (value: any) => {
   setAssets((prev) => [optimisticAsset, ...prev]);
 
   try {
-  const allImages = normalizeLocalMedia(draft.images || []);
+  const allImages = normalizeAssetImages(draft.images);
 const allVoiceNotes = normalizeLocalMedia(draft.voiceNotes || []);
 
 
@@ -1385,7 +1458,7 @@ const saveAndCreateNextAsset = (draft: AssetDraft) => {
   setUploadingAssetIds((prev) =>
     prev.includes(targetAsset.id) ? prev : [...prev, targetAsset.id]
   );
-    const allImages = normalizeLocalMedia(draft.images || []);
+    const allImages = normalizeAssetImages(draft.images);
     const allVoiceNotes = normalizeLocalMedia(draft.voiceNotes || []);
     const normalizedAssetType = normalizeAssetType(draft.assetType as any);
     const isVehicle = normalizedAssetType === "vehicle";
@@ -1464,7 +1537,7 @@ const payload = {
           isPresent: draft.isPresent ?? existingOfflineAsset.isPresent,
           updatedAt: new Date().toISOString(),
 
-          images: normalizeLocalMedia(draft.images || []),
+          images: normalizeAssetImages(draft.images),
           voiceNotes: normalizeLocalMedia(draft.voiceNotes || []),
         };
         await upsertOfflineAsset(updatedOfflineAsset);
@@ -1651,7 +1724,7 @@ const getAssetImageUri = (asset: AssetItem) => {
 
 
 const getValidAssetMedia = (asset: AssetItem) => {
-  return (asset.images || []).filter((media: any) => {
+  return flattenAssetImages((asset as any).images).filter((media: any) => {
     const uri = media?.url || media?.uri;
     return typeof uri === "string" && uri.trim().length > 0;
   });
@@ -1810,7 +1883,7 @@ const buildNewAssetInitialData = (
     quantity: 1,
     subAssetType: "",
     rawData: {},
-    images: [],
+    images: createEmptyAssetImages(),
     voiceNotes: [],
     notes: "",
     hasNotes: false,
@@ -2258,7 +2331,7 @@ const handleRenameSubAssetType = async (
                     onPress={() => openEditAsset(item)}
                     activeOpacity={0.85}
                   >
-                    {item.images?.length ? (
+                    {getAssetImageUri(item) ? (
                       <Image
                         source={{ uri: getAssetImageUri(item)! }}
                         style={styles.searchResultImage}
