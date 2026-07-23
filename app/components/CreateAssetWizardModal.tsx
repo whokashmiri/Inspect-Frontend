@@ -1,5 +1,6 @@
 // CreateAssetWizardModal.tsx
 import React, { RefObject, useEffect, useMemo, useRef, useState } from "react";
+import { compressAssetImage } from "./utils/compressImage";
 import {
   Modal,
   View,
@@ -200,6 +201,8 @@ export default function CreateAssetWizardModal({
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
+  const [processingImages, setProcessingImages] = useState(false);
+
   const [snackbar, setSnackbar] = useState<{
     message: string;
     type: "success" | "error" | "info";
@@ -207,6 +210,7 @@ export default function CreateAssetWizardModal({
 
   const snackbarTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const soundObjectRef = useRef<any>(null);
+  const processingImagesRef = useRef(false);
   const [playingIndex, setPlayingIndex] = useState<number | null>(null);
 
   const scrollRef = useRef<ScrollView>(null);
@@ -263,9 +267,12 @@ export default function CreateAssetWizardModal({
       setCameraMode("photos");
       setPhotoSlot(null);
       setSubmitting(false);
+
+      setProcessingImages(false);
+      processingImagesRef.current = false;
+
       setDetailsExpanded(false);
       didAutoOpenCameraRef.current = false;
-
       const initialAssetType = String(
         initialData?.assetType || "",
       ).toLowerCase();
@@ -650,6 +657,10 @@ export default function CreateAssetWizardModal({
     closeAfterSave = true,
   ) => {
     if (submitting) return;
+    if (processingImages) {
+      showSnackbar("Please wait while the photos are being processed", "info");
+      return;
+    }
 
     if (isRecording) {
       Alert.alert(
@@ -732,6 +743,114 @@ export default function CreateAssetWizardModal({
     setNewConditionText("");
     setAddConditionMode(false);
     setConditionModalOpen(false);
+  };
+
+  const normalizeLocalUri = (path?: string) => {
+    const value = String(path || "").trim();
+
+    if (!value) {
+      return "";
+    }
+
+    if (
+      value.startsWith("file://") ||
+      value.startsWith("content://") ||
+      value.startsWith("ph://") ||
+      value.startsWith("http://") ||
+      value.startsWith("https://")
+    ) {
+      return value;
+    }
+
+    return `file://${value}`;
+  };
+
+  const isRemoteUri = (uri: string) =>
+    uri.startsWith("http://") ||
+    uri.startsWith("https://") ||
+    uri.startsWith("//");
+
+  const processCapturedMedia = async (
+    media: any[],
+    slot: Exclude<PhotoSlot, null>,
+  ): Promise<AssetMediaInput[]> => {
+    const processedMedia: AssetMediaInput[] = [];
+
+    for (let index = 0; index < media.length; index += 1) {
+      const item = media[index];
+
+      const isVideo =
+        item?.mediaType === "video" ||
+        String(item?.mimeType || item?.type || "").startsWith("video/");
+
+      const originalUri = normalizeLocalUri(
+        item?.path || item?.uri || item?.localUri,
+      );
+
+      if (!originalUri) {
+        continue;
+      }
+
+      if (isVideo) {
+        processedMedia.push({
+          uri: originalUri,
+          name:
+            item?.name || item?.fileName || `video_${Date.now()}_${index}.mp4`,
+          type: item?.mimeType || item?.type || "video/mp4",
+          mimeType: item?.mimeType || item?.type || "video/mp4",
+          mediaType: "video",
+          duration: item?.duration,
+          thumbnailUrl: item?.thumbnailUrl,
+        } as AssetMediaInput);
+
+        continue;
+      }
+
+      const sourceMimeType = String(
+        item?.mimeType || item?.type || "image/jpeg",
+      ).toLowerCase();
+
+      let finalUri = originalUri;
+      let wasCompressed = false;
+
+      if (!isRemoteUri(originalUri)) {
+        try {
+          const compressedUri = await compressAssetImage(originalUri, slot);
+
+          if (compressedUri) {
+            finalUri = compressedUri;
+            wasCompressed = compressedUri !== originalUri;
+          }
+        } catch (error) {
+          console.error("Image compression failed:", error);
+        }
+      }
+
+      const finalMimeType = wasCompressed
+        ? "image/jpeg"
+        : sourceMimeType.startsWith("image/")
+          ? sourceMimeType
+          : "image/jpeg";
+
+      const extension = wasCompressed
+        ? "jpg"
+        : finalMimeType.includes("png")
+          ? "png"
+          : finalMimeType.includes("heic") || finalMimeType.includes("heif")
+            ? "heic"
+            : "jpg";
+      processedMedia.push({
+        uri: finalUri,
+        name: `photo_${Date.now()}_${index}.${extension}`,
+        type: finalMimeType,
+        mimeType: finalMimeType,
+        mediaType: "image",
+        originalUri,
+        compressed: wasCompressed,
+      } as AssetMediaInput);
+    }
+
+    return processedMedia;
   };
 
   return (
@@ -1150,9 +1269,13 @@ export default function CreateAssetWizardModal({
                     <View style={styles.footer}>
                       {!isVehicle && (
                         <TouchableOpacity
-                          style={styles.footerIconBtn}
+                          style={[
+                            styles.footerIconBtn,
+                            processingImages && { opacity: 0.6 },
+                          ]}
                           onPress={openPhotoCamera}
                           activeOpacity={0.85}
+                          disabled={processingImages}
                         >
                           <MaterialIcons
                             name="photo-camera"
@@ -1170,17 +1293,21 @@ export default function CreateAssetWizardModal({
                         style={[
                           styles.primaryBtn,
                           styles.finishBtn,
-                          submitting && { opacity: 0.6 },
+                          (submitting || processingImages) && {
+                            opacity: 0.6,
+                          },
                         ]}
                         onPress={handleFooterSave}
-                        disabled={submitting}
+                        disabled={submitting || processingImages}
                       >
                         <Text style={styles.primaryText}>
-                          {submitting
-                            ? t("asset.saving") || "Saving..."
-                            : mode === "edit"
-                              ? "Save & Next"
-                              : "Save & New Asset"}
+                          {processingImages
+                            ? "Processing photos..."
+                            : submitting
+                              ? t("asset.saving") || "Saving..."
+                              : mode === "edit"
+                                ? "Save & Next"
+                                : "Save & New Asset"}
                         </Text>
                       </TouchableOpacity>
 
@@ -1188,19 +1315,35 @@ export default function CreateAssetWizardModal({
                         style={[
                           styles.primaryBtn,
                           styles.finishBtn,
-                          submitting && { opacity: 0.6 },
+                          (submitting || processingImages) && {
+                            opacity: 0.6,
+                          },
                         ]}
                         onPress={handleFinish}
-                        disabled={submitting}
+                        disabled={submitting || processingImages}
                       >
                         <Text style={styles.primaryText}>
-                          {submitting
-                            ? t("asset.saving") || "Saving..."
-                            : mode === "edit"
-                              ? t("asset.saveChanges")
-                              : t("asset.finish")}
+                          {processingImages
+                            ? "Processing photos..."
+                            : submitting
+                              ? t("asset.saving") || "Saving..."
+                              : mode === "edit"
+                                ? t("asset.saveChanges")
+                                : t("asset.finish")}
                         </Text>
                       </TouchableOpacity>
+                    </View>
+                  )}
+
+                  {processingImages && (
+                    <View style={styles.processingOverlay}>
+                      <View style={styles.processingBox}>
+                        <ActivityIndicator size="large" color={ACC} />
+
+                        <Text style={styles.processingText}>
+                          Optimizing photos...
+                        </Text>
+                      </View>
                     </View>
                   )}
                 </View>
@@ -1346,52 +1489,74 @@ export default function CreateAssetWizardModal({
       <AssetCameraModal
         visible={cameraOpen}
         mode={cameraMode}
-        onClose={() => setCameraOpen(false)}
-        onDone={(media: any[]) => {
-          if (cameraMode !== "photos") return;
+        onClose={() => {
+          if (processingImagesRef.current) return;
 
-          const mapped: AssetMediaInput[] = media.map(
-            (item: any, index: number) => {
-              const isVideo = item.mediaType === "video";
+          setCameraOpen(false);
+          setPhotoSlot(null);
+        }}
+        onDone={async (media: any[]) => {
+          if (cameraMode !== "photos") {
+            return;
+          }
 
-              return {
-                uri: item.path?.startsWith("file://")
-                  ? item.path
-                  : `file://${item.path}`,
-                name: isVideo
-                  ? `video_${Date.now()}_${index}.mp4`
-                  : `photo_${Date.now()}_${index}.jpg`,
-                type: isVideo ? "video/mp4" : "image/jpeg",
-                mediaType: isVideo ? "video" : "image",
-              };
-            },
-          );
+          if (!Array.isArray(media) || media.length === 0) {
+            setCameraOpen(false);
+            setPhotoSlot(null);
+            return;
+          }
 
-          if (!mapped.length) return;
+          const slot: Exclude<PhotoSlot, null> = photoSlot || "other";
 
-          setDraft((prev): AssetDraft => {
-            const slot = photoSlot || "other";
+          processingImagesRef.current = true;
+          setProcessingImages(true);
 
-            if (slot === "other") {
+          try {
+            const mapped = await processCapturedMedia(media, slot);
+
+            if (!mapped.length) {
+              showSnackbar("No valid photos were captured", "error");
+              return;
+            }
+
+            setDraft((prev): AssetDraft => {
+              if (slot === "other") {
+                return {
+                  ...prev,
+                  images: {
+                    ...prev.images,
+                    other: [...(prev.images.other || []), ...mapped],
+                  },
+                };
+              }
+
               return {
                 ...prev,
                 images: {
                   ...prev.images,
-                  other: [...(prev.images.other || []), ...mapped],
+
+                  // Plate/details/odometer/brand accept one image.
+                  [slot]: mapped[0],
                 },
               };
-            }
+            });
 
-            return {
-              ...prev,
-              images: {
-                ...prev.images,
-                [slot]: mapped[0],
-              },
-            };
-          });
+            showSnackbar(
+              mapped.length === 1
+                ? "Photo processed successfully"
+                : `${mapped.length} photos processed successfully`,
+              "success",
+            );
+          } catch (error) {
+            console.error("Failed to process captured media:", error);
 
-          setPhotoSlot(null);
+            showSnackbar("Could not process the captured photos", "error");
+          } finally {
+            processingImagesRef.current = false;
+            setProcessingImages(false);
+            setPhotoSlot(null);
+            setCameraOpen(false);
+          }
         }}
         onScanText={(text: string) => {
           if (cameraMode !== "scan") return;
@@ -1629,6 +1794,35 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     alignSelf: "flex-start",
+  },
+
+  processingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 1000,
+    elevation: 1000,
+    backgroundColor: "rgba(255,255,255,0.78)",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 24,
+  },
+
+  processingBox: {
+    minWidth: 180,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+    borderRadius: 16,
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: BORDER,
+    alignItems: "center",
+    gap: 10,
+    elevation: 8,
+  },
+
+  processingText: {
+    color: TEXT,
+    fontSize: 12,
+    fontWeight: "700",
   },
 
   vehicleDropdownPlaceholder: {

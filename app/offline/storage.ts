@@ -33,6 +33,284 @@ type JsonRow = {
 };
 
 let initialized = false;
+let initializationPromise: Promise<void> | null = null;
+
+
+export function initStorage(): Promise<void> {
+  if (initialized) {
+    return Promise.resolve();
+  }
+
+  if (initializationPromise) {
+    return initializationPromise;
+  }
+
+  initializationPromise = runDbTask(async () => {
+    if (initialized) return;
+
+    try {
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS pending_queue (
+          id TEXT PRIMARY KEY NOT NULL,
+          type TEXT NOT NULL,
+          payload TEXT NOT NULL,
+          projectId TEXT,
+          localMediaUris TEXT,
+          createdAt INTEGER NOT NULL,
+          status TEXT NOT NULL DEFAULT 'pending',
+          retryCount INTEGER NOT NULL DEFAULT 0,
+          lastAttempt INTEGER
+        );
+      `);
+
+      const pendingColumns = await db.getAllAsync<{ name: string }>(
+        `PRAGMA table_info(pending_queue);`
+      );
+
+      const pendingColumnNames = pendingColumns.map((column) => column.name);
+
+      if (!pendingColumnNames.includes("projectId")) {
+        await db.execAsync(
+          `ALTER TABLE pending_queue ADD COLUMN projectId TEXT;`
+        );
+      }
+
+      if (!pendingColumnNames.includes("localMediaUris")) {
+        await db.execAsync(
+          `ALTER TABLE pending_queue ADD COLUMN localMediaUris TEXT;`
+        );
+      }
+
+      if (!pendingColumnNames.includes("retryCount")) {
+        await db.execAsync(`
+          ALTER TABLE pending_queue
+          ADD COLUMN retryCount INTEGER NOT NULL DEFAULT 0;
+        `);
+      }
+
+      if (!pendingColumnNames.includes("lastAttempt")) {
+        await db.execAsync(
+          `ALTER TABLE pending_queue ADD COLUMN lastAttempt INTEGER;`
+        );
+      }
+
+      if (!pendingColumnNames.includes("status")) {
+        await db.execAsync(`
+          ALTER TABLE pending_queue
+          ADD COLUMN status TEXT NOT NULL DEFAULT 'pending';
+        `);
+      }
+
+      await db.execAsync(`
+        CREATE INDEX IF NOT EXISTS idx_pending_queue_status
+        ON pending_queue(status);
+
+        CREATE INDEX IF NOT EXISTS idx_pending_queue_projectId
+        ON pending_queue(projectId);
+
+        CREATE TABLE IF NOT EXISTS offline_projects (
+          id TEXT PRIMARY KEY NOT NULL,
+          companyId TEXT,
+          userId TEXT,
+          data TEXT NOT NULL,
+          downloadedAt INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS offline_folders (
+          id TEXT PRIMARY KEY NOT NULL,
+          projectId TEXT NOT NULL,
+          parentId TEXT,
+          data TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_offline_folders_projectId
+        ON offline_folders(projectId);
+
+        CREATE INDEX IF NOT EXISTS idx_offline_folders_parentId
+        ON offline_folders(parentId);
+
+        CREATE TABLE IF NOT EXISTS offline_assets (
+          id TEXT PRIMARY KEY NOT NULL,
+          projectId TEXT NOT NULL,
+          folderId TEXT,
+          data TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_offline_assets_projectId
+        ON offline_assets(projectId);
+
+        CREATE INDEX IF NOT EXISTS idx_offline_assets_folderId
+        ON offline_assets(folderId);
+
+        CREATE TABLE IF NOT EXISTS project_sync_state (
+          projectId TEXT PRIMARY KEY NOT NULL,
+          syncVersion INTEGER NOT NULL DEFAULT 0,
+          needsSync INTEGER NOT NULL DEFAULT 0,
+          lastSyncAt TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_project_sync_state_needsSync
+        ON project_sync_state(needsSync);
+      `);
+
+      const projectColumns = await db.getAllAsync<{ name: string }>(
+        `PRAGMA table_info(offline_projects);`
+      );
+
+      const projectColumnNames = projectColumns.map(
+        (column) => column.name
+      );
+
+      if (!projectColumnNames.includes("companyId")) {
+        try {
+          await db.execAsync(`
+            ALTER TABLE offline_projects
+            ADD COLUMN companyId TEXT;
+          `);
+        } catch (error: any) {
+          const message = String(error?.message || error);
+
+          if (!message.includes("duplicate column name")) {
+            throw error;
+          }
+        }
+      }
+
+      if (!projectColumnNames.includes("userId")) {
+        try {
+          await db.execAsync(`
+            ALTER TABLE offline_projects
+            ADD COLUMN userId TEXT;
+          `);
+        } catch (error: any) {
+          const message = String(error?.message || error);
+
+          if (!message.includes("duplicate column name")) {
+            throw error;
+          }
+        }
+      }
+
+      const projectRows = await db.getAllAsync<{
+        id: string;
+        data: string;
+        companyId: string | null;
+        userId: string | null;
+      }>(`
+        SELECT id, data, companyId, userId
+        FROM offline_projects;
+      `);
+
+      for (const row of projectRows) {
+        try {
+          const parsed = JSON.parse(row.data);
+
+          const companyId =
+            row.companyId ?? parsed?.companyId ?? null;
+
+          const userId =
+            row.userId ?? parsed?.userId ?? null;
+
+          if (
+            companyId !== row.companyId ||
+            userId !== row.userId
+          ) {
+            await db.runAsync(
+              `
+                UPDATE offline_projects
+                SET companyId = ?, userId = ?
+                WHERE id = ?;
+              `,
+              [companyId, userId, row.id]
+            );
+          }
+        } catch {
+          // Ignore malformed project rows.
+        }
+      }
+
+      const folderRows = await db.getAllAsync<{
+        id: string;
+        data: string;
+        parentId: string | null;
+      }>(`
+        SELECT id, data, parentId
+        FROM offline_folders;
+      `);
+
+      for (const row of folderRows) {
+        try {
+          const parsed = JSON.parse(row.data);
+
+          const normalizedParentId =
+            row.parentId ??
+            parsed?.parentId ??
+            parsed?.parent ??
+            null;
+
+          if (normalizedParentId !== row.parentId) {
+            await db.runAsync(
+              `
+                UPDATE offline_folders
+                SET parentId = ?
+                WHERE id = ?;
+              `,
+              [normalizedParentId, row.id]
+            );
+          }
+        } catch {
+          // Ignore malformed folder rows.
+        }
+      }
+
+      const assetRows = await db.getAllAsync<{
+        id: string;
+        data: string;
+        folderId: string | null;
+      }>(`
+        SELECT id, data, folderId
+        FROM offline_assets;
+      `);
+
+      for (const row of assetRows) {
+        try {
+          const parsed = JSON.parse(row.data);
+
+          const normalizedFolderId =
+            row.folderId ??
+            parsed?.folderId ??
+            parsed?.parent ??
+            null;
+
+          if (normalizedFolderId !== row.folderId) {
+            await db.runAsync(
+              `
+                UPDATE offline_assets
+                SET folderId = ?
+                WHERE id = ?;
+              `,
+              [normalizedFolderId, row.id]
+            );
+          }
+        } catch {
+          // Ignore malformed asset rows.
+        }
+      }
+
+      initialized = true;
+      console.log("✅ Offline storage initialized");
+    } catch (error) {
+      initialized = false;
+      console.error("Storage init failed:", error);
+      throw error;
+    }
+  }).catch((error) => {
+    initializationPromise = null;
+    throw error;
+  });
+
+  return initializationPromise;
+}
 
 function normalizeFolderParent(folder: any): string | null {
   return folder.parentId ?? folder.parent ?? null;
@@ -247,206 +525,7 @@ export async function advancedSearchOfflineAssets({
     hasMore: start + safeLimit < assets.length,
   };
 }
-export async function initStorage(): Promise<void> {
-  if (initialized) return;
 
-  try {
-    await db.execAsync(`
-      CREATE TABLE IF NOT EXISTS pending_queue (
-        id TEXT PRIMARY KEY NOT NULL,
-        type TEXT NOT NULL,
-        payload TEXT NOT NULL,
-        projectId TEXT,
-        localMediaUris TEXT,
-        createdAt INTEGER NOT NULL,
-        status TEXT NOT NULL DEFAULT 'pending',
-        retryCount INTEGER NOT NULL DEFAULT 0,
-        lastAttempt INTEGER
-      );
-    `);
-
-    // ---- migration for older installs: pending_queue ----
-    const pendingColumns = await db.getAllAsync<{ name: string }>(
-      `PRAGMA table_info(pending_queue);`
-    );
-    const pendingColumnNames = pendingColumns.map((c) => c.name);
-
-    if (!pendingColumnNames.includes("projectId")) {
-      await db.execAsync(`ALTER TABLE pending_queue ADD COLUMN projectId TEXT;`);
-    }
-
-    if (!pendingColumnNames.includes("localMediaUris")) {
-      await db.execAsync(`ALTER TABLE pending_queue ADD COLUMN localMediaUris TEXT;`);
-    }
-
-    if (!pendingColumnNames.includes("retryCount")) {
-      await db.execAsync(
-        `ALTER TABLE pending_queue ADD COLUMN retryCount INTEGER NOT NULL DEFAULT 0;`
-      );
-    }
-
-    if (!pendingColumnNames.includes("lastAttempt")) {
-      await db.execAsync(`ALTER TABLE pending_queue ADD COLUMN lastAttempt INTEGER;`);
-    }
-
-    if (!pendingColumnNames.includes("status")) {
-      await db.execAsync(
-        `ALTER TABLE pending_queue ADD COLUMN status TEXT NOT NULL DEFAULT 'pending';`
-      );
-    }
-
-    await db.execAsync(`
-      CREATE INDEX IF NOT EXISTS idx_pending_queue_status
-      ON pending_queue(status);
-
-      CREATE INDEX IF NOT EXISTS idx_pending_queue_projectId
-      ON pending_queue(projectId);
-
-      CREATE TABLE IF NOT EXISTS offline_projects (
-        id TEXT PRIMARY KEY NOT NULL,
-        companyId TEXT,
-        userId TEXT,
-        data TEXT NOT NULL,
-        downloadedAt INTEGER NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS offline_folders (
-        id TEXT PRIMARY KEY NOT NULL,
-        projectId TEXT NOT NULL,
-        parentId TEXT,
-        data TEXT NOT NULL
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_offline_folders_projectId
-      ON offline_folders(projectId);
-
-      CREATE INDEX IF NOT EXISTS idx_offline_folders_parentId
-      ON offline_folders(parentId);
-
-      CREATE TABLE IF NOT EXISTS offline_assets (
-        id TEXT PRIMARY KEY NOT NULL,
-        projectId TEXT NOT NULL,
-        folderId TEXT,
-        data TEXT NOT NULL
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_offline_assets_projectId
-      ON offline_assets(projectId);
-
-      CREATE INDEX IF NOT EXISTS idx_offline_assets_folderId
-      ON offline_assets(folderId);
-
-            CREATE TABLE IF NOT EXISTS project_sync_state (
-        projectId TEXT PRIMARY KEY NOT NULL,
-        syncVersion INTEGER NOT NULL DEFAULT 0,
-        needsSync INTEGER NOT NULL DEFAULT 0,
-        lastSyncAt TEXT
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_project_sync_state_needsSync
-      ON project_sync_state(needsSync);
-    `);
-
-    // ---- migration for older installs: offline_projects ----
-    const projectColumns = await db.getAllAsync<{ name: string }>(
-      `PRAGMA table_info(offline_projects);`
-    );
-    const projectColumnNames = projectColumns.map((c) => c.name);
-
-   if (!projectColumnNames.includes("companyId")) {
-  try {
-    await db.execAsync(`ALTER TABLE offline_projects ADD COLUMN companyId TEXT;`);
-  } catch (error: any) {
-    if (!String(error?.message || error).includes("duplicate column name")) {
-      throw error;
-    }
-  }
-}
-
-    if (!projectColumnNames.includes("userId")) {
-      await db.execAsync(`ALTER TABLE offline_projects ADD COLUMN userId TEXT;`);
-    }
-
-    // Backfill old offline_projects rows from stored JSON
-    const projectRows = await db.getAllAsync<{
-      id: string;
-      data: string;
-      companyId: string | null;
-      userId: string | null;
-    }>(`SELECT id, data, companyId, userId FROM offline_projects;`);
-
-    for (const row of projectRows) {
-      try {
-        const parsed = JSON.parse(row.data);
-
-        const companyId = row.companyId ?? parsed?.companyId ?? null;
-        const userId = row.userId ?? parsed?.userId ?? null;
-
-        if (companyId !== row.companyId || userId !== row.userId) {
-          await db.runAsync(
-            `UPDATE offline_projects SET companyId = ?, userId = ? WHERE id = ?;`,
-            [companyId, userId, row.id]
-          );
-        }
-      } catch {
-        // ignore malformed rows
-      }
-    }
-
-    // Backfill old offline_folders rows where parent may be inside JSON as "parent"
-    const folderRows = await db.getAllAsync<{
-      id: string;
-      data: string;
-      parentId: string | null;
-    }>(`SELECT id, data, parentId FROM offline_folders;`);
-
-    for (const row of folderRows) {
-      try {
-        const parsed = JSON.parse(row.data);
-        const normalizedParentId = row.parentId ?? parsed?.parentId ?? parsed?.parent ?? null;
-
-        if (normalizedParentId !== row.parentId) {
-          await db.runAsync(
-            `UPDATE offline_folders SET parentId = ? WHERE id = ?;`,
-            [normalizedParentId, row.id]
-          );
-        }
-      } catch {
-        // ignore malformed rows
-      }
-    }
-
-    // Backfill old offline_assets rows where folder may be stored as "parent"
-    const assetRows = await db.getAllAsync<{
-      id: string;
-      data: string;
-      folderId: string | null;
-    }>(`SELECT id, data, folderId FROM offline_assets;`);
-
-    for (const row of assetRows) {
-      try {
-        const parsed = JSON.parse(row.data);
-        const normalizedFolderId = row.folderId ?? parsed?.folderId ?? parsed?.parent ?? null;
-
-        if (normalizedFolderId !== row.folderId) {
-          await db.runAsync(
-            `UPDATE offline_assets SET folderId = ? WHERE id = ?;`,
-            [normalizedFolderId, row.id]
-          );
-        }
-      } catch (error) {
-        console.log(error);
-        
-      }
-    }
-
-    initialized = true;
-    console.log("✅ Offline storage initialized");
-  } catch (error) {
-    console.error("Storage init failed:", error);
-    throw error;
-  }
-}
 
 export async function savePending(
   item: Omit<PendingItem, "status" | "retryCount" | "lastAttempt">
