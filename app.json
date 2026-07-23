@@ -21,7 +21,8 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/Logo.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#ffffff",
+        "softwareKeyboardLayoutMode": "resize"
       },
       "usesCleartextTraffic": true,
       "permissions": [

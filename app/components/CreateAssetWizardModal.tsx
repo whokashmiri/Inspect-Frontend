@@ -1,5 +1,5 @@
 // CreateAssetWizardModal.tsx
-import React, {RefObject, useEffect, useMemo, useRef, useState } from "react";
+import React, { RefObject, useEffect, useMemo, useRef, useState } from "react";
 import {
   Modal,
   View,
@@ -16,13 +16,11 @@ import {
   Keyboard,
   LayoutChangeEvent,
   ActivityIndicator,
-  StyleSheet
-  
+  StyleSheet,
 } from "react-native";
 
-
 import { Audio } from "expo-av";
-import {Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import AssetCameraModal from "./AssetCameraModal";
 
@@ -39,8 +37,6 @@ type CameraMode = "photos" | "scan";
 
 type PhotoSlot = "plate" | "details" | "odometer" | "brand" | "other" | null;
 
-
-
 const DEFAULT_CONDITIONS = [
   "New",
   "Excellent",
@@ -50,7 +46,6 @@ const DEFAULT_CONDITIONS = [
   "Poor",
   "Scrape",
 ];
-
 
 type Props = {
   visible: boolean;
@@ -66,13 +61,12 @@ type Props = {
 
   onRenameSubAssetType?: (
     oldSubAssetType: string,
-    newSubAssetType: string
+    newSubAssetType: string,
   ) => Promise<void> | void;
 
   onSaveAndNext?: (draft: AssetDraft) => Promise<void> | void;
   onSaveAndCreate?: (draft: AssetDraft) => Promise<void> | void;
 };
-
 
 const cleanAssetRawData = (rawData?: Record<string, any> | null) => {
   const source =
@@ -87,7 +81,6 @@ const cleanAssetRawData = (rawData?: Record<string, any> | null) => {
   return source;
 };
 
-
 const createEmptyImages = () => ({
   plate: null,
   details: null,
@@ -98,7 +91,7 @@ const createEmptyImages = () => ({
 
 const normalizeInitialImages = (
   images: any,
-  assetType?: string
+  assetType?: string,
 ): AssetDraft["images"] => {
   const empty = createEmptyImages();
 
@@ -139,18 +132,14 @@ const normalizeInitialImages = (
   return empty;
 };
 
-const getInitialDraft = (
-  initialData?: Partial<AssetDraft>
-): AssetDraft => {
+const getInitialDraft = (initialData?: Partial<AssetDraft>): AssetDraft => {
   const rawData = cleanAssetRawData(
-    ((initialData as any)?.rawData || {}) as Record<string, any>
+    ((initialData as any)?.rawData || {}) as Record<string, any>,
   );
 
   const quantity = (initialData as any)?.quantity ?? 1;
 
-  const subAssetType = String(
-    (initialData as any)?.subAssetType || ""
-  ).trim();
+  const subAssetType = String((initialData as any)?.subAssetType || "").trim();
 
   return {
     images: normalizeInitialImages(initialData?.images, initialData?.assetType),
@@ -179,7 +168,7 @@ const getInitialDraft = (
 
     rawData,
   } as any;
-};;
+};
 
 export default function CreateAssetWizardModal({
   visible,
@@ -203,11 +192,13 @@ export default function CreateAssetWizardModal({
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
 
-  const [photoSlot, setPhotoSlot] =
-    useState<PhotoSlot>(null);
+  const [photoSlot, setPhotoSlot] = useState<PhotoSlot>(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [detailsExpanded, setDetailsExpanded] = useState(false);
+
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const [snackbar, setSnackbar] = useState<{
     message: string;
@@ -230,11 +221,11 @@ export default function CreateAssetWizardModal({
 
   const modalWidth = Math.min(width * 0.97, isTablet ? 900 : 650);
 
-const modalMaxHeight =
-  detailsExpanded ? height * 0.92 : height * 0.82;
+  // const modalMaxHeight =
+  //   detailsExpanded ? height * 0.92 : height * 0.82;
 
-const modalMinHeight =
-  detailsExpanded ? height * 0.90 : height * 0.55;
+  // const modalMinHeight =
+  //   detailsExpanded ? height * 0.90 : height * 0.65;
 
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
@@ -251,7 +242,7 @@ const modalMinHeight =
 
   const showSnackbar = (
     message: string,
-    type: "success" | "error" | "info" = "info"
+    type: "success" | "error" | "info" = "info",
   ) => {
     if (snackbarTimeout.current) {
       clearTimeout(snackbarTimeout.current);
@@ -281,7 +272,9 @@ const modalMinHeight =
       setDetailsExpanded(false);
       didAutoOpenCameraRef.current = false;
 
-      const initialAssetType = String(initialData?.assetType || "").toLowerCase();
+      const initialAssetType = String(
+        initialData?.assetType || "",
+      ).toLowerCase();
 
       const shouldAutoOpenForCreate =
         mode === "create" && initialAssetType === "other";
@@ -304,46 +297,53 @@ const modalMinHeight =
     }
   }, [visible, initialData, mode, autoOpenCamera]);
 
-  // const previewSize = useMemo(() => {
-  //   const columns = width < 360 ? 4 : width < 600 ? 5 : 6;
-  //   const cardPadding = 32;
-  //   const gaps = (columns - 1) * 6;
-  //   const available = modalWidth - cardPadding - gaps;
+  useEffect(() => {
+    const keyboardShowEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
 
-  //   return Math.max(44, Math.min(62, Math.floor(available / columns)));
-  // }, [width, modalWidth]);
+    const keyboardHideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
 
-const previewSize = useMemo(() => {
-  const columns = width < 600 ? 4 : 5;
-  const cardPadding =  isSmallScreen ? 28 : 44;
-  const gaps = (columns - 1) * 8;
-  const available = modalWidth - cardPadding - gaps;
+    const showSubscription = Keyboard.addListener(
+      keyboardShowEvent,
+      (event) => {
+        setKeyboardVisible(true);
+        setKeyboardHeight(event.endCoordinates?.height || 0);
+      },
+    );
 
-  return Math.max(
-  110,
-  Math.min(100, Math.floor(available / columns))
-);
-}, [isSmallScreen, modalWidth]);
+    const hideSubscription = Keyboard.addListener(keyboardHideEvent, () => {
+      setKeyboardVisible(false);
+      setKeyboardHeight(0);
+    });
 
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
+
+  const previewSize = useMemo(() => {
+    const columns = width < 600 ? 4 : 5;
+    const cardPadding = isSmallScreen ? 28 : 44;
+    const gaps = (columns - 1) * 8;
+    const available = modalWidth - cardPadding - gaps;
+
+    return Math.max(70, Math.min(100, Math.floor(available / columns)));
+  }, [isSmallScreen, modalWidth]);
 
   const otherPreviewSize = useMemo(() => {
-  const columns = 4;
-  const gridGap = 8;
+    const columns = 4;
+    const gridGap = 8;
 
-  // modalCard horizontal padding:
-  const modalHorizontalPadding = isSmallScreen ? 28 : 44;
+    // modalCard horizontal padding:
+    const modalHorizontalPadding = isSmallScreen ? 28 : 44;
 
-  const availableWidth =
-    modalWidth -
-    modalHorizontalPadding -
-    gridGap * (columns - 1);
+    const availableWidth =
+      modalWidth - modalHorizontalPadding - gridGap * (columns - 1);
 
-  return Math.max(
-    110,
-    Math.min(100, Math.floor(availableWidth / columns))
-  );
-}, [modalWidth, isSmallScreen]);
-
+    return Math.max(110, Math.min(100, Math.floor(availableWidth / columns)));
+  }, [modalWidth, isSmallScreen]);
 
   const projectConditions = useMemo(() => {
     const unique = new Map<string, string>();
@@ -368,7 +368,7 @@ const previewSize = useMemo(() => {
       a.localeCompare(b, undefined, {
         sensitivity: "base",
         numeric: true,
-      })
+      }),
     );
   }, [conditionOptions, (draft as any).condition]);
 
@@ -382,6 +382,22 @@ const previewSize = useMemo(() => {
   const isVehicleAsset =
     String((draft as any).assetType || "").toLowerCase() === "vehicle" ||
     String((draft as any).assetType || "") === "Vehicle";
+
+  const vehicleModalMaxHeight = detailsExpanded ? height * 0.94 : height * 0.86;
+
+  const vehicleModalMinHeight = detailsExpanded ? height * 0.92 : height * 0.5;
+
+  const otherModalMaxHeight = detailsExpanded ? height * 0.88 : height * 0.72;
+
+  const otherModalMinHeight = detailsExpanded ? height * 0.84 : height * 0.65;
+
+  const modalMaxHeight = isVehicle
+    ? vehicleModalMaxHeight
+    : otherModalMaxHeight;
+
+  const modalMinHeight = isVehicle
+    ? vehicleModalMinHeight
+    : otherModalMinHeight;
 
   const subAssetType = getOtherSubAssetType(draft);
 
@@ -400,22 +416,18 @@ const previewSize = useMemo(() => {
     fieldPositions.current[key] = e.nativeEvent.layout.y;
   };
 
-  const scrollToField = (key: string) => {
+  const scrollToField = (key: string, offset = 80) => {
     const y = fieldPositions.current[key] ?? 0;
 
-    setTimeout(() => {
+    const scroll = () => {
       scrollRef.current?.scrollTo({
-        y: Math.max(0, y - 80),
+        y: Math.max(0, y - offset),
         animated: true,
       });
-    }, 80);
+    };
 
-    setTimeout(() => {
-      scrollRef.current?.scrollTo({
-        y: Math.max(0, y - 80),
-        animated: true,
-      });
-    }, 320);
+    setTimeout(scroll, 100);
+    setTimeout(scroll, 350);
   };
 
   const openVehiclePhotoCamera = (slot: Exclude<PhotoSlot, "brand" | null>) => {
@@ -510,7 +522,7 @@ const previewSize = useMemo(() => {
 
   const manufactureYears = Array.from(
     { length: currentYear - 1979 },
-    (_, index) => String(currentYear - index)
+    (_, index) => String(currentYear - index),
   );
 
   const playVoiceNote = async (uri: string, index: number) => {
@@ -520,7 +532,7 @@ const previewSize = useMemo(() => {
       if (isRemote) {
         Alert.alert(
           t("asset.playbackNotAvailable"),
-          t("asset.remoteVoicePlaybackMessage")
+          t("asset.remoteVoicePlaybackMessage"),
         );
         return;
       }
@@ -539,7 +551,7 @@ const previewSize = useMemo(() => {
 
       const { sound } = await Audio.Sound.createAsync(
         { uri: formattedUri },
-        { shouldPlay: true }
+        { shouldPlay: true },
       );
 
       soundObjectRef.current = sound;
@@ -641,7 +653,7 @@ const previewSize = useMemo(() => {
 
   const saveDraftWithAction = async (
     action?: (draft: AssetDraft) => Promise<void> | void,
-    closeAfterSave = true
+    closeAfterSave = true,
   ) => {
     if (submitting) return;
 
@@ -657,7 +669,10 @@ const previewSize = useMemo(() => {
                 await stopRecording();
                 saveDraftWithAction(action, closeAfterSave);
               } catch {
-                Alert.alert(t("common.error"), t("asset.couldNotStopRecording"));
+                Alert.alert(
+                  t("common.error"),
+                  t("asset.couldNotStopRecording"),
+                );
               }
             },
           },
@@ -665,7 +680,7 @@ const previewSize = useMemo(() => {
             text: t("common.cancel"),
             style: "cancel",
           },
-        ]
+        ],
       );
 
       return;
@@ -689,7 +704,7 @@ const previewSize = useMemo(() => {
       setSubmitting(false);
       Alert.alert(
         t("common.error"),
-        error?.message || t("asset.failedToSaveAsset")
+        error?.message || t("asset.failedToSaveAsset"),
       );
     }
   };
@@ -741,9 +756,9 @@ const previewSize = useMemo(() => {
           <View style={styles.overlay}>
             <KeyboardAvoidingView
               style={styles.keyboardWrap}
-              behavior={Platform.OS === "ios" ? "padding" : "height"}
-              keyboardVerticalOffset={Platform.OS === "ios" ? 20 : 0}
-              enabled
+              behavior={Platform.OS === "ios" ? "padding" : undefined}
+              keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
+              enabled={Platform.OS === "ios"}
             >
               <TouchableWithoutFeedback>
                 <View
@@ -751,9 +766,10 @@ const previewSize = useMemo(() => {
                     styles.modalCard,
                     {
                       width: modalWidth,
+
                       maxHeight: modalMaxHeight,
                       minHeight: modalMinHeight,
-                      //  height: detailsExpanded ? height * 0.92 : height * 0.78,
+
                       borderRadius: isSmallScreen ? 18 : 24,
                       padding: isSmallScreen ? 14 : 22,
                     },
@@ -778,8 +794,6 @@ const previewSize = useMemo(() => {
                           </Text>
                         </View>
                       </View>
-
-   
                     </View>
 
                     <TouchableOpacity
@@ -794,11 +808,19 @@ const previewSize = useMemo(() => {
                   <ScrollView
                     ref={scrollRef}
                     style={styles.scrollView}
-                    contentContainerStyle={styles.scrollContent}
+                    contentContainerStyle={[
+                      styles.scrollContent,
+                      {
+                        paddingBottom: keyboardVisible
+                          ? Math.max(180, keyboardHeight * 0.65)
+                          : 100,
+                      },
+                    ]}
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
-                    keyboardDismissMode="on-drag"
+                    keyboardDismissMode="interactive"
                     nestedScrollEnabled
+                    automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
                   >
                     <>
                       <View style={styles.topQuickRow}>
@@ -858,32 +880,30 @@ const previewSize = useMemo(() => {
                         </View>
                       </View>
 
-
-                                         {!isVehicleAsset && (
+                      {!isVehicleAsset && (
                         <OtherAssetForm
-  draft={draft}
-  setDraft={setDraft}
-  detailsExpanded={detailsExpanded}
-  setDetailsExpanded={setDetailsExpanded}
-  subAssetTypes={subAssetTypes}
-  onRenameSubAssetType={onRenameSubAssetType}
-  showSnackbar={showSnackbar}
-  previewSize={otherPreviewSize}
-  imageLoadingMap={imageLoadingMap}
-  setImageLoading={setImageLoading}
-  height={height}
-  openOtherPhotoCamera={openOtherPhotoCamera}
-/>
+                          draft={draft}
+                          setDraft={setDraft}
+                          detailsExpanded={detailsExpanded}
+                          setDetailsExpanded={setDetailsExpanded}
+                          subAssetTypes={subAssetTypes}
+                          onRenameSubAssetType={onRenameSubAssetType}
+                          showSnackbar={showSnackbar}
+                          previewSize={otherPreviewSize}
+                          imageLoadingMap={imageLoadingMap}
+                          setImageLoading={setImageLoading}
+                          height={height}
+                          openOtherPhotoCamera={openOtherPhotoCamera}
+                        />
                       )}
 
-                                            {isVehicle && (
+                      {isVehicle && (
                         <VehicleAssetForm
                           draft={draft}
                           setDraft={setDraft}
                           detailsExpanded={detailsExpanded}
                           previewSize={previewSize}
                           setDetailsExpanded={setDetailsExpanded}
-                          
                           imageLoadingMap={imageLoadingMap}
                           setImageLoading={setImageLoading}
                           manufactureYears={manufactureYears}
@@ -892,9 +912,6 @@ const previewSize = useMemo(() => {
                           t={t}
                         />
                       )}
-
-
-
 
                       {detailsExpanded && (
                         <>
@@ -932,7 +949,10 @@ const previewSize = useMemo(() => {
                             </TouchableOpacity>
                           </View>
 
-                          <View style={styles.notesInputWrap}>
+                          <View
+                            style={styles.notesInputWrap}
+                            onLayout={setFieldPosition("notes")}
+                          >
                             <Text style={styles.fieldLabel}>Notes</Text>
 
                             <TextInput
@@ -948,22 +968,40 @@ const previewSize = useMemo(() => {
                                   hasNotes,
                                 }));
                               }}
+                              onFocus={() => {
+                                scrollToField("notes", 20);
+                              }}
                               style={styles.notesTextArea}
                               multiline
                               textAlignVertical="top"
+                              returnKeyType="default"
+                              blurOnSubmit={false}
                             />
                           </View>
 
-                          <View style={styles.recordDoneRow}>
+                          <View
+                            style={styles.recordDoneRow}
+                            onLayout={setFieldPosition("voiceNotes")}
+                          >
                             <View style={styles.voiceCompactRow}>
                               <TouchableOpacity
                                 style={[
                                   styles.voiceIconBtn,
                                   isRecording && styles.voiceRecordingBtn,
                                 ]}
-                                onPress={
-                                  isRecording ? stopRecording : startRecording
-                                }
+                                onPress={() => {
+                                  Keyboard.dismiss();
+
+                                  setTimeout(() => {
+                                    scrollToField("voiceNotes", 50);
+
+                                    if (isRecording) {
+                                      stopRecording();
+                                    } else {
+                                      startRecording();
+                                    }
+                                  }, 150);
+                                }}
                                 activeOpacity={0.85}
                               >
                                 <Ionicons
@@ -1038,8 +1076,7 @@ const previewSize = useMemo(() => {
                                 <View
                                   style={[
                                     styles.smallCheckbox,
-                                    draft.isDone &&
-                                      styles.smallCheckboxChecked,
+                                    draft.isDone && styles.smallCheckboxChecked,
                                   ]}
                                 >
                                   {draft.isDone && (
@@ -1110,67 +1147,68 @@ const previewSize = useMemo(() => {
                               </View>
                             </View>
                           )}
-
-
                         </>
                       )}
                     </>
                   </ScrollView>
 
-                  <View style={styles.footer}>
-                    {!isVehicle && (
+                  {!keyboardVisible && (
+                    <View style={styles.footer}>
+                      {!isVehicle && (
+                        <TouchableOpacity
+                          style={styles.footerIconBtn}
+                          onPress={openPhotoCamera}
+                          activeOpacity={0.85}
+                        >
+                          <MaterialIcons
+                            name="photo-camera"
+                            size={18}
+                            color="#fff"
+                          />
+
+                          <Text style={styles.footerIconBtnText}>
+                            {t("asset.openCamera")}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+
                       <TouchableOpacity
-                        style={[styles.footerIconBtn]}
-                        onPress={openPhotoCamera}
-                        activeOpacity={0.85}
+                        style={[
+                          styles.primaryBtn,
+                          styles.finishBtn,
+                          submitting && { opacity: 0.6 },
+                        ]}
+                        onPress={handleFooterSave}
+                        disabled={submitting}
                       >
-                        <MaterialIcons
-                          name="photo-camera"
-                          size={18}
-                          color="#fff"
-                        />
-                        <Text style={styles.footerIconBtnText}>
-                          {t("asset.openCamera")}
+                        <Text style={styles.primaryText}>
+                          {submitting
+                            ? t("asset.saving") || "Saving..."
+                            : mode === "edit"
+                              ? "Save & Next"
+                              : "Save & New Asset"}
                         </Text>
                       </TouchableOpacity>
-                    )}
 
-                    <TouchableOpacity
-                      style={[
-                        styles.primaryBtn,
-                        styles.finishBtn,
-                        submitting && { opacity: 0.6 },
-                      ]}
-                      onPress={handleFooterSave}
-                      disabled={submitting}
-                    >
-                      <Text style={styles.primaryText}>
-                        {submitting
-                          ? t("asset.saving") || "Saving..."
-                          : mode === "edit"
-                          ? "Save & Next"
-                          : "Save & New Asset"}
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[
-                        styles.primaryBtn,
-                        styles.finishBtn,
-                        submitting && { opacity: 0.6 },
-                      ]}
-                      onPress={handleFinish}
-                      disabled={submitting}
-                    >
-                      <Text style={styles.primaryText}>
-                        {submitting
-                          ? t("asset.saving") || "Saving..."
-                          : mode === "edit"
-                          ? t("asset.saveChanges")
-                          : t("asset.finish")}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
+                      <TouchableOpacity
+                        style={[
+                          styles.primaryBtn,
+                          styles.finishBtn,
+                          submitting && { opacity: 0.6 },
+                        ]}
+                        onPress={handleFinish}
+                        disabled={submitting}
+                      >
+                        <Text style={styles.primaryText}>
+                          {submitting
+                            ? t("asset.saving") || "Saving..."
+                            : mode === "edit"
+                              ? t("asset.saveChanges")
+                              : t("asset.finish")}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
                 </View>
               </TouchableWithoutFeedback>
             </KeyboardAvoidingView>
@@ -1259,19 +1297,16 @@ const previewSize = useMemo(() => {
                         onPress={saveNewCondition}
                         activeOpacity={0.85}
                       >
-                        <Ionicons
-                          name="checkmark"
-                          size={19}
-                          color="#ffffff"
-                        />
+                        <Ionicons name="checkmark" size={19} color="#ffffff" />
                       </TouchableOpacity>
                     </View>
                   )}
 
                   {projectConditions.map((condition) => {
                     const isSelected =
-                      String(draft.condition || "").trim().toLowerCase() ===
-                      condition.trim().toLowerCase();
+                      String(draft.condition || "")
+                        .trim()
+                        .toLowerCase() === condition.trim().toLowerCase();
 
                     return (
                       <TouchableOpacity
@@ -1302,11 +1337,7 @@ const previewSize = useMemo(() => {
                         </Text>
 
                         {isSelected && (
-                          <Ionicons
-                            name="checkmark"
-                            size={18}
-                            color={ACC}
-                          />
+                          <Ionicons name="checkmark" size={18} color={ACC} />
                         )}
                       </TouchableOpacity>
                     );
@@ -1339,7 +1370,7 @@ const previewSize = useMemo(() => {
                 type: isVideo ? "video/mp4" : "image/jpeg",
                 mediaType: isVideo ? "video" : "image",
               };
-            }
+            },
           );
 
           if (!mapped.length) return;
@@ -1391,8 +1422,8 @@ const previewSize = useMemo(() => {
                 snackbar.type === "error"
                   ? styles.snackbarError
                   : snackbar.type === "success"
-                  ? styles.snackbarSuccess
-                  : styles.snackbarInfo,
+                    ? styles.snackbarSuccess
+                    : styles.snackbarInfo,
               ]}
             >
               <Text style={styles.snackbarText}>{snackbar.message}</Text>
@@ -1428,16 +1459,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
- modalCard: {
-  backgroundColor: "#fff",
-  borderWidth: 1,
-  borderColor: BORDER,
-  borderRadius: 24,
-  padding: 16,
-  alignSelf: "center",
-  flexShrink: 1,
-  overflow: "visible",
-},
+  modalCard: {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 24,
+    padding: 16,
+    alignSelf: "center",
+    flexShrink: 1,
+    overflow: "visible",
+  },
   scrollView: {
     flex: 1,
     width: "100%",
@@ -1580,13 +1611,13 @@ const styles = StyleSheet.create({
     backgroundColor: MUTED,
   },
 
- header: {
-  flexDirection: "row",
-  justifyContent: "space-between",
-  alignItems: "flex-start",
-  marginBottom: 8,
-  gap: 8,
-},
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 8,
+    gap: 8,
+  },
 
   title: {
     color: TEXT,
@@ -1594,17 +1625,17 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 
-closeBtn: {
-  width: 32,
-  height: 32,
-  borderRadius: 12,
-  backgroundColor: SURFACE,
-  borderWidth: 1,
-  borderColor: BORDER,
-  alignItems: "center",
-  justifyContent: "center",
-  alignSelf: "flex-start",
-},
+  closeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 12,
+    backgroundColor: SURFACE,
+    borderWidth: 1,
+    borderColor: BORDER,
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "flex-start",
+  },
 
   vehicleDropdownPlaceholder: {
     color: "#767B91",
