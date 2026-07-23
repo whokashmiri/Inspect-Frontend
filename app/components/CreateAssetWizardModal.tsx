@@ -221,12 +221,6 @@ export default function CreateAssetWizardModal({
 
   const modalWidth = Math.min(width * 0.97, isTablet ? 900 : 650);
 
-  // const modalMaxHeight =
-  //   detailsExpanded ? height * 0.92 : height * 0.82;
-
-  // const modalMinHeight =
-  //   detailsExpanded ? height * 0.90 : height * 0.65;
-
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
 
