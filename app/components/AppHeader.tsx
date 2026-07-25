@@ -8,12 +8,15 @@ import {
   Pressable,
   ActivityIndicator,
   TextInput,
+  Alert,
+  Switch,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import i18n from "../i18n/i18n";
 import * as Updates from "expo-updates";
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from "react-i18next";
 import { saveLanguagePreference } from "../offline/authStorage";
+import { useConnectivity } from "../components/connectivity/ConnectivityContext";
 
 const ACC = "#2A324B";
 const SURFACE = "#E1E5EE";
@@ -29,7 +32,13 @@ export type HeaderUser = {
   companyName?: string;
   serviceCities?: string[];
   isProfileCompleted?: boolean;
-  role?: "Manager" | "Inspector" | "Valuator" | "company_admin" | "Freelance Inspector" | string;
+  role?:
+    | "Manager"
+    | "Inspector"
+    | "Valuator"
+    | "company_admin"
+    | "Freelance Inspector"
+    | string;
 };
 
 type AppHeaderProps = {
@@ -68,8 +77,7 @@ const InfoRow = memo(function InfoRow({
   );
 });
 
-
-  const SAUDI_CITIES = [
+const SAUDI_CITIES = [
   "Riyadh",
   "Jeddah",
   "Makkah",
@@ -100,14 +108,18 @@ function AppHeaderComponent({
   onCompleteProfile,
 }: AppHeaderProps) {
   const { t } = useTranslation();
+
+  const { manualOffline, hasInternet, isSyncing, setManualOffline } =
+    useConnectivity();
+
+  const [changingConnectivityMode, setChangingConnectivityMode] =
+    useState(false);
   const [isRTL, setIsRTL] = useState(i18n.language === "ar");
 
-    const [menuVisible, setMenuVisible] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
 
-const openMenu = useCallback(() => setMenuVisible(true), []);
-const closeMenu = useCallback(() => setMenuVisible(false), []);
-
-
+  const openMenu = useCallback(() => setMenuVisible(true), []);
+  const closeMenu = useCallback(() => setMenuVisible(false), []);
 
   const [profileVisible, setProfileVisible] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -117,12 +129,9 @@ const closeMenu = useCallback(() => setMenuVisible(false), []);
   const [profileName, setProfileName] = useState(user?.name || "");
   const [citySearch, setCitySearch] = useState("");
   const [selectedCities, setSelectedCities] = useState<string[]>(
-    Array.isArray(user?.serviceCities) ? user.serviceCities : []
+    Array.isArray(user?.serviceCities) ? user.serviceCities : [],
   );
   const [savingProfile, setSavingProfile] = useState(false);
-
-
-
 
   const toggleLanguage = useCallback(async () => {
     const current = i18n.language;
@@ -134,23 +143,65 @@ const closeMenu = useCallback(() => setMenuVisible(false), []);
     setIsRTL(next === "ar");
   }, []);
 
-const openProfile = useCallback(() => {
-  setProfileName(user?.name || "");
-  setSelectedCities(Array.isArray(user?.serviceCities) ? user.serviceCities : []);
-  setCitySearch("");
-  setEditingProfile(!user?.isProfileCompleted);
-  setProfileVisible(true);
-}, [user?.name, user?.serviceCities, user?.isProfileCompleted]);
+  const openProfile = useCallback(() => {
+    setProfileName(user?.name || "");
+    setSelectedCities(
+      Array.isArray(user?.serviceCities) ? user.serviceCities : [],
+    );
+    setCitySearch("");
+    setEditingProfile(!user?.isProfileCompleted);
+    setProfileVisible(true);
+  }, [user?.name, user?.serviceCities, user?.isProfileCompleted]);
 
-const openProfileFromMenu = useCallback(() => {
-  closeMenu();
-  openProfile();
-}, [closeMenu, openProfile]);
+  const openProfileFromMenu = useCallback(() => {
+    closeMenu();
+    openProfile();
+  }, [closeMenu, openProfile]);
 
   const closeProfile = useCallback(() => {
     if (loggingOut || savingProfile) return;
     setProfileVisible(false);
   }, [loggingOut, savingProfile]);
+
+  const connectivityStatus = useMemo(() => {
+    if (manualOffline) {
+      return {
+        label: "Offline",
+        icon: "cloud-offline-outline" as const,
+        color: "#B45309",
+        backgroundColor: "#FFF7ED",
+        borderColor: "#FED7AA",
+      };
+    }
+
+    if (!hasInternet) {
+      return {
+        label: "No Internet",
+        icon: "warning-outline" as const,
+        color: "#B42318",
+        backgroundColor: "#FEF3F2",
+        borderColor: "#FECDCA",
+      };
+    }
+
+    if (isSyncing) {
+      return {
+        label: "Syncing",
+        icon: "sync-outline" as const,
+        color: "#175CD3",
+        backgroundColor: "#EFF8FF",
+        borderColor: "#B2DDFF",
+      };
+    }
+
+    return {
+      label: "Online",
+      icon: "cloud-done-outline" as const,
+      color: "#027A48",
+      backgroundColor: "#ECFDF3",
+      borderColor: "#ABEFC6",
+    };
+  }, [manualOffline, hasInternet, isSyncing]);
 
   const handleLogout = useCallback(async () => {
     if (!onLogout || loggingOut) return;
@@ -179,17 +230,12 @@ const openProfileFromMenu = useCallback(() => {
     if (!q) return [];
 
     return SAUDI_CITIES.filter((city) => {
-      return (
-        city.toLowerCase().includes(q) &&
-        !selectedCities.includes(city)
-      );
+      return city.toLowerCase().includes(q) && !selectedCities.includes(city);
     }).slice(0, 6);
   }, [citySearch, selectedCities]);
 
   const addCity = useCallback((city: string) => {
-    setSelectedCities((prev) =>
-      prev.includes(city) ? prev : [...prev, city]
-    );
+    setSelectedCities((prev) => (prev.includes(city) ? prev : [...prev, city]));
     setCitySearch("");
   }, []);
 
@@ -197,46 +243,170 @@ const openProfileFromMenu = useCallback(() => {
     setSelectedCities((prev) => prev.filter((c) => c !== city));
   }, []);
 
- const handleCompleteProfile = useCallback(async () => {
-  if (!onCompleteProfile || savingProfile) return;
-  if (!profileName.trim()) return;
-  if (selectedCities.length === 0) return;
+  const handleCompleteProfile = useCallback(async () => {
+    if (!onCompleteProfile || savingProfile) return;
+    if (!profileName.trim()) return;
+    if (selectedCities.length === 0) return;
 
-  try {
-    setSavingProfile(true);
+    try {
+      setSavingProfile(true);
 
-    await onCompleteProfile({
-      name: profileName.trim(),
-      serviceCities: selectedCities,
-    });
+      await onCompleteProfile({
+        name: profileName.trim(),
+        serviceCities: selectedCities,
+      });
 
-    setEditingProfile(false);
-    setProfileVisible(false);
-  } catch (err: any) {
-    console.log("Complete profile failed:", err);
-    alert(err?.message || "Failed to save profile");
-  } finally {
-    setSavingProfile(false);
-  }
-}, [onCompleteProfile, savingProfile, profileName, selectedCities]);
+      setEditingProfile(false);
+      setProfileVisible(false);
+    } catch (err: any) {
+      console.log("Complete profile failed:", err);
+      alert(err?.message || "Failed to save profile");
+    } finally {
+      setSavingProfile(false);
+    }
+  }, [onCompleteProfile, savingProfile, profileName, selectedCities]);
 
   const showProfileForm = !user?.isProfileCompleted || editingProfile;
 
+  const confirmOfflineMode = useCallback((): Promise<boolean> => {
+    return new Promise((resolve) => {
+      Alert.alert(
+        "Work offline?",
+        "API requests will stop and your changes will be stored locally until you switch back online.",
+        [
+          {
+            text: "Cancel",
+            style: "cancel",
+            onPress: () => resolve(false),
+          },
+          {
+            text: "Work Offline",
+            onPress: () => resolve(true),
+          },
+        ],
+        {
+          cancelable: true,
+          onDismiss: () => resolve(false),
+        },
+      );
+    });
+  }, []);
+
+  const handleConnectivityToggle = useCallback(
+    async (onlineEnabled: boolean) => {
+      if (changingConnectivityMode) {
+        return;
+      }
+
+      setChangingConnectivityMode(true);
+
+      try {
+        if (onlineEnabled) {
+          await setManualOffline(false);
+
+          if (!hasInternet) {
+            Alert.alert(
+              "No internet connection",
+              "Online mode is enabled, but the phone currently has no internet.",
+            );
+          }
+
+          return;
+        }
+
+        const confirmed = await confirmOfflineMode();
+
+        if (confirmed) {
+          await setManualOffline(true);
+        }
+      } catch (error) {
+        console.error("Failed to change connectivity mode:", error);
+
+        Alert.alert("Could not change mode", "Please try again.");
+      } finally {
+        setChangingConnectivityMode(false);
+      }
+    },
+    [
+      changingConnectivityMode,
+      confirmOfflineMode,
+      hasInternet,
+      setManualOffline,
+    ],
+  );
   return (
     <>
-      <View style={[styles.header, { flexDirection: isRTL ? "row-reverse" : "row" }]}>
-        <View style={[styles.brandRow, { flexDirection: isRTL ? "row-reverse" : "row" }]}>
+      <View
+        style={[
+          styles.header,
+          { flexDirection: isRTL ? "row-reverse" : "row" },
+        ]}
+      >
+        <View
+          style={[
+            styles.brandRow,
+            { flexDirection: isRTL ? "row-reverse" : "row" },
+          ]}
+        >
           <View style={styles.logoMark}>
             <View style={styles.logoInner} />
           </View>
 
           <View>
             <Text style={styles.companyName}>{title}</Text>
-            <Text style={styles.companySub}>{t("companyPage.header")}</Text>
+            {/* <Text style={styles.companySub}>{t("companyPage.header")}</Text> */}
           </View>
         </View>
 
-          <View
+        {isAuthenticated ? (
+          <View style={styles.connectivitySection}>
+            <View
+              style={[
+                styles.connectivityBadge,
+                {
+                  backgroundColor: connectivityStatus.backgroundColor,
+                  borderColor: connectivityStatus.borderColor,
+                },
+              ]}
+            >
+              {isSyncing && !manualOffline ? (
+                <ActivityIndicator size={11} color={connectivityStatus.color} />
+              ) : (
+                <Ionicons
+                  name={connectivityStatus.icon}
+                  size={13}
+                  color={connectivityStatus.color}
+                />
+              )}
+
+              <Text
+                style={[
+                  styles.connectivityText,
+                  {
+                    color: connectivityStatus.color,
+                  },
+                ]}
+              >
+                {connectivityStatus.label}
+              </Text>
+            </View>
+
+            <Switch
+              value={!manualOffline}
+              onValueChange={handleConnectivityToggle}
+              disabled={changingConnectivityMode}
+              trackColor={{
+                false: "#D0D5DD",
+                true: "#86B39A",
+              }}
+              thumbColor="#FFFFFF"
+              ios_backgroundColor="#D0D5DD"
+              style={styles.connectivitySwitch}
+            />
+          </View>
+        ) : null}
+
+        <View
           style={[
             { flexDirection: "row", marginLeft: 10, alignItems: "center" },
             { flexDirection: isRTL ? "row-reverse" : "row" },
@@ -264,29 +434,36 @@ const openProfileFromMenu = useCallback(() => {
           </TouchableOpacity>
         ) : null}
 
-<Modal
-  visible={menuVisible}
-  animationType="fade"
-  transparent
-  onRequestClose={closeMenu}
->
-  <Pressable style={styles.menuOverlay} onPress={closeMenu}>
-    <View style={[styles.menuDropdown, isRTL ? { left: 16 } : { right: 16 }]}>
-      <TouchableOpacity
-        style={styles.menuRow}
-        activeOpacity={0.8}
-        onPress={openProfileFromMenu}
-      >
-        <View style={styles.menuAvatar}>
-          <Ionicons name="person" size={16} color="#ffffff" />
-        </View>
-        <Text style={styles.menuRowText}>{t("header.userProfile")}</Text>
-          
-        <Ionicons name="chevron-forward" size={16} color={MUTED} />
-      </TouchableOpacity>
-    </View>
-  </Pressable>
-</Modal>
+        <Modal
+          visible={menuVisible}
+          animationType="fade"
+          transparent
+          onRequestClose={closeMenu}
+        >
+          <Pressable style={styles.menuOverlay} onPress={closeMenu}>
+            <View
+              style={[
+                styles.menuDropdown,
+                isRTL ? { left: 16 } : { right: 16 },
+              ]}
+            >
+              <TouchableOpacity
+                style={styles.menuRow}
+                activeOpacity={0.8}
+                onPress={openProfileFromMenu}
+              >
+                <View style={styles.menuAvatar}>
+                  <Ionicons name="person" size={16} color="#ffffff" />
+                </View>
+                <Text style={styles.menuRowText}>
+                  {t("header.userProfile")}
+                </Text>
+
+                <Ionicons name="chevron-forward" size={16} color={MUTED} />
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Modal>
       </View>
 
       <Modal
@@ -356,7 +533,11 @@ const openProfileFromMenu = useCallback(() => {
                         style={styles.suggestionItem}
                         onPress={() => addCity(city)}
                       >
-                        <Ionicons name="location-outline" size={15} color={ACC} />
+                        <Ionicons
+                          name="location-outline"
+                          size={15}
+                          color={ACC}
+                        />
                         <Text style={styles.suggestionText}>{city}</Text>
                       </TouchableOpacity>
                     ))}
@@ -387,34 +568,41 @@ const openProfileFromMenu = useCallback(() => {
                   {savingProfile ? (
                     <ActivityIndicator size="small" color="#ffffff" />
                   ) : (
-                    <Text style={styles.saveProfileText}>{t("header.saveProfile")}</Text>
+                    <Text style={styles.saveProfileText}>
+                      {t("header.saveProfile")}
+                    </Text>
                   )}
                 </TouchableOpacity>
               </View>
             ) : null}
 
-
             {user?.isProfileCompleted && !editingProfile ? (
-  <TouchableOpacity
-    style={styles.editProfileButton}
-    onPress={() => {
-      setProfileName(user?.name || "");
-      setSelectedCities(Array.isArray(user?.serviceCities) ? user.serviceCities : []);
-      setCitySearch("");
-      setEditingProfile(true);
-    }}
-  >
-    <Ionicons name="create-outline" size={15} color="#ffffff" />
-    <Text style={styles.editProfileText}>{t("header.editProfile")}</Text>
-  </TouchableOpacity>
-) : null}
+              <TouchableOpacity
+                style={styles.editProfileButton}
+                onPress={() => {
+                  setProfileName(user?.name || "");
+                  setSelectedCities(
+                    Array.isArray(user?.serviceCities)
+                      ? user.serviceCities
+                      : [],
+                  );
+                  setCitySearch("");
+                  setEditingProfile(true);
+                }}
+              >
+                <Ionicons name="create-outline" size={15} color="#ffffff" />
+                <Text style={styles.editProfileText}>
+                  {t("header.editProfile")}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
 
             <View style={styles.infoGrid}>
-             <InfoRow
-  label="Phone"
-  value={user?.phone || user?.username}
-  icon="call-outline"
-/>
+              <InfoRow
+                label="Phone"
+                value={user?.phone || user?.username}
+                icon="call-outline"
+              />
 
               <InfoRow
                 label="Name"
@@ -427,8 +615,6 @@ const openProfileFromMenu = useCallback(() => {
                 value={user?.companyName}
                 icon="business-outline"
               />
-
-         
 
               <InfoRow
                 label="Service Cities"
@@ -451,7 +637,11 @@ const openProfileFromMenu = useCallback(() => {
                   <ActivityIndicator size="small" color="#ffffff" />
                 ) : (
                   <>
-                    <Ionicons name="log-out-outline" size={18} color="#ffffff" />
+                    <Ionicons
+                      name="log-out-outline"
+                      size={18}
+                      color="#ffffff"
+                    />
                     <Text style={styles.logoutButtonText}>
                       {t("header.logout")}
                     </Text>
@@ -467,8 +657,6 @@ const openProfileFromMenu = useCallback(() => {
 }
 export const AppHeader = memo(AppHeaderComponent);
 
-
-
 const styles = StyleSheet.create({
   header: {
     backgroundColor: "#ffffff",
@@ -482,84 +670,111 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
 
-menuButton: {
-  marginLeft: 12,
-  width: 38,
-  height: 38,
-  borderRadius: 12,
-  backgroundColor: SURFACE,
-  borderWidth: 1,
-  borderColor: BORDER,
-  alignItems: "center",
-  justifyContent: "center",
-},
+  connectivitySection: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
 
-menuOverlay: {
-  flex: 1,
-  backgroundColor: "rgba(42,50,75,0.25)",
-},
+  connectivityBadge: {
+    minHeight: 30,
+    maxWidth: 92,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
 
-menuDropdown: {
-  position: "absolute",
-  top: 78,
-  width: 200,
-  backgroundColor: "#ffffff",
-  borderWidth: 1,
-  borderColor: BORDER,
-  borderRadius: 16,
-  paddingVertical: 6,
-  elevation: 12,
-  shadowColor: "#000",
-  shadowOffset: { width: 0, height: 8 },
-  shadowOpacity: 0.15,
-  shadowRadius: 12,
-},
+  connectivityText: {
+    fontSize: 9,
+    fontWeight: "700",
+  },
 
-menuRow: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 10,
-  paddingHorizontal: 12,
-  paddingVertical: 10,
-},
+  connectivitySwitch: {
+    transform: [{ scaleX: 0.72 }, { scaleY: 0.72 }],
+  },
 
-menuAvatar: {
-  width: 28,
-  height: 28,
-  borderRadius: 14,
-  backgroundColor: ACC,
-  alignItems: "center",
-  justifyContent: "center",
-},
+  menuButton: {
+    marginLeft: 12,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: SURFACE,
+    borderWidth: 1,
+    borderColor: BORDER,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
-menuRowText: {
-  flex: 1,
-  color: TEXT,
-  fontSize: 13,
-  fontWeight: "700",
-},
+  menuOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(42,50,75,0.25)",
+  },
+
+  menuDropdown: {
+    position: "absolute",
+    top: 78,
+    width: 200,
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 16,
+    paddingVertical: 6,
+    elevation: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+  },
+
+  menuRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+
+  menuAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: ACC,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  menuRowText: {
+    flex: 1,
+    color: TEXT,
+    fontSize: 13,
+    fontWeight: "700",
+  },
   brandRow: {
     flexDirection: "row",
     alignItems: "center",
     flex: 1,
   },
   logoMark: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
+    width: 30,
+    height: 30,
+    borderRadius: 20,
     backgroundColor: ACC,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 14,
+    marginLeft: 7,
   },
   logoInner: {
-    width: 15,
-    height: 15,
+    width: 10,
+    height: 10,
     borderRadius: 5,
     backgroundColor: SOFT,
   },
   companyName: {
-    fontSize: 22,
+    fontSize: 16,
     fontWeight: "400",
     color: TEXT,
     letterSpacing: -0.5,
@@ -658,46 +873,44 @@ menuRowText: {
   infoGrid: {
     gap: 10,
   },
-infoCard: {
-  backgroundColor: SURFACE,
-  borderWidth: 1,
-  borderColor: BORDER,
-  borderRadius: 12,
-  paddingHorizontal: 12,
-  paddingVertical: 10,
-},
+  infoCard: {
+    backgroundColor: SURFACE,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
 
-infoInlineRow: {
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: 10,
-},
+  infoInlineRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
 
-infoLeft: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 7,
-},
+  infoLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
 
+  editProfileButton: {
+    backgroundColor: ACC,
+    borderRadius: 12,
+    paddingVertical: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 7,
+    marginBottom: 12,
+  },
 
-
-editProfileButton: {
-  backgroundColor: ACC,
-  borderRadius: 12,
-  paddingVertical: 11,
-  alignItems: "center",
-  justifyContent: "center",
-  flexDirection: "row",
-  gap: 7,
-  marginBottom: 12,
-},
-
-editProfileText: {
-  color: "#ffffff",
-  fontSize: 13,
-  fontWeight: "700",
-},
+  editProfileText: {
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: "700",
+  },
 
   infoTopRow: {
     flexDirection: "row",
@@ -705,21 +918,21 @@ editProfileText: {
     marginBottom: 8,
     gap: 8,
   },
-infoLabel: {
-  fontSize: 8,
-  fontWeight: "700",
-  color: MUTED,
-  letterSpacing: 0.7,
-  textTransform: "uppercase",
-},
+  infoLabel: {
+    fontSize: 8,
+    fontWeight: "700",
+    color: MUTED,
+    letterSpacing: 0.7,
+    textTransform: "uppercase",
+  },
 
- infoValue: {
-  flex: 1,
-  textAlign: "right",
-  fontSize: 13,
-  color: TEXT,
-  fontWeight: "600",
-},
+  infoValue: {
+    flex: 1,
+    textAlign: "right",
+    fontSize: 13,
+    color: TEXT,
+    fontWeight: "600",
+  },
 
   logoutButton: {
     backgroundColor: ACC,
@@ -757,97 +970,96 @@ infoLabel: {
     letterSpacing: 1,
   },
 
+  completeProfileBox: {
+    backgroundColor: "#F8F9FC",
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 12,
+    gap: 8,
+  },
 
-completeProfileBox: {
-  backgroundColor: "#F8F9FC",
-  borderWidth: 1,
-  borderColor: BORDER,
-  borderRadius: 14,
-  padding: 12,
-  marginBottom: 12,
-  gap: 8,
-},
+  completeTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: TEXT,
+    marginBottom: 2,
+  },
 
-completeTitle: {
-  fontSize: 13,
-  fontWeight: "700",
-  color: TEXT,
-  marginBottom: 2,
-},
+  input: {
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    color: TEXT,
+    fontSize: 13,
+  },
 
-input: {
-  backgroundColor: "#ffffff",
-  borderWidth: 1,
-  borderColor: BORDER,
-  borderRadius: 10,
-  paddingHorizontal: 12,
-  paddingVertical: 9,
-  color: TEXT,
-  fontSize: 13,
-},
+  suggestionBox: {
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 12,
+    overflow: "hidden",
+  },
 
-suggestionBox: {
-  backgroundColor: "#ffffff",
-  borderWidth: 1,
-  borderColor: BORDER,
-  borderRadius: 12,
-  overflow: "hidden",
-},
+  suggestionItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
+  },
 
-suggestionItem: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 8,
-  paddingHorizontal: 12,
-  paddingVertical: 10,
-  borderBottomWidth: 1,
-  borderBottomColor: BORDER,
-},
+  suggestionText: {
+    color: TEXT,
+    fontSize: 13,
+    fontWeight: "600",
+  },
 
-suggestionText: {
-  color: TEXT,
-  fontSize: 13,
-  fontWeight: "600",
-},
+  cityChips: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
 
-cityChips: {
-  flexDirection: "row",
-  flexWrap: "wrap",
-  gap: 8,
-},
+  cityChip: {
+    backgroundColor: ACC,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
 
-cityChip: {
-  backgroundColor: ACC,
-  borderRadius: 999,
-  paddingHorizontal: 10,
-  paddingVertical: 7,
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 6,
-},
+  cityChipText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "700",
+  },
 
-cityChipText: {
-  color: "#ffffff",
-  fontSize: 12,
-  fontWeight: "700",
-},
+  saveProfileButton: {
+    backgroundColor: ACC,
+    borderRadius: 12,
+    paddingVertical: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 2,
+  },
 
-saveProfileButton: {
-  backgroundColor: ACC,
-  borderRadius: 12,
-  paddingVertical: 11,
-  alignItems: "center",
-  justifyContent: "center",
-  marginTop: 2,
-},
+  saveProfileText: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "700",
+  },
 
-saveProfileText: {
-  color: "#ffffff",
-  fontSize: 14,
-  fontWeight: "700",
-},
-
- label: {
+  label: {
     fontSize: 8,
     fontWeight: "600",
     color: MUTED,
