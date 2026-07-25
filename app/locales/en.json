@@ -5,6 +5,10 @@
         "longDescription": " We’ll keep this space clean until new features arrive.",
         "header":"Asset Inspection Platform"
     },
+    "auth": {
+    "dontHaveAccount": "Don't have an account?",
+    "createOne": "Create One"
+  },
   "projectPage": {
     "title": "Your Company",
     "description": "Manage your company projects",

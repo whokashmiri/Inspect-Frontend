@@ -41,8 +41,8 @@ type PhotoSlot = "plate" | "details" | "odometer" | "brand" | "other" | null;
 const DEFAULT_CONDITIONS = [
   "New",
   "Excellent",
-  "Good",
   "Very Good",
+  "Good",
   "Acceptable",
   "Poor",
   "Scrape",
@@ -52,9 +52,9 @@ const CONDITION_TRANSLATION_KEYS: Record<string, string> = {
   new: "conditions.condition.new",
   excellent: "conditions.condition.excellent",
   good: "conditions.condition.good",
+  poor: "conditions.condition.poor",
   "very good": "conditions.condition.veryGood",
   acceptable: "conditions.condition.acceptable",
-  poor: "conditions.condition.poor",
   scrape: "conditions.condition.scrape",
 };
 
@@ -376,9 +376,7 @@ export default function CreateAssetWizardModal({
     const current = String((draft as any).condition || "").trim();
     if (current) unique.set(current.toLowerCase(), current);
 
-    return Array.from(unique.values()).sort((a, b) =>
-      a.localeCompare(b, undefined, { sensitivity: "base", numeric: true }),
-    );
+    return Array.from(unique.values());
   }, [conditionOptions, (draft as any).condition]);
 
   const currentCategory: AssetType =

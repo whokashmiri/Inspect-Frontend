@@ -5,6 +5,10 @@
     "longDescription": "سنحافظ على هذه المساحة فارغة حتى تتوفر ميزات جديدة.",
     "header": "منصة فحص الأصول"
   },
+    "auth": {
+    "dontHaveAccount": "ليس لديك حساب؟",
+    "createOne": "إنشاء حساب"
+  },
   "projectPage": {
     "title": "شركتك",
     "description": "إدارة مشاريع الشركة",

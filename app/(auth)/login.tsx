@@ -11,31 +11,30 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
-import { useFonts } from 'expo-font';
-import  fonts  from '../fonts/fonts';
+import { useFonts } from "expo-font";
+import fonts from "../fonts/fonts";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../api/AuthContext";
-import { ApiError , authApi } from "../../api/api";
+import { ApiError, authApi } from "../../api/api";
 import { useTranslation } from "react-i18next";
 
 export default function LoginScreen() {
-      const [loaded] = useFonts({
+  const [loaded] = useFonts({
     ...fonts.poppins,
     ...fonts.inter,
   });
-const { t } = useTranslation();
+  const { t } = useTranslation();
   const router = useRouter();
   const { login } = useAuth();
-
- 
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<{ username?: string; password?: string }>(
-    {},
-  );
+  const [errors, setErrors] = useState<{
+    username?: string;
+    password?: string;
+  }>({});
 
   // ── Validation ────────────────────────────────────────────────────────────
   function validate() {
@@ -54,12 +53,10 @@ const { t } = useTranslation();
       await login("+966" + username.trim(), password);
       // Navigation is handled by the root layout based on auth state
     } catch (err) {
-     const msg =
-      err instanceof ApiError
-    ? err.message
-    : t("common.somethingWentWrong");
+      const msg =
+        err instanceof ApiError ? err.message : t("common.somethingWentWrong");
 
-    Alert.alert(t("login.failedTitle"), msg);
+      Alert.alert(t("login.failedTitle"), msg);
     } finally {
       setLoading(false);
     }
@@ -87,31 +84,33 @@ const { t } = useTranslation();
         <View style={styles.form}>
           {/* Username */}
           <View style={styles.fieldGroup}>
-  <Text style={styles.label}>{t("login.username")}</Text>
-  <View style={[styles.inputRow, errors.username && styles.inputError]}>
-    <View style={styles.prefixBox}>
-      <Text style={styles.prefixText}>+966</Text>
-    </View>
-    <View style={styles.prefixDivider} />
-    <TextInput
-      style={styles.inputInner}
-      placeholder={t("login.usernamePlaceholder")}
-      placeholderTextColor="#555"
-      value={username}
-      onChangeText={(t) => {
-        setUsername(t);
-        if (errors.username)
-          setErrors((e) => ({ ...e, username: undefined }));
-      }}
-      keyboardType="phone-pad"
-      autoCapitalize="none"
-      autoCorrect={false}
-    />
-  </View>
-  {errors.username && (
-    <Text style={styles.errorText}>{errors.username}</Text>
-  )}
-</View>
+            <Text style={styles.label}>{t("login.username")}</Text>
+            <View
+              style={[styles.inputRow, errors.username && styles.inputError]}
+            >
+              <View style={styles.prefixBox}>
+                <Text style={styles.prefixText}>+966</Text>
+              </View>
+              <View style={styles.prefixDivider} />
+              <TextInput
+                style={styles.inputInner}
+                placeholder={t("login.usernamePlaceholder")}
+                placeholderTextColor="#555"
+                value={username}
+                onChangeText={(t) => {
+                  setUsername(t);
+                  if (errors.username)
+                    setErrors((e) => ({ ...e, username: undefined }));
+                }}
+                keyboardType="phone-pad"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+            {errors.username && (
+              <Text style={styles.errorText}>{errors.username}</Text>
+            )}
+          </View>
 
           {/* Password */}
           <View style={styles.fieldGroup}>
@@ -121,7 +120,7 @@ const { t } = useTranslation();
             >
               <TextInput
                 style={styles.inputInner}
-              placeholder={t("login.passwordPlaceholder")}
+                placeholder={t("login.passwordPlaceholder")}
                 placeholderTextColor="#555"
                 value={password}
                 onChangeText={(t) => {
@@ -146,21 +145,23 @@ const { t } = useTranslation();
           </View>
 
           {/* Forgot Password trigger */}
-<TouchableOpacity
-  style={styles.forgotWrap}
-  onPress={() => router.push("/forgot-password")}
->
-  <Text style={styles.forgotText}>{t("login.forgotPassword") ?? "Forgot password?"}</Text>
-</TouchableOpacity>
+          <TouchableOpacity
+            style={styles.forgotWrap}
+            onPress={() => router.push("/forgot-password")}
+          >
+            <Text style={styles.forgotText}>
+              {t("login.forgotPassword") ?? "Forgot password?"}
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-  style={styles.footer}
-  onPress={() => router.push("/signup")}
->
-  <Text style={styles.footerText}>Don't have an account? </Text>
-  <Text style={styles.footerLink}>Create One</Text>
-</TouchableOpacity>
+          <TouchableOpacity
+            style={styles.footer}
+            onPress={() => router.push("/signup")}
+          >
+            <Text style={styles.footerText}>{t("auth.dontHaveAccount")} </Text>
 
+            <Text style={styles.footerLink}>{t("auth.createOne")}</Text>
+          </TouchableOpacity>
 
           {/* CTA */}
           <TouchableOpacity
@@ -176,7 +177,6 @@ const { t } = useTranslation();
             )}
           </TouchableOpacity>
         </View>
-
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -232,20 +232,20 @@ const styles = StyleSheet.create({
   },
 
   prefixBox: {
-  paddingHorizontal: 12,
-  paddingVertical: 12,
-  justifyContent: "center",
-},
-prefixText: {
-  fontSize: 15,
-  fontWeight: "600",
-  color: TEXT,
-},
-prefixDivider: {
-  width: 1,
-  height: 20,
-  backgroundColor: BORDER,
-},
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    justifyContent: "center",
+  },
+  prefixText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: TEXT,
+  },
+  prefixDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: BORDER,
+  },
   input: {
     backgroundColor: SURFACE,
     borderWidth: 1,
@@ -277,15 +277,16 @@ prefixDivider: {
   inputError: { borderColor: "#FF453A" },
   errorText: { fontSize: 12, color: "#FF453A", marginTop: 5, marginLeft: 2 },
 
-  forgotWrap: { 
-    alignSelf: "flex-end", 
+  forgotWrap: {
+    alignSelf: "flex-end",
     marginBottom: 10,
-    marginTop: 4 
+    marginTop: 4,
   },
-  forgotText: { 
+  forgotText: {
     fontSize: 13,
     color: ACC,
-    fontWeight: "600" },
+    fontWeight: "600",
+  },
 
   btn: {
     backgroundColor: ACC,
@@ -310,43 +311,43 @@ prefixDivider: {
   footerLink: { fontSize: 14, color: ACC, fontWeight: "600" },
 
   forgotBox: {
-  backgroundColor: "#F8F9FC",
-  borderWidth: 1,
-  borderColor: BORDER,
-  borderRadius: 14,
-  padding: 14,
-  marginBottom: 18,
-  gap: 10,
-},
+    backgroundColor: "#F8F9FC",
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 18,
+    gap: 10,
+  },
 
-forgotTitle: {
-  fontSize: 14,
-  fontWeight: "700",
-  color: TEXT,
-  marginBottom: 4,
-},
+  forgotTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: TEXT,
+    marginBottom: 4,
+  },
 
-smallBtn: {
-  backgroundColor: ACC,
-  borderRadius: 12,
-  paddingVertical: 12,
-  alignItems: "center",
-},
+  smallBtn: {
+    backgroundColor: ACC,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
 
-smallBtnText: {
-  color: "#fff",
-  fontSize: 14,
-  fontWeight: "700",
-},
+  smallBtnText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "700",
+  },
 
-cancelForgotBtn: {
-  alignItems: "center",
-  paddingVertical: 6,
-},
+  cancelForgotBtn: {
+    alignItems: "center",
+    paddingVertical: 6,
+  },
 
-cancelForgotText: {
-  color: MUTED,
-  fontSize: 13,
-  fontWeight: "600",
-},
+  cancelForgotText: {
+    color: MUTED,
+    fontSize: 13,
+    fontWeight: "600",
+  },
 });
