@@ -13,6 +13,8 @@ import { PendingItem, OfflineResult, OfflineAction } from "./types";
 import { getCachedUser, isOfflineSessionValid } from "./authStorage";
 import { persistOfflineMediaPayload } from "./mediaStorage";
 
+import { isManualOfflineMode } from "./connectivityMode";
+
 import * as Crypto from "expo-crypto";
 
 
@@ -135,19 +137,38 @@ export async function safeApiCall<T>(
   await initStorage();
 
   const state = await NetInfo.fetch();
-  const isOnline = !!state.isConnected && !!state.isInternetReachable;
 
-  if (isOnline) {
+  const hasInternet =
+    state.isConnected === true &&
+    state.isInternetReachable !== false;
+
+  const manualOffline = isManualOfflineMode();
+
+  /*
+   * Never execute apiFn while the user has selected Offline mode,
+   * even when Wi-Fi or mobile data is available.
+   */
+  const canUseApi = hasInternet && !manualOffline;
+
+  if (canUseApi) {
     try {
       return await apiFn();
     } catch (error) {
       console.error("API call failed:", error);
+
+      /*
+       * Keep this as throw for now.
+       *
+       * Later, we can decide whether temporary API/network errors should
+       * automatically fall back to the offline queue.
+       */
       throw error;
     }
   }
 
   const cachedUser = await getCachedUser();
-  const canUseOffline = cachedUser && (await isOfflineSessionValid());
+  const canUseOffline =
+    !!cachedUser && (await isOfflineSessionValid());
 
   if (!canUseOffline) {
     throw new Error(
@@ -155,73 +176,103 @@ export async function safeApiCall<T>(
     );
   }
 
-  // For updateAsset, check if there's already a pending item for this asset
-  // to avoid incrementing sync count for multiple edits of the same asset
-let localId = Crypto.randomUUID();
-let pendingType = options.type;
+  let localId = Crypto.randomUUID();
+  let pendingType = options.type;
+  let payloadForQueue = fallbackPayload;
 
-const assetId = String(fallbackPayload?.assetId || "");
+  const assetId = String(
+    fallbackPayload?.assetId || ""
+  );
 
-const isLocalAssetId =
-  assetId.startsWith("offline_") || assetId.includes("-");
+  const isLocalAssetId =
+    assetId.startsWith("offline_") ||
+    assetId.includes("-");
 
-if (options.type === "updateAsset" && assetId) {
-   const existingPending = await getPendingAssetItem(assetId, options.projectId);
+  /*
+   * When updating an asset that already has a pending queue item,
+   * reuse that item rather than adding another pending operation.
+   */
+  if (options.type === "updateAsset" && assetId) {
+    const existingPending =
+      await getPendingAssetItem(
+        assetId,
+        options.projectId
+      );
 
-  if (existingPending) {
-    localId = existingPending.id;
+    if (existingPending) {
+      localId = existingPending.id;
+    }
+
+    /*
+     * An asset created offline does not exist on the server yet.
+     * Editing it should update the queued createAsset payload rather
+     * than queue an updateAsset request for a nonexistent remote ID.
+     */
+    if (isLocalAssetId) {
+      pendingType = "createAsset";
+
+      payloadForQueue = {
+        ...(existingPending?.payload || {}),
+        ...fallbackPayload,
+
+        offlineId: assetId,
+
+        parent:
+          fallbackPayload.parent ??
+          existingPending?.payload?.parent ??
+          existingPending?.payload?.folderId ??
+          null,
+
+        folderId:
+          fallbackPayload.folderId ??
+          existingPending?.payload?.folderId ??
+          existingPending?.payload?.parent ??
+          null,
+      };
+
+      delete payloadForQueue.assetId;
+    }
   }
 
-  if (isLocalAssetId) {
-    pendingType = "createAsset";
+  const payloadToSave =
+    shouldPersistMedia(pendingType)
+      ? await persistOfflineMediaPayload(
+          payloadForQueue
+        )
+      : payloadForQueue;
 
-    fallbackPayload = {
-       ...(existingPending?.payload || {}),
-      ...fallbackPayload,
-      offlineId: assetId,
+  const pending: Omit<
+    PendingItem,
+    "status" | "retryCount" | "lastAttempt"
+  > = {
+    id: localId,
+    type: pendingType,
+    payload: payloadToSave,
+    projectId: options.projectId,
 
+    localMediaUris:
+      options.localMediaUris ??
+      extractLocalMediaUris(
+        payloadToSave,
+        pendingType
+      ),
 
-       parent:
-        fallbackPayload.parent ??
-        existingPending?.payload?.parent ??
-        existingPending?.payload?.folderId ??
-        null,
-
-      folderId:
-        fallbackPayload.folderId ??
-        existingPending?.payload?.folderId ??
-        existingPending?.payload?.parent ??
-        null,
-    };
-
-    delete fallbackPayload.assetId;
-  }
-}
-const payloadToSave = shouldPersistMedia(pendingType)
-  ? await persistOfflineMediaPayload(fallbackPayload)
-  : fallbackPayload;
-
-const pending: Omit<PendingItem, "status" | "retryCount" | "lastAttempt"> = {
-  id: localId,
-  type: pendingType,
-  payload: payloadToSave,
-  projectId: options.projectId,
-  localMediaUris:
-    options.localMediaUris ??
-    extractLocalMediaUris(payloadToSave, pendingType),
-  createdAt: Date.now(),
-};
+    createdAt: Date.now(),
+  };
 
   await savePending(pending);
-  await markProjectNeedsSync(options.projectId);
+  await markProjectNeedsSync(
+    options.projectId
+  );
 
   return {
     offline: true,
     localId,
-    message: "Saved offline - will sync when online",
+    message: manualOffline
+      ? "Saved offline. It will sync when you switch the app online."
+      : "No internet connection. Saved offline and queued for sync.",
   };
 }
-
 export function useSafeApiCall() {
   return async <T,>(
     apiFn: () => Promise<T>,
