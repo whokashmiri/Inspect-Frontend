@@ -14,7 +14,7 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Picker } from "@react-native-picker/picker";
 import { Ionicons } from "@expo/vector-icons";
-
+import { useTranslation } from "react-i18next";
 import { AssetDraft, AssetMediaInput } from "../utils/types";
 import {
   vehicleBrands,
@@ -27,29 +27,6 @@ type VehicleSinglePhotoSlot = Exclude<VehiclePhotoSlot, "other">;
 
 const FAVORITE_VEHICLE_BRANDS_KEY = "favorite_vehicle_brands";
 const FAVORITE_VEHICLE_MODELS_KEY = "favorite_vehicle_models_by_brand";
-
-const vehiclePreviewSlots = [
-  {
-    key: "plate",
-    label: "Car Plate",
-    icon: "car-sport-outline",
-  },
-  {
-    key: "details",
-    label: "Car Details",
-    icon: "document-text",
-  },
-  {
-    key: "odometer",
-    label: "Odometer",
-    icon: "speedometer-outline",
-  },
-  {
-    key: "other",
-    label: "Other",
-    icon: "images-outline",
-  },
-] as const;
 
 type VehicleAssetFormProps = {
   draft: AssetDraft;
@@ -67,7 +44,7 @@ type VehicleAssetFormProps = {
 
   openVehiclePhotoCamera: (slot: VehiclePhotoSlot) => void;
 
-  t: any;
+  // t: any;
 };
 
 function normalizeVehicleSearch(value: string) {
@@ -97,17 +74,17 @@ function sortVehicleText(a: string, b: string) {
 
 function moveFavoritesToTop(items: string[], favorites: string[]) {
   const uniqueItems = Array.from(
-    new Set(items.map(normalizeVehicleFavorite).filter(Boolean))
+    new Set(items.map(normalizeVehicleFavorite).filter(Boolean)),
   ).sort(sortVehicleText);
 
   const cleanFavorites = Array.from(
-    new Set(favorites.map(normalizeVehicleFavorite).filter(Boolean))
+    new Set(favorites.map(normalizeVehicleFavorite).filter(Boolean)),
   ).sort(sortVehicleText);
 
   const favoriteSet = new Set(cleanFavorites);
 
   const favoriteItems = cleanFavorites.filter((item) =>
-    uniqueItems.includes(item)
+    uniqueItems.includes(item),
   );
 
   const normalItems = uniqueItems.filter((item) => !favoriteSet.has(item));
@@ -130,13 +107,12 @@ export default function VehicleAssetForm({
   manufactureYears,
   height,
   openVehiclePhotoCamera,
-  t,
+  // t,
 }: VehicleAssetFormProps) {
+  const { t, i18n } = useTranslation();
   const [brandDropdownOpen, setBrandDropdownOpen] = useState(false);
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const [vehicleSearch, setVehicleSearch] = useState("");
-
-   
 
   const [favoriteBrands, setFavoriteBrands] = useState<string[]>([]);
   const [favoriteModelsByBrand, setFavoriteModelsByBrand] = useState<
@@ -150,11 +126,11 @@ export default function VehicleAssetForm({
     const loadVehicleFavorites = async () => {
       try {
         const savedBrands = await AsyncStorage.getItem(
-          FAVORITE_VEHICLE_BRANDS_KEY
+          FAVORITE_VEHICLE_BRANDS_KEY,
         );
 
         const savedModels = await AsyncStorage.getItem(
-          FAVORITE_VEHICLE_MODELS_KEY
+          FAVORITE_VEHICLE_MODELS_KEY,
         );
 
         setFavoriteBrands(savedBrands ? JSON.parse(savedBrands) : []);
@@ -167,12 +143,23 @@ export default function VehicleAssetForm({
     loadVehicleFavorites();
   }, []);
 
+  const vehiclePreviewSlots = [
+    { key: "plate", label: t("asset.carPlate"), icon: "car-sport-outline" },
+    { key: "details", label: t("asset.carDetails"), icon: "document-text" },
+    {
+      key: "odometer",
+      label: t("asset.odometer"),
+      icon: "speedometer-outline",
+    },
+    { key: "other", label: t("common.other"), icon: "images-outline" },
+  ] as const;
+
   const selectedBrand = String(draft.brand || "").trim();
   const availableVehicleModels = getVehicleModelsByBrand(selectedBrand);
 
   const sortedVehicleBrands = useMemo(
     () => moveFavoritesToTop(vehicleBrands, favoriteBrands),
-    [favoriteBrands]
+    [favoriteBrands],
   );
 
   const selectedBrandFavoriteModels = selectedBrand
@@ -181,11 +168,8 @@ export default function VehicleAssetForm({
 
   const sortedVehicleModels = useMemo(
     () =>
-      moveFavoritesToTop(
-        availableVehicleModels,
-        selectedBrandFavoriteModels
-      ),
-    [availableVehicleModels, selectedBrandFavoriteModels]
+      moveFavoritesToTop(availableVehicleModels, selectedBrandFavoriteModels),
+    [availableVehicleModels, selectedBrandFavoriteModels],
   );
 
   const normalizedVehicleSearch = normalizeVehicleSearch(vehicleSearch);
@@ -194,7 +178,7 @@ export default function VehicleAssetForm({
     if (!normalizedVehicleSearch) return sortedVehicleBrands;
 
     return sortedVehicleBrands.filter((brand) =>
-      normalizeVehicleSearch(brand).includes(normalizedVehicleSearch)
+      normalizeVehicleSearch(brand).includes(normalizedVehicleSearch),
     );
   }, [sortedVehicleBrands, normalizedVehicleSearch]);
 
@@ -202,7 +186,7 @@ export default function VehicleAssetForm({
     if (!normalizedVehicleSearch) return sortedVehicleModels;
 
     return sortedVehicleModels.filter((model) =>
-      normalizeVehicleSearch(model).includes(normalizedVehicleSearch)
+      normalizeVehicleSearch(model).includes(normalizedVehicleSearch),
     );
   }, [sortedVehicleModels, normalizedVehicleSearch]);
 
@@ -247,7 +231,7 @@ export default function VehicleAssetForm({
 
       await AsyncStorage.setItem(
         FAVORITE_VEHICLE_BRANDS_KEY,
-        JSON.stringify(nextFavorites)
+        JSON.stringify(nextFavorites),
       );
     } catch (error) {
       console.log("Failed to save favorite brand", error);
@@ -277,7 +261,7 @@ export default function VehicleAssetForm({
 
       await AsyncStorage.setItem(
         FAVORITE_VEHICLE_MODELS_KEY,
-        JSON.stringify(nextFavoritesByBrand)
+        JSON.stringify(nextFavoritesByBrand),
       );
     } catch (error) {
       console.log("Failed to save favorite model", error);
@@ -314,7 +298,9 @@ export default function VehicleAssetForm({
 
   return (
     <>
-      <Text style={styles.helper}>Vehicle photos {vehicleImageCount}</Text>
+      <Text style={styles.helper}>
+        {t("asset.vehiclePhotos", { count: vehicleImageCount })}
+      </Text>
 
       <View style={styles.vehiclePreviewGrid}>
         {vehiclePreviewSlots.map((slot) => {
@@ -347,90 +333,86 @@ export default function VehicleAssetForm({
                   height: previewSize + 18,
                 },
               ]}
-onPress={() => {
-  // Plate, details or odometer already has an image:
-  // open that image instead of reopening the camera.
-  if (!isOtherSlot && imageUri) {
-    setSelectedImageUri(imageUri);
-    return;
-  }
+              onPress={() => {
+                // Plate, details or odometer already has an image:
+                // open that image instead of reopening the camera.
+                if (!isOtherSlot && imageUri) {
+                  setSelectedImageUri(imageUri);
+                  return;
+                }
 
-  // One Other image: open it directly.
-  if (isOtherSlot && otherPhotos.length === 1 && imageUri) {
-    setSelectedImageUri(imageUri);
-    return;
-  }
+                // One Other image: open it directly.
+                if (isOtherSlot && otherPhotos.length === 1 && imageUri) {
+                  setSelectedImageUri(imageUri);
+                  return;
+                }
 
-  // Multiple Other images: open the gallery.
-  if (isOtherSlot && otherPhotos.length > 1) {
-    setOtherPhotosOpen(true);
-    return;
-  }
+                // Multiple Other images: open the gallery.
+                if (isOtherSlot && otherPhotos.length > 1) {
+                  setOtherPhotosOpen(true);
+                  return;
+                }
 
-  // Empty placeholder: open the correct vehicle camera slot.
-  openVehiclePhotoCamera(slot.key);
-}}
+                // Empty placeholder: open the correct vehicle camera slot.
+                openVehiclePhotoCamera(slot.key);
+              }}
               activeOpacity={0.85}
             >
               <View style={styles.vehiclePreviewBox}>
-           {imageUri ? (
-  <>
-    <Image
-      source={{ uri: imageUri }}
-      style={[
-        styles.previewImage,
-        isImageLoading && styles.previewImageLoading,
-      ]}
-      resizeMode="cover"
-      fadeDuration={150}
-      onLoadStart={() => setImageLoading(imageKey, true)}
-      onLoadEnd={() => setImageLoading(imageKey, false)}
-      onError={() => setImageLoading(imageKey, false)}
-    />
+                {imageUri ? (
+                  <>
+                    <Image
+                      source={{ uri: imageUri }}
+                      style={[
+                        styles.previewImage,
+                        isImageLoading && styles.previewImageLoading,
+                      ]}
+                      resizeMode="cover"
+                      fadeDuration={150}
+                      onLoadStart={() => setImageLoading(imageKey, true)}
+                      onLoadEnd={() => setImageLoading(imageKey, false)}
+                      onError={() => setImageLoading(imageKey, false)}
+                    />
 
-    {isImageLoading && (
-      <View style={styles.imageLoaderOverlay}>
-        <ActivityIndicator size="small" color="#ffffff" />
-      </View>
-    )}
+                    {isImageLoading && (
+                      <View style={styles.imageLoaderOverlay}>
+                        <ActivityIndicator size="small" color="#ffffff" />
+                      </View>
+                    )}
 
-    {isOtherSlot && otherExtraCount > 0 && (
-      <View style={styles.countBadge}>
-        <Text style={styles.countBadgeText}>
-          +{otherExtraCount}
-        </Text>
-      </View>
-    )}
+                    {isOtherSlot && otherExtraCount > 0 && (
+                      <View style={styles.countBadge}>
+                        <Text style={styles.countBadgeText}>
+                          +{otherExtraCount}
+                        </Text>
+                      </View>
+                    )}
 
-    {!isOtherSlot && (
-      <TouchableOpacity
-        style={styles.removeBadge}
-        onPress={(event) => {
-          event.stopPropagation();
-          removeVehicleSlotImage(slot.key);
-        }}
-        activeOpacity={0.85}
-      >
-        <Text style={styles.removeBadgeText}>✕</Text>
-      </TouchableOpacity>
-    )}
+                    {!isOtherSlot && (
+                      <TouchableOpacity
+                        style={styles.removeBadge}
+                        onPress={(event) => {
+                          event.stopPropagation();
+                          removeVehicleSlotImage(slot.key);
+                        }}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.removeBadgeText}>✕</Text>
+                      </TouchableOpacity>
+                    )}
 
-    {isOtherSlot && (
-      <View style={styles.otherAddBadge}>
-        <Ionicons name="add" size={14} color="#ffffff" />
-      </View>
-    )}
-  </>
-) : (
-  <View style={styles.vehiclePlaceholderContent}>
-    <Ionicons
-      name={slot.icon as any}
-      size={20}
-      color={MUTED}
-    />
-    <Ionicons name="add-circle" size={13} color={ACC} />
-  </View>
-)}
+                    {isOtherSlot && (
+                      <View style={styles.otherAddBadge}>
+                        <Ionicons name="add" size={14} color="#ffffff" />
+                      </View>
+                    )}
+                  </>
+                ) : (
+                  <View style={styles.vehiclePlaceholderContent}>
+                    <Ionicons name={slot.icon as any} size={20} color={MUTED} />
+                    <Ionicons name="add-circle" size={13} color={ACC} />
+                  </View>
+                )}
               </View>
 
               <Text style={styles.vehiclePreviewLabel} numberOfLines={1}>
@@ -447,13 +429,17 @@ onPress={() => {
         activeOpacity={0.85}
       >
         <Ionicons
-          name={detailsExpanded ? "remove-circle-outline" : "add-circle-outline"}
+          name={
+            detailsExpanded ? "remove-circle-outline" : "add-circle-outline"
+          }
           size={18}
           color={ACC}
         />
 
         <Text style={styles.addDetailsText}>
-          {detailsExpanded ? "Hide details" : "Add vehicle details"}
+          {detailsExpanded
+            ? t("asset.hideDetails")
+            : t("asset.addVehicleDetails")}
         </Text>
       </TouchableOpacity>
 
@@ -518,7 +504,9 @@ onPress={() => {
                 numberOfLines={1}
               >
                 {draft.model ||
-                  (draft.brand ? t("asset.model") : "Choose brand first")}
+                  (draft.brand
+                    ? t("asset.model")
+                    : t("asset.chooseBrandFirst"))}
               </Text>
 
               <Ionicons
@@ -530,7 +518,9 @@ onPress={() => {
           </View>
 
           <View
-            pointerEvents={brandDropdownOpen || modelDropdownOpen ? "none" : "auto"}
+            pointerEvents={
+              brandDropdownOpen || modelDropdownOpen ? "none" : "auto"
+            }
             style={styles.vehicleField}
           >
             <Text style={styles.fieldLabel}>{t("asset.manufactureYear")}</Text>
@@ -548,7 +538,7 @@ onPress={() => {
                 style={styles.vehicleYearPicker}
                 itemStyle={styles.vehicleYearPickerItem}
               >
-                <Picker.Item label="Year" value="" />
+                <Picker.Item label={t("asset.year")} value="" />
                 {manufactureYears.map((year) => (
                   <Picker.Item key={year} label={year} value={year} />
                 ))}
@@ -557,7 +547,9 @@ onPress={() => {
           </View>
 
           <View
-            pointerEvents={brandDropdownOpen || modelDropdownOpen ? "none" : "auto"}
+            pointerEvents={
+              brandDropdownOpen || modelDropdownOpen ? "none" : "auto"
+            }
             style={styles.vehicleField}
           >
             <Text style={styles.fieldLabel}>{t("asset.kilometersDriven")}</Text>
@@ -659,12 +651,17 @@ onPress={() => {
                 >
                   {displayedVehicleOptions.length === 0 ? (
                     <View style={styles.vehicleSearchEmpty}>
-                      <Ionicons name="search-outline" size={28} color="#A0A5B4" />
+                      <Ionicons
+                        name="search-outline"
+                        size={28}
+                        color="#A0A5B4"
+                      />
                       <Text style={styles.vehicleSearchEmptyTitle}>
-                        No results found
+                        {t("common.noResultsFound")}
                       </Text>
+
                       <Text style={styles.vehicleSearchEmptyText}>
-                        Try searching in English or Arabic
+                        {t("asset.trySearchingEnglishArabic")}
                       </Text>
                     </View>
                   ) : (
@@ -692,9 +689,15 @@ onPress={() => {
                             }}
                             activeOpacity={0.85}
                           >
-                            <Text style={styles.vehicleSelectOptionText}>{item}</Text>
+                            <Text style={styles.vehicleSelectOptionText}>
+                              {item}
+                            </Text>
                             {isSelected && (
-                              <Ionicons name="checkmark" size={18} color={ACC} />
+                              <Ionicons
+                                name="checkmark"
+                                size={18}
+                                color={ACC}
+                              />
                             )}
                           </TouchableOpacity>
 
@@ -727,50 +730,50 @@ onPress={() => {
       </Modal>
 
       <Modal
-  visible={Boolean(selectedImageUri)}
-  transparent={false}
-  animationType="fade"
-  statusBarTranslucent
-  onRequestClose={() => setSelectedImageUri(null)}
->
-  <View
-    style={{
-      flex: 1,
-      backgroundColor: "#000000",
-      alignItems: "center",
-      justifyContent: "center",
-    }}
-  >
-    {selectedImageUri && (
-      <Image
-        source={{ uri: selectedImageUri }}
-        style={{
-          width: "100%",
-          height: "100%",
-        }}
-        resizeMode="contain"
-      />
-    )}
+        visible={Boolean(selectedImageUri)}
+        transparent={false}
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setSelectedImageUri(null)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "#000000",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {selectedImageUri && (
+            <Image
+              source={{ uri: selectedImageUri }}
+              style={{
+                width: "100%",
+                height: "100%",
+              }}
+              resizeMode="contain"
+            />
+          )}
 
-    <TouchableOpacity
-      style={{
-        position: "absolute",
-        top: 48,
-        right: 20,
-        width: 42,
-        height: 42,
-        borderRadius: 21,
-        backgroundColor: "rgba(0,0,0,0.65)",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-      onPress={() => setSelectedImageUri(null)}
-      activeOpacity={0.85}
-    >
-      <Ionicons name="close" size={28} color="#ffffff" />
-    </TouchableOpacity>
-  </View>
-</Modal>
+          <TouchableOpacity
+            style={{
+              position: "absolute",
+              top: 48,
+              right: 20,
+              width: 42,
+              height: 42,
+              borderRadius: 21,
+              backgroundColor: "rgba(0,0,0,0.65)",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            onPress={() => setSelectedImageUri(null)}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="close" size={28} color="#ffffff" />
+          </TouchableOpacity>
+        </View>
+      </Modal>
 
       <Modal
         visible={otherPhotosOpen}
@@ -788,7 +791,9 @@ onPress={() => {
                 ]}
               >
                 <View style={styles.vehicleSelectHeader}>
-                  <Text style={styles.vehicleSelectTitle}>Other Photos</Text>
+                  <Text style={styles.vehicleSelectTitle}>
+                    {t("asset.otherPhotos")}
+                  </Text>
 
                   <TouchableOpacity
                     onPress={() => setOtherPhotosOpen(false)}
@@ -811,21 +816,21 @@ onPress={() => {
                     const isImageLoading = imageLoadingMap[imageKey] !== false;
 
                     return (
-                    <TouchableOpacity
-  key={imageKey}
-  style={[
-    styles.previewItem,
-    { width: previewSize, height: previewSize },
-  ]}
-  onPress={() => {
-    setOtherPhotosOpen(false);
+                      <TouchableOpacity
+                        key={imageKey}
+                        style={[
+                          styles.previewItem,
+                          { width: previewSize, height: previewSize },
+                        ]}
+                        onPress={() => {
+                          setOtherPhotosOpen(false);
 
-    setTimeout(() => {
-      setSelectedImageUri(imageUri);
-    }, 100);
-  }}
-  activeOpacity={0.9}
->
+                          setTimeout(() => {
+                            setSelectedImageUri(imageUri);
+                          }, 100);
+                        }}
+                        activeOpacity={0.9}
+                      >
                         <Image
                           source={{ uri: imageUri }}
                           style={[
@@ -845,16 +850,16 @@ onPress={() => {
                           </View>
                         )}
 
-                       <TouchableOpacity
-  style={styles.removeBadge}
-  onPress={(event) => {
-    event.stopPropagation();
-    removeOtherImage(index);
-  }}
-  activeOpacity={0.85}
->
-  <Text style={styles.removeBadgeText}>✕</Text>
-</TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.removeBadge}
+                          onPress={(event) => {
+                            event.stopPropagation();
+                            removeOtherImage(index);
+                          }}
+                          activeOpacity={0.85}
+                        >
+                          <Text style={styles.removeBadgeText}>✕</Text>
+                        </TouchableOpacity>
                       </TouchableOpacity>
                     );
                   })}

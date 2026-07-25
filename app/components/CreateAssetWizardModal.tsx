@@ -48,6 +48,20 @@ const DEFAULT_CONDITIONS = [
   "Scrape",
 ];
 
+const CONDITION_TRANSLATION_KEYS: Record<string, string> = {
+  new: "conditions.condition.new",
+  excellent: "conditions.condition.excellent",
+  good: "conditions.condition.good",
+  "very good": "conditions.condition.veryGood",
+  acceptable: "conditions.condition.acceptable",
+  poor: "conditions.condition.poor",
+  scrape: "conditions.condition.scrape",
+};
+
+const translateCondition = (value: string, t: (k: string) => string) => {
+  const key = CONDITION_TRANSLATION_KEYS[value.trim().toLowerCase()];
+  return key ? t(key) : value;
+};
 type Props = {
   visible: boolean;
   onClose: () => void;
@@ -360,16 +374,10 @@ export default function CreateAssetWizardModal({
     });
 
     const current = String((draft as any).condition || "").trim();
-
-    if (current) {
-      unique.set(current.toLowerCase(), current);
-    }
+    if (current) unique.set(current.toLowerCase(), current);
 
     return Array.from(unique.values()).sort((a, b) =>
-      a.localeCompare(b, undefined, {
-        sensitivity: "base",
-        numeric: true,
-      }),
+      a.localeCompare(b, undefined, { sensitivity: "base", numeric: true }),
     );
   }, [conditionOptions, (draft as any).condition]);
 
@@ -408,11 +416,10 @@ export default function CreateAssetWizardModal({
       : currentCategory;
 
   const getShortVoiceName = () => {
-    if (isRecording) return "Recording...";
-    if (!draft.voiceNotes?.[0]) return "Add voice";
-    return "Play your Voice note";
+    if (isRecording) return t("asset.recording");
+    if (!draft.voiceNotes?.[0]) return t("asset.addVoice");
+    return t("asset.playYourVoiceNote");
   };
-
   const setFieldPosition = (key: string) => (e: LayoutChangeEvent) => {
     fieldPositions.current[key] = e.nativeEvent.layout.y;
   };
@@ -917,7 +924,6 @@ export default function CreateAssetWizardModal({
                       <Text style={styles.closeText}>✕</Text>
                     </TouchableOpacity>
                   </View>
-
                   <ScrollView
                     ref={scrollRef}
                     style={styles.scrollView}
@@ -941,7 +947,9 @@ export default function CreateAssetWizardModal({
                           style={{ flex: 1 }}
                           onLayout={setFieldPosition("name")}
                         >
-                          <Text style={styles.fieldLabel}>Asset name</Text>
+                          <Text style={styles.fieldLabel}>
+                            {t("asset.assetName")}
+                          </Text>
 
                           <View style={styles.assetNameInputWrap}>
                             <TextInput
@@ -1022,7 +1030,7 @@ export default function CreateAssetWizardModal({
                           manufactureYears={manufactureYears}
                           height={height}
                           openVehiclePhotoCamera={openVehiclePhotoCamera}
-                          t={t}
+                          // t={t}
                         />
                       )}
 
@@ -1051,7 +1059,9 @@ export default function CreateAssetWizardModal({
                                 ]}
                                 numberOfLines={1}
                               >
-                                {draft.condition || "Choose condition"}
+                                {draft.condition
+                                  ? translateCondition(draft.condition, t)
+                                  : t("asset.chooseCondition")}
                               </Text>
 
                               <Ionicons
@@ -1066,10 +1076,12 @@ export default function CreateAssetWizardModal({
                             style={styles.notesInputWrap}
                             onLayout={setFieldPosition("notes")}
                           >
-                            <Text style={styles.fieldLabel}>Notes</Text>
+                            <Text style={styles.fieldLabel}>
+                              {t("projectScreen.stats.notes")}
+                            </Text>
 
                             <TextInput
-                              placeholder="Type notes here..."
+                              placeholder={t("asset.typeNotesHere")}
                               placeholderTextColor="#767B91"
                               value={draft.notes || ""}
                               onChangeText={(text) => {
@@ -1264,7 +1276,6 @@ export default function CreateAssetWizardModal({
                       )}
                     </>
                   </ScrollView>
-
                   {!keyboardVisible && (
                     <View style={styles.footer}>
                       {!isVehicle && (
@@ -1302,12 +1313,12 @@ export default function CreateAssetWizardModal({
                       >
                         <Text style={styles.primaryText}>
                           {processingImages
-                            ? "Processing photos..."
+                            ? t("asset.processingPhotos")
                             : submitting
-                              ? t("asset.saving") || "Saving..."
+                              ? t("asset.saving")
                               : mode === "edit"
-                                ? "Save & Next"
-                                : "Save & New Asset"}
+                                ? t("asset.saveAndNext")
+                                : t("asset.saveAndNewAsset")}
                         </Text>
                       </TouchableOpacity>
 
@@ -1324,7 +1335,7 @@ export default function CreateAssetWizardModal({
                       >
                         <Text style={styles.primaryText}>
                           {processingImages
-                            ? "Processing photos..."
+                            ? t("asset.processingPhotos")
                             : submitting
                               ? t("asset.saving") || "Saving..."
                               : mode === "edit"
@@ -1334,14 +1345,13 @@ export default function CreateAssetWizardModal({
                       </TouchableOpacity>
                     </View>
                   )}
-
                   {processingImages && (
                     <View style={styles.processingOverlay}>
                       <View style={styles.processingBox}>
                         <ActivityIndicator size="large" color={ACC} />
 
                         <Text style={styles.processingText}>
-                          Optimizing photos...
+                          {t("asset.optimizing")}
                         </Text>
                       </View>
                     </View>
@@ -1413,7 +1423,7 @@ export default function CreateAssetWizardModal({
                         color={ACC}
                       />
                       <Text style={styles.conditionAddRowText}>
-                        Add a Condition
+                        {t("asset.addACondition")}
                       </Text>
                     </TouchableOpacity>
                   ) : (
@@ -1440,14 +1450,15 @@ export default function CreateAssetWizardModal({
                   )}
 
                   {projectConditions.map((condition) => {
+                    const safeCondition = String(condition || "").trim();
                     const isSelected =
                       String(draft.condition || "")
                         .trim()
-                        .toLowerCase() === condition.trim().toLowerCase();
+                        .toLowerCase() === safeCondition.toLowerCase();
 
                     return (
                       <TouchableOpacity
-                        key={condition}
+                        key={safeCondition}
                         style={[
                           styles.conditionOptionRow,
                           isSelected && styles.conditionOptionRowSelected,
@@ -1455,9 +1466,8 @@ export default function CreateAssetWizardModal({
                         onPress={() => {
                           setDraft((prev) => ({
                             ...prev,
-                            condition,
+                            condition: safeCondition,
                           }));
-
                           setConditionModalOpen(false);
                           setAddConditionMode(false);
                           setNewConditionText("");
@@ -1470,9 +1480,8 @@ export default function CreateAssetWizardModal({
                             isSelected && styles.conditionOptionTextSelected,
                           ]}
                         >
-                          {condition}
+                          {translateCondition(safeCondition, t)}
                         </Text>
-
                         {isSelected && (
                           <Ionicons name="checkmark" size={18} color={ACC} />
                         )}

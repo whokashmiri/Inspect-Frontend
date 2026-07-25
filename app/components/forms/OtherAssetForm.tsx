@@ -1,4 +1,3 @@
-
 //OtherAssetForm.tsx
 import React, { useMemo, useState } from "react";
 import {
@@ -16,16 +15,9 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { AssetDraft, AssetMediaInput } from "../utils/types";
 import { formStyles as styles, ACC, TEXT } from "./formStyles";
+import { useTranslation } from "react-i18next";
 
 type OtherPhotoSlot = "details" | "brand" | "other";
-
-
-
-const otherPreviewSlots = [
-  { key: "details", label: "Details", icon: "document-text-outline" },
-  { key: "brand", label: "Brand", icon: "pricetag-outline" },
-  { key: "other", label: "Other", icon: "images-outline" },
-] as const;
 
 function getImageKey(slot: string, uri: string, index = 0) {
   return `${slot}-${index}-${uri}`;
@@ -36,19 +28,16 @@ type OtherAssetFormProps = {
   setDraft: React.Dispatch<React.SetStateAction<AssetDraft>>;
 
   detailsExpanded: boolean;
-setDetailsExpanded: React.Dispatch<React.SetStateAction<boolean>>;
+  setDetailsExpanded: React.Dispatch<React.SetStateAction<boolean>>;
 
   subAssetTypes?: string[];
 
   onRenameSubAssetType?: (
     oldSubAssetType: string,
-    newSubAssetType: string
+    newSubAssetType: string,
   ) => Promise<void> | void;
 
-  showSnackbar?: (
-    message: string,
-    type?: "success" | "error" | "info"
-  ) => void;
+  showSnackbar?: (message: string, type?: "success" | "error" | "info") => void;
 
   previewSize: number;
   imageLoadingMap: Record<string, boolean>;
@@ -57,9 +46,6 @@ setDetailsExpanded: React.Dispatch<React.SetStateAction<boolean>>;
 
   openOtherPhotoCamera: (slot: OtherPhotoSlot) => void;
 };
-
-
-
 
 const cleanAssetRawData = (rawData?: Record<string, any> | null) => {
   const source =
@@ -87,9 +73,7 @@ const formatSubAssetTypeLabel = (value: string) => {
 
 export function getOtherAssetQuantity(draft: AssetDraft) {
   const rawQuantity =
-    (draft as any).quantity ??
-    (draft as any).rawData?.quantity ??
-    1;
+    (draft as any).quantity ?? (draft as any).rawData?.quantity ?? 1;
 
   const quantity = Number(rawQuantity);
 
@@ -146,6 +130,7 @@ export default function OtherAssetForm({
   height,
   openOtherPhotoCamera,
 }: OtherAssetFormProps) {
+  const { t, i18n } = useTranslation();
   const [assetTypeDropdownOpen, setAssetTypeDropdownOpen] = useState(false);
   const [addTypeModalOpen, setAddTypeModalOpen] = useState(false);
   const [newSubAssetTypeText, setNewSubAssetTypeText] = useState("");
@@ -154,17 +139,24 @@ export default function OtherAssetForm({
   const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
 
   const [editingSubAssetType, setEditingSubAssetType] = useState<string | null>(
-    null
+    null,
   );
   const [editingSubAssetTypeText, setEditingSubAssetTypeText] = useState("");
 
   const subAssetType = getOtherSubAssetType(draft);
+  const otherPreviewSlots = [
+    { key: "details", label: "asset.details", icon: "document-text-outline" },
+    { key: "brand", label: "asset.brand", icon: "pricetag-outline" },
+    { key: "other", label: "asset.typeOther", icon: "images-outline" },
+  ] as const;
 
   const projectAssetTypes = useMemo(() => {
     const unique = new Map<string, string>();
 
     subAssetTypes.forEach((item) => {
-      const value = String(item || "").trim().toLowerCase();
+      const value = String(item || "")
+        .trim()
+        .toLowerCase();
       if (value) unique.set(value, value);
     });
 
@@ -185,28 +177,34 @@ export default function OtherAssetForm({
 
     const quantity = Math.max(1, Math.floor(cleaned));
 
-    setDraft((prev) => ({
-      ...prev,
-      assetType: "other",
-      quantity,
-      rawData: cleanAssetRawData((prev as any).rawData),
-    } as any));
+    setDraft(
+      (prev) =>
+        ({
+          ...prev,
+          assetType: "other",
+          quantity,
+          rawData: cleanAssetRawData((prev as any).rawData),
+        }) as any,
+    );
   };
 
   const saveNewSubAssetType = () => {
     const value = newSubAssetTypeText.trim().toLowerCase();
 
     if (!value) {
-      showSnackbar?.("Please enter asset type", "error");
+      showSnackbar?.(t("asset.enterAssetType"), "error");
       return;
     }
 
-    setDraft((prev) => ({
-      ...prev,
-      assetType: "other",
-      subAssetType: value,
-      rawData: cleanAssetRawData((prev as any).rawData),
-    } as any));
+    setDraft(
+      (prev) =>
+        ({
+          ...prev,
+          assetType: "other",
+          subAssetType: value,
+          rawData: cleanAssetRawData((prev as any).rawData),
+        }) as any,
+    );
 
     setNewSubAssetTypeText("");
     setAddTypeModalOpen(false);
@@ -214,13 +212,15 @@ export default function OtherAssetForm({
   };
 
   const saveEditedSubAssetType = async () => {
-    const oldValue = String(editingSubAssetType || "").trim().toLowerCase();
+    const oldValue = String(editingSubAssetType || "")
+      .trim()
+      .toLowerCase();
     const newValue = editingSubAssetTypeText.trim().toLowerCase();
 
     if (!oldValue) return;
 
     if (!newValue) {
-      showSnackbar?.("Please enter asset type", "error");
+      showSnackbar?.(t("asset.enterAssetType"), "error");
       return;
     }
 
@@ -229,24 +229,28 @@ export default function OtherAssetForm({
         await onRenameSubAssetType(oldValue, newValue);
       }
 
-      setDraft((prev) => ({
-        ...prev,
-        assetType: "other",
-        subAssetType:
-          String((prev as any).subAssetType || "").trim().toLowerCase() ===
-          oldValue
-            ? newValue
-            : (prev as any).subAssetType,
-        rawData: cleanAssetRawData((prev as any).rawData),
-      } as any));
+      setDraft(
+        (prev) =>
+          ({
+            ...prev,
+            assetType: "other",
+            subAssetType:
+              String((prev as any).subAssetType || "")
+                .trim()
+                .toLowerCase() === oldValue
+                ? newValue
+                : (prev as any).subAssetType,
+            rawData: cleanAssetRawData((prev as any).rawData),
+          }) as any,
+      );
 
       setEditingSubAssetType(null);
       setEditingSubAssetTypeText("");
       setAssetTypeDropdownOpen(false);
 
-      showSnackbar?.("Asset type updated", "success");
+      showSnackbar?.(t("asset.assetTypeUpdated"), "success");
     } catch (error: any) {
-      showSnackbar?.(error?.message || "Failed to update asset type", "error");
+      (error?.message || t("asset.failedToUpdateAssetType"), "error");
     }
   };
 
@@ -277,15 +281,12 @@ export default function OtherAssetForm({
     }));
   };
 
-
   return (
     <>
-     
-
       <View style={styles.otherAssetControls}>
         <View style={styles.assetTypeQuantityRow}>
           <View style={styles.assetTypeFieldWrap}>
-            <Text style={styles.fieldLabel}>Asset type</Text>
+            <Text style={styles.fieldLabel}> {t("asset.assetType")}</Text>
 
             <View style={styles.assetTypeInputLikeWrap}>
               <TouchableOpacity
@@ -299,7 +300,7 @@ export default function OtherAssetForm({
                 <Text style={styles.assetTypeInputText} numberOfLines={1}>
                   {subAssetType
                     ? formatSubAssetTypeLabel(subAssetType)
-                    : "Choose"}
+                    : t("common.choose")}
                 </Text>
 
                 <Ionicons
@@ -326,7 +327,7 @@ export default function OtherAssetForm({
           </View>
 
           <View style={styles.quantityFieldWrap}>
-            <Text style={styles.fieldLabel}>Quantity</Text>
+            <Text style={styles.fieldLabel}> {t("asset.quantity")}</Text>
 
             <View style={styles.quantityControl}>
               <TouchableOpacity
@@ -357,150 +358,152 @@ export default function OtherAssetForm({
           </View>
         </View>
 
-         <Text style={styles.helper}>Asset photos {imageCount}</Text>
+        <Text style={styles.helper}>
+          {t("asset.assetPhotos", { count: imageCount })}
+        </Text>
 
-      <View style={styles.vehiclePreviewGrid}>
-        {otherPreviewSlots.map((slot) => {
-          const isOtherSlot = slot.key === "other";
-          const image = isOtherSlot
-            ? otherPhotos[0] || null
-            : draft.images[slot.key];
+        <View style={styles.vehiclePreviewGrid}>
+          {otherPreviewSlots.map((slot) => {
+            const isOtherSlot = slot.key === "other";
+            const image = isOtherSlot
+              ? otherPhotos[0] || null
+              : draft.images[slot.key];
 
-          const imageUri = image?.uri || image?.url;
-          const imageKey = imageUri
-            ? getImageKey(slot.key, imageUri)
-            : slot.key;
-          const isImageLoading = imageUri
-            ? imageLoadingMap[imageKey] !== false
-            : false;
-          const extraCount = isOtherSlot
-            ? Math.max(otherPhotos.length - 1, 0)
-            : 0;
+            const imageUri = image?.uri || image?.url;
+            const imageKey = imageUri
+              ? getImageKey(slot.key, imageUri)
+              : slot.key;
+            const isImageLoading = imageUri
+              ? imageLoadingMap[imageKey] !== false
+              : false;
+            const extraCount = isOtherSlot
+              ? Math.max(otherPhotos.length - 1, 0)
+              : 0;
 
-          return (
-            <TouchableOpacity
-              key={slot.key}
-              style={[
-                styles.vehiclePreviewItem,
-                { width: previewSize, height: previewSize + 18 },
-              ]}
-onPress={() => {
-  if (!isOtherSlot && imageUri) {
-    setSelectedImageUri(imageUri);
-    return;
-  }
+            return (
+              <TouchableOpacity
+                key={slot.key}
+                style={[
+                  styles.vehiclePreviewItem,
+                  { width: previewSize, height: previewSize + 18 },
+                ]}
+                onPress={() => {
+                  if (!isOtherSlot && imageUri) {
+                    setSelectedImageUri(imageUri);
+                    return;
+                  }
 
-  if (isOtherSlot && otherPhotos.length === 1 && imageUri) {
-    setSelectedImageUri(imageUri);
-    return;
-  }
+                  if (isOtherSlot && otherPhotos.length === 1 && imageUri) {
+                    setSelectedImageUri(imageUri);
+                    return;
+                  }
 
-  if (isOtherSlot && otherPhotos.length > 1) {
-    setOtherPhotosOpen(true);
-    return;
-  }
+                  if (isOtherSlot && otherPhotos.length > 1) {
+                    setOtherPhotosOpen(true);
+                    return;
+                  }
 
-  openOtherPhotoCamera(slot.key);
-}}
-              activeOpacity={0.85}
-            >
-              <View style={styles.vehiclePreviewBox}>
-                {imageUri ? (
-                  <>
-                    <Image
-                      source={{ uri: imageUri }}
-                      style={[
-                        styles.previewImage,
-                        isImageLoading && styles.previewImageLoading,
-                      ]}
-                      resizeMode="cover"
-                      fadeDuration={150}
-                      onLoadStart={() => setImageLoading(imageKey, true)}
-                      onLoadEnd={() => setImageLoading(imageKey, false)}
-                      onError={() => setImageLoading(imageKey, false)}
-                    />
+                  openOtherPhotoCamera(slot.key);
+                }}
+                activeOpacity={0.85}
+              >
+                <View style={styles.vehiclePreviewBox}>
+                  {imageUri ? (
+                    <>
+                      <Image
+                        source={{ uri: imageUri }}
+                        style={[
+                          styles.previewImage,
+                          isImageLoading && styles.previewImageLoading,
+                        ]}
+                        resizeMode="cover"
+                        fadeDuration={150}
+                        onLoadStart={() => setImageLoading(imageKey, true)}
+                        onLoadEnd={() => setImageLoading(imageKey, false)}
+                        onError={() => setImageLoading(imageKey, false)}
+                      />
 
-                    {isImageLoading && (
-                      <View style={styles.imageLoaderOverlay}>
-                        <ActivityIndicator size="small" color="#ffffff" />
-                      </View>
-                    )}
+                      {isImageLoading && (
+                        <View style={styles.imageLoaderOverlay}>
+                          <ActivityIndicator size="small" color="#ffffff" />
+                        </View>
+                      )}
 
-                    {isOtherSlot && extraCount > 0 && (
-                      <View style={styles.countBadge}>
-                        <Text style={styles.countBadgeText}>+{extraCount}</Text>
-                      </View>
-                    )}
+                      {isOtherSlot && extraCount > 0 && (
+                        <View style={styles.countBadge}>
+                          <Text style={styles.countBadgeText}>
+                            +{extraCount}
+                          </Text>
+                        </View>
+                      )}
 
-                    {!isOtherSlot && (
-                      <TouchableOpacity
-                        style={styles.removeBadge}
-                        onPress={(event) => {
-                          event.stopPropagation();
-                          removeSingleSlotImage(slot.key as "details" | "brand");
-                        }}
-                        activeOpacity={0.85}
-                      >
-                        <Text style={styles.removeBadgeText}>✕</Text>
-                      </TouchableOpacity>
-                    )}
+                      {!isOtherSlot && (
+                        <TouchableOpacity
+                          style={styles.removeBadge}
+                          onPress={(event) => {
+                            event.stopPropagation();
+                            removeSingleSlotImage(
+                              slot.key as "details" | "brand",
+                            );
+                          }}
+                          activeOpacity={0.85}
+                        >
+                          <Text style={styles.removeBadgeText}>✕</Text>
+                        </TouchableOpacity>
+                      )}
 
-                    {isOtherSlot && (
-                      <View style={styles.otherAddBadge}>
-                        <Ionicons name="add" size={14} color="#ffffff" />
-                      </View>
-                    )}
-                  </>
-                ) : (
-                  <View style={styles.vehiclePlaceholderContent}>
-                    <Ionicons
-                      name={slot.icon as any}
-                      size={20}
-                      color="#767B91"
-                    />
-                    <Ionicons name="add-circle" size={13} color={ACC} />
-                  </View>
-                )}
-              </View>
+                      {isOtherSlot && (
+                        <View style={styles.otherAddBadge}>
+                          <Ionicons name="add" size={14} color="#ffffff" />
+                        </View>
+                      )}
+                    </>
+                  ) : (
+                    <View style={styles.vehiclePlaceholderContent}>
+                      <Ionicons
+                        name={slot.icon as any}
+                        size={20}
+                        color="#767B91"
+                      />
+                      <Ionicons name="add-circle" size={13} color={ACC} />
+                    </View>
+                  )}
+                </View>
 
-              <Text style={styles.vehiclePreviewLabel} numberOfLines={1}>
-                {slot.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+                <Text style={styles.vehiclePreviewLabel} numberOfLines={1}>
+                  {t(slot.label)}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
-      <TouchableOpacity
-  style={styles.addDetailsBtn}
-  onPress={() => setDetailsExpanded((prev) => !prev)}
-  activeOpacity={0.85}
->
-  <Ionicons
-    name={
-      detailsExpanded
-        ? "remove-circle-outline"
-        : "add-circle-outline"
-    }
-    size={18}
-    color={ACC}
-  />
+        <TouchableOpacity
+          style={styles.addDetailsBtn}
+          onPress={() => setDetailsExpanded((prev) => !prev)}
+          activeOpacity={0.85}
+        >
+          <Ionicons
+            name={
+              detailsExpanded ? "remove-circle-outline" : "add-circle-outline"
+            }
+            size={18}
+            color={ACC}
+          />
 
-  <Text style={styles.addDetailsText}>
-    {detailsExpanded
-      ? "Hide details"
-      : "Add asset details"}
-  </Text>
-</TouchableOpacity>
-
-      
+          <Text style={styles.addDetailsText}>
+            {detailsExpanded
+              ? t("asset.hideDetails")
+              : t("asset.addAssetDetails")}
+          </Text>
+        </TouchableOpacity>
 
         {assetTypeDropdownOpen && (
           <View style={styles.assetTypeDropdownMenuFull}>
             {projectAssetTypes.length === 0 ? (
               <View style={styles.addTypeDropdownOption}>
                 <Text style={styles.addTypeDropdownOptionText}>
-                  No sub asset types yet
+                  {t("asset.noSubAssetTypes")}
                 </Text>
               </View>
             ) : (
@@ -524,7 +527,7 @@ onPress={() => {
                           style={styles.assetTypeEditInput}
                           autoFocus
                           selectTextOnFocus
-                          placeholder="Edit asset type"
+                          placeholder={t("asset.editAssetType")}
                           placeholderTextColor="#767B91"
                         />
 
@@ -552,15 +555,16 @@ onPress={() => {
                         <TouchableOpacity
                           style={styles.assetTypeOptionMain}
                           onPress={() => {
-                            setDraft((prev) =>
-                              ({
-                                ...prev,
-                                assetType: "other",
-                                subAssetType: type,
-                                rawData: cleanAssetRawData(
-                                  (prev as any).rawData
-                                ),
-                              } as any)
+                            setDraft(
+                              (prev) =>
+                                ({
+                                  ...prev,
+                                  assetType: "other",
+                                  subAssetType: type,
+                                  rawData: cleanAssetRawData(
+                                    (prev as any).rawData,
+                                  ),
+                                }) as any,
                             );
 
                             setAssetTypeDropdownOpen(false);
@@ -624,7 +628,9 @@ onPress={() => {
                 ]}
               >
                 <View style={styles.vehicleSelectHeader}>
-                  <Text style={styles.vehicleSelectTitle}>Other Photos</Text>
+                  <Text style={styles.vehicleSelectTitle}>
+                    {t("asset.otherPhotos")}
+                  </Text>
 
                   <TouchableOpacity
                     onPress={() => setOtherPhotosOpen(false)}
@@ -647,52 +653,51 @@ onPress={() => {
                     const isImageLoading = imageLoadingMap[imageKey] !== false;
 
                     return (
-                    
                       <TouchableOpacity
-  key={imageKey}
-  style={[
-    styles.previewItem,
-    { width: previewSize, height: previewSize },
-  ]}
-  onPress={() => {
-    setOtherPhotosOpen(false);
+                        key={imageKey}
+                        style={[
+                          styles.previewItem,
+                          { width: previewSize, height: previewSize },
+                        ]}
+                        onPress={() => {
+                          setOtherPhotosOpen(false);
 
-    setTimeout(() => {
-      setSelectedImageUri(imageUri);
-    }, 100);
-  }}
-  activeOpacity={0.9}
->
-  <Image
-    source={{ uri: imageUri }}
-    style={[
-      styles.previewImage,
-      isImageLoading && styles.previewImageLoading,
-    ]}
-    resizeMode="cover"
-    fadeDuration={150}
-    onLoadStart={() => setImageLoading(imageKey, true)}
-    onLoadEnd={() => setImageLoading(imageKey, false)}
-    onError={() => setImageLoading(imageKey, false)}
-  />
+                          setTimeout(() => {
+                            setSelectedImageUri(imageUri);
+                          }, 100);
+                        }}
+                        activeOpacity={0.9}
+                      >
+                        <Image
+                          source={{ uri: imageUri }}
+                          style={[
+                            styles.previewImage,
+                            isImageLoading && styles.previewImageLoading,
+                          ]}
+                          resizeMode="cover"
+                          fadeDuration={150}
+                          onLoadStart={() => setImageLoading(imageKey, true)}
+                          onLoadEnd={() => setImageLoading(imageKey, false)}
+                          onError={() => setImageLoading(imageKey, false)}
+                        />
 
-  {isImageLoading && (
-    <View style={styles.imageLoaderOverlay}>
-      <ActivityIndicator size="small" color="#ffffff" />
-    </View>
-  )}
+                        {isImageLoading && (
+                          <View style={styles.imageLoaderOverlay}>
+                            <ActivityIndicator size="small" color="#ffffff" />
+                          </View>
+                        )}
 
-  <TouchableOpacity
-    style={styles.removeBadge}
-    onPress={(event) => {
-      event.stopPropagation();
-      removeOtherImage(index);
-    }}
-    activeOpacity={0.85}
-  >
-    <Text style={styles.removeBadgeText}>✕</Text>
-  </TouchableOpacity>
-</TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.removeBadge}
+                          onPress={(event) => {
+                            event.stopPropagation();
+                            removeOtherImage(index);
+                          }}
+                          activeOpacity={0.85}
+                        >
+                          <Text style={styles.removeBadgeText}>✕</Text>
+                        </TouchableOpacity>
+                      </TouchableOpacity>
                     );
                   })}
 
@@ -704,11 +709,7 @@ onPress={() => {
                     onPress={() => openOtherPhotoCamera("other")}
                     activeOpacity={0.85}
                   >
-                    <Ionicons
-                      name="add-circle-outline"
-                      size={26}
-                      color={ACC}
-                    />
+                    <Ionicons name="add-circle-outline" size={26} color={ACC} />
                   </TouchableOpacity>
                 </ScrollView>
               </View>
@@ -718,52 +719,50 @@ onPress={() => {
       </Modal>
 
       <Modal
-  visible={Boolean(selectedImageUri)}
-  transparent={false}
-  animationType="fade"
-  statusBarTranslucent
-  onRequestClose={() => setSelectedImageUri(null)}
->
-  <View
-    style={{
-      flex: 1,
-      backgroundColor: "#000000",
-      justifyContent: "center",
-      alignItems: "center",
-    }}
-  >
-    {selectedImageUri && (
-      <Image
-        source={{ uri: selectedImageUri }}
-        style={{
-          width: "100%",
-          height: "100%",
-        }}
-        resizeMode="contain"
-      />
-    )}
+        visible={Boolean(selectedImageUri)}
+        transparent={false}
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setSelectedImageUri(null)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "#000000",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          {selectedImageUri && (
+            <Image
+              source={{ uri: selectedImageUri }}
+              style={{
+                width: "100%",
+                height: "100%",
+              }}
+              resizeMode="contain"
+            />
+          )}
 
-    <TouchableOpacity
-      style={{
-        position: "absolute",
-        top: 50,
-        right: 20,
-        width: 42,
-        height: 42,
-        borderRadius: 21,
-        backgroundColor: "rgba(0, 0, 0, 0.65)",
-        justifyContent: "center",
-        alignItems: "center",
-      }}
-      onPress={() => setSelectedImageUri(null)}
-      activeOpacity={0.85}
-    >
-      <Ionicons name="close" size={28} color="#ffffff" />
-    </TouchableOpacity>
-  </View>
-</Modal>
-
-
+          <TouchableOpacity
+            style={{
+              position: "absolute",
+              top: 50,
+              right: 20,
+              width: 42,
+              height: 42,
+              borderRadius: 21,
+              backgroundColor: "rgba(0, 0, 0, 0.65)",
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+            onPress={() => setSelectedImageUri(null)}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="close" size={28} color="#ffffff" />
+          </TouchableOpacity>
+        </View>
+      </Modal>
 
       <Modal
         visible={addTypeModalOpen}
@@ -785,7 +784,9 @@ onPress={() => {
             <TouchableWithoutFeedback onPress={() => {}}>
               <View style={styles.addTypeModalCard}>
                 <View style={styles.vehicleSelectHeader}>
-                  <Text style={styles.vehicleSelectTitle}>Add asset type</Text>
+                  <Text style={styles.vehicleSelectTitle}>
+                    {t("asset.addAssetType")}
+                  </Text>
 
                   <TouchableOpacity
                     onPress={() => {
@@ -800,10 +801,10 @@ onPress={() => {
                 </View>
 
                 <View style={{ padding: 14 }}>
-                  <Text style={styles.fieldLabel}>Asset type</Text>
+                  <Text style={styles.fieldLabel}>{t("asset.assetType")}</Text>
 
                   <TextInput
-                    placeholder="e.g. Sofa, Chair, TV"
+                    placeholder={t("asset.assetTypeExample")}
                     placeholderTextColor="#767B91"
                     value={newSubAssetTypeText}
                     onChangeText={setNewSubAssetTypeText}
@@ -833,7 +834,9 @@ onPress={() => {
                       }}
                       activeOpacity={0.85}
                     >
-                      <Text style={styles.secondaryText}>Cancel</Text>
+                      <Text style={styles.secondaryText}>
+                        {t("common.cancel")}
+                      </Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -841,7 +844,7 @@ onPress={() => {
                       onPress={saveNewSubAssetType}
                       activeOpacity={0.85}
                     >
-                      <Text style={styles.primaryText}>Add</Text>
+                      <Text style={styles.primaryText}> {t("common.add")}</Text>
                     </TouchableOpacity>
                   </View>
                 </View>

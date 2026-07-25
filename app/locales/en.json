@@ -157,13 +157,35 @@
   "common": {
     "error": "Error",
     "validation": "Validation",
+     "choose": "Choose",
     "cancel": "Cancel",
+    "add": "Add",
     "confirm": "Confirm",
     "remove": "Remove",
     "yes": "Yes",
-    "no": "No"
+    "no": "No",
+    "other": "Other",
+    "noResultsFound": "No results found"
   },
-  "asset": {
+
+
+
+ "conditions": {
+    "condition": {
+      "new": "New",
+      "excellent": "Excellent",
+      "good": "Good",
+      "veryGood": "Very Good",
+      "acceptable": "Acceptable",
+      "poor": "Poor",
+      "scrape": "Scrape"
+    }
+  },
+
+  "asset": 
+
+  {
+
     "createAsset": "Create Asset",
     "editAsset": "Edit Asset",
     "stepOf": "Step {{step}} of {{total}}",
@@ -183,9 +205,26 @@
     "conditionUsed": "Used",
     "conditionDamaged": "Damaged",
     "assetType": "Asset Type",
+    "quantity": "Quantity",
+    "assetPhotos": "Asset photos {{count}}",
+    "editAssetType": "Edit asset type",
+    "carPlate": "Car Plate",
+    "carDetails": "Car Details",
+    "odometer": "Odometer",
+    "vehiclePhotos": "Vehicle photos {{count}}",
+    "addVehicleDetails": "Add vehicle details",
+    "chooseBrandFirst": "Choose brand first",
+    "year": "Year",
+    "searchBrand": "Search brand",
+    "searchModel": "Search model",
+    "trySearchingEnglishArabic": "Try searching in English or Arabic",
+    "otherPhotos": "Other Photos",
+    "addAssetType": "Add asset type",
+    "assetTypeExample": "e.g. Sofa, Chair, TV",
     "typeOther": "Other",
     "typeVehicle": "Vehicle",
     "brand": "Brand",
+    "details":"Details",
     "model": "Model",
     "manufactureYear": "Manufacture Year",
     "kilometersDriven": "KMS Driven / Hours Used",
@@ -197,6 +236,23 @@
     "markAsDone": "Mark as Done",
     "voiceNotesAdded": "{{count}} voice note added",
     "voiceNotesAdded_plural": "{{count}} voice notes added",
+     "processingPhotos": "Processing photos...",
+    "saving": "Saving...",
+    "saveAndNext": "Save & Next",
+    "saveAndNewAsset": "Save & New Asset",
+    "optimizing":" Optimizing photos...",
+    "addACondition":" Add a Condition",
+    "chooseCondition":"Choose a Condition",
+    "hideDetails": "Hide details",
+    "addAssetDetails": "Add asset details",
+    "noSubAssetTypes": "No sub asset types yet",
+    "enterAssetType":"Please enter asset type",
+    "assetTypeUpdated": "Asset type updated",
+    "failedToUpdateAssetType": "Failed to update asset type",
+     "typeNotesHere": "Type notes here...",
+        "recording": "Recording...",
+    "addVoice": "Add voice",
+    "playYourVoiceNote": "Play your voice note",
     "saved": "saved",
     "back": "Back",
     "next": "Next",
