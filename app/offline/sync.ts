@@ -141,50 +141,121 @@ async function processQueueItem(
     switch (item.type) {
       case "createProject": {
         const result = await projectApi.create(item.payload as any);
-        await patchPendingProjectRefs(item.id, result.project.id, pendingItems);
+
+        await patchPendingProjectRefs(
+          item.id,
+          result.project.id,
+          pendingItems
+        );
+
         break;
       }
 
       case "createFolder": {
-        const result = await projectContentApi.createFolder(item.payload as any);
-        await patchPendingFolderRefs(item.id, result.folder.id, pendingItems);
+        const result = await projectContentApi.createFolder(
+          item.payload as any
+        );
+
+        await patchPendingFolderRefs(
+          item.id,
+          result.folder.id,
+          pendingItems
+        );
+
         break;
       }
 
       case "createAsset": {
-        await projectContentApi.createAsset(item.payload as any);
+        await projectContentApi.createAsset(
+          item.payload as any
+        );
+
         await deleteOfflineMediaFiles(item.payload);
+
         break;
       }
 
       case "updateAsset": {
-        await projectContentApi.updateAsset(item.payload as any);
+        await projectContentApi.updateAsset(
+          item.payload as any
+        );
+
         await deleteOfflineMediaFiles(item.payload);
+
+        break;
+      }
+
+      case "deleteAsset": {
+        const assetId =
+          item.payload?.assetId ??
+          item.payload?.id;
+
+        if (!assetId) {
+          throw new Error(
+            `Missing assetId for deleteAsset queue item ${item.id}`
+          );
+        }
+
+        try {
+          await projectContentApi.deleteAsset(
+            assetId
+          );
+        } catch (error: any) {
+          const status =
+            error?.response?.status ??
+            error?.status;
+
+          /*
+           * If the server says the asset does not exist,
+           * the desired delete result is already achieved.
+           */
+          if (status !== 404) {
+            throw error;
+          }
+
+          console.log(
+            `Asset ${assetId} was already deleted on the server.`
+          );
+        }
+
         break;
       }
 
       case "renameSubAssetType": {
         await projectContentApi.renameProjectSubAssetType({
           projectId: item.payload.projectId,
-          oldSubAssetType: item.payload.oldSubAssetType,
-          newSubAssetType: item.payload.newSubAssetType,
+          oldSubAssetType:
+            item.payload.oldSubAssetType,
+          newSubAssetType:
+            item.payload.newSubAssetType,
           parent: item.payload.parent ?? null,
         });
+
         break;
       }
 
       default:
-        console.warn("Unknown action type:", item.type);
+        console.warn(
+          "Unknown action type:",
+          item.type
+        );
+
         return false;
     }
 
     await updateStatus(item.id, "synced");
     await deletePending(item.id);
 
-await markUploadedProjectNeedsDownload(item.projectId);
+    await markUploadedProjectNeedsDownload(
+      item.projectId
+    );
+
     return true;
   } catch (error) {
-    console.error(`Sync failed for ${item.id}:`, error);
+    console.error(
+      `Sync failed for ${item.id}:`,
+      error
+    );
 
     if ((item.retryCount ?? 0) < 3) {
       await updateStatus(
@@ -194,57 +265,17 @@ await markUploadedProjectNeedsDownload(item.projectId);
         Date.now()
       );
     } else {
-      await updateStatus(item.id, "failed", item.retryCount ?? 3, Date.now());
+      await updateStatus(
+        item.id,
+        "failed",
+        item.retryCount ?? 3,
+        Date.now()
+      );
     }
 
     return false;
   }
 }
-// export async function syncQueue(): Promise<{
-//   synced: number;
-//   failed: number;
-//   pending: number;
-// }> {
-//   if (isSyncing) return { synced: 0, failed: 0, pending: 0 };
-
-//   const net = await NetInfo.fetch();
-//   const isOnline = !!net.isConnected && !!net.isInternetReachable;
-//   if (!isOnline) return { synced: 0, failed: 0, pending: 0 };
-
-//   const canSync = await ensureValidSessionForSync();
-//   if (!canSync) {
-//     return { synced: 0, failed: 0, pending: 0 };
-//   }
-
-//   isSyncing = true;
-//   console.log("🛜 Starting sync...");
-
-//   try {
-//     const pending = await getPending("pending");
-//     let synced = 0;
-//     let failed = 0;
-
-//     for (const item of pending) {
-//       const success = await processQueueItem(item, pending);
-//       if (success) synced++;
-//       else failed++;
-
-//       await new Promise((resolve) => setTimeout(resolve, 400));
-//     }
-
-//     if (synced > 0) {
-//       console.log(`Sync Complete: ${synced} item(s) synced.`);
-//     }
-
-//     return {
-//       synced,
-//       failed,
-//       pending: Math.max(0, pending.length - synced - failed),
-//     };
-//   } finally {
-//     isSyncing = false;
-//   }
-// }
 
 
 
@@ -254,17 +285,6 @@ export async function syncQueue(): Promise<{
   pending: number;
 }> {
   if (isSyncing) {
-    return {
-      synced: 0,
-      failed: 0,
-      pending: 0,
-    };
-  }
-
-  // Hard stop when user manually selected offline mode.
-  if (isManualOfflineMode()) {
-    console.log("Sync skipped: manual offline mode is enabled.");
-
     const pendingItems = await getPending("pending");
 
     return {
@@ -274,47 +294,100 @@ export async function syncQueue(): Promise<{
     };
   }
 
-  const net = await NetInfo.fetch();
-
-  const hasInternet =
-    net.isConnected === true &&
-    net.isInternetReachable !== false;
-
-  if (!hasInternet) {
-    const pendingItems = await getPending("pending");
-
-    return {
-      synced: 0,
-      failed: 0,
-      pending: pendingItems.length,
-    };
-  }
-
-  const canSync = await ensureValidSessionForSync();
-
-  if (!canSync) {
-    const pendingItems = await getPending("pending");
-
-    return {
-      synced: 0,
-      failed: 0,
-      pending: pendingItems.length,
-    };
-  }
-
+  /*
+   * Lock immediately.
+   *
+   * This must happen before NetInfo.fetch(),
+   * session validation, getPending(), or any other await.
+   */
   isSyncing = true;
 
-  console.log("Starting sync...");
-
   try {
-    const pending = await getPending("pending");
+    if (isManualOfflineMode()) {
+      console.log(
+        "Sync skipped: manual offline mode is enabled.",
+      );
+
+      const pendingItems =
+        await getPending("pending");
+
+      return {
+        synced: 0,
+        failed: 0,
+        pending: pendingItems.length,
+      };
+    }
+
+    const net = await NetInfo.fetch();
+
+    const hasInternet =
+      net.isConnected === true &&
+      net.isInternetReachable !== false;
+
+    if (!hasInternet) {
+      const pendingItems =
+        await getPending("pending");
+
+      return {
+        synced: 0,
+        failed: 0,
+        pending: pendingItems.length,
+      };
+    }
+
+    /*
+     * Check manual offline mode again because
+     * NetInfo.fetch() is asynchronous.
+     */
+    if (isManualOfflineMode()) {
+      const pendingItems =
+        await getPending("pending");
+
+      return {
+        synced: 0,
+        failed: 0,
+        pending: pendingItems.length,
+      };
+    }
+
+    const canSync =
+      await ensureValidSessionForSync();
+
+    if (!canSync) {
+      const pendingItems =
+        await getPending("pending");
+
+      return {
+        synced: 0,
+        failed: 0,
+        pending: pendingItems.length,
+      };
+    }
+
+    /*
+     * Check again because session validation
+     * is also asynchronous.
+     */
+    if (isManualOfflineMode()) {
+      const pendingItems =
+        await getPending("pending");
+
+      return {
+        synced: 0,
+        failed: 0,
+        pending: pendingItems.length,
+      };
+    }
+
+    console.log("Starting sync...");
+
+    const pending =
+      await getPending("pending");
 
     let synced = 0;
     let failed = 0;
 
     for (const item of pending) {
-      // Stop immediately if the user toggles offline
-      // while synchronization is already running.
       if (isManualOfflineMode()) {
         console.log(
           "Sync stopped: manual offline mode was enabled.",
@@ -322,11 +395,13 @@ export async function syncQueue(): Promise<{
         break;
       }
 
-      const currentNetwork = await NetInfo.fetch();
+      const currentNetwork =
+        await NetInfo.fetch();
 
       const stillHasInternet =
         currentNetwork.isConnected === true &&
-        currentNetwork.isInternetReachable !== false;
+        currentNetwork.isInternetReachable !==
+          false;
 
       if (!stillHasInternet) {
         console.log(
@@ -335,10 +410,19 @@ export async function syncQueue(): Promise<{
         break;
       }
 
-      const success = await processQueueItem(
-        item,
-        pending,
-      );
+      /*
+       * Check once more after NetInfo because
+       * the user may toggle Offline during it.
+       */
+      if (isManualOfflineMode()) {
+        console.log(
+          "Sync stopped: manual offline mode was enabled.",
+        );
+        break;
+      }
+
+      const success =
+        await processQueueItem(item, pending);
 
       if (success) {
         synced++;
@@ -351,9 +435,8 @@ export async function syncQueue(): Promise<{
       );
     }
 
-    const remainingPending = await getPending(
-      "pending",
-    );
+    const remainingPending =
+      await getPending("pending");
 
     if (synced > 0) {
       console.log(
@@ -367,9 +450,14 @@ export async function syncQueue(): Promise<{
       pending: remainingPending.length,
     };
   } finally {
+    /*
+     * Always unlock, including early returns
+     * and errors.
+     */
     isSyncing = false;
   }
 }
+
 let unsubscribeSyncListener: (() => void) | null = null;
 
 export function startSyncListener() {

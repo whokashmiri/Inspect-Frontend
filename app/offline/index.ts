@@ -47,6 +47,7 @@ export {
   getProjectsNeedingSync,
   deleteOfflineFoldersByIds,
   deleteOfflineAssetsByIds,
+   deletePendingCreateAssetByLocalId,
 } from "./storage";
 
 

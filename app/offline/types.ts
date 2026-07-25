@@ -6,7 +6,8 @@ export type OfflineAction =
   | "createFolder"
   | "createAsset"
   | "updateAsset"
-  | "renameSubAssetType";
+  | "renameSubAssetType"
+  | "deleteAsset";
 
 export interface PendingItem {
   id: string;
@@ -69,7 +70,7 @@ export type AppRole =
 export interface CachedUser {
   id: string;
   username: string;
-  companyName: string | null;
+  companyName?: string | null;
   role: AppRole | string;
   isBlocked?: boolean;
   [key: string]: any;

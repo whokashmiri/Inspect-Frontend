@@ -1290,3 +1290,29 @@ export async function deleteOfflineAssetsByIds(assetIds: string[]): Promise<void
     }
   });
 }
+
+
+export async function deletePendingCreateAssetByLocalId(
+  localAssetId: string,
+): Promise<void> {
+  const pendingItems =
+    await getPending("pending");
+
+  for (const item of pendingItems) {
+    if (item.type !== "createAsset") {
+      continue;
+    }
+
+    const payload = item.payload || {};
+
+    const matches =
+      // item.localId === localAssetId ||
+      payload.localId === localAssetId ||
+      payload.clientMutationId ===
+        localAssetId;
+
+    if (matches) {
+      await deletePending(item.id);
+    }
+  }
+}

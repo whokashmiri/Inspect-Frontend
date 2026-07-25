@@ -59,6 +59,8 @@ import {
   getOfflineConditions,
   getOfflineSubAssetTypes,
   renameOfflineSubAssetType,
+  deleteOfflineAssetsByIds,
+  deletePendingCreateAssetByLocalId,
 } from "../offline";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 
@@ -314,14 +316,19 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
   const folderInputRef = useRef<TextInput>(null);
   const isOnline = useIsOnline();
-  const { manualOffline, setManualOffline } = useConnectivity();
+  const {
+    manualOffline,
+    setManualOffline,
+    syncNow: connectivitySyncNow,
+    isSyncing: connectivityIsSyncing,
+  } = useConnectivity();
 
   const autoEnterRootAttemptedRef = useRef(false);
   const adminRootFolderIdRef = useRef<string | null>(null);
   const downloadCheckCompletedRef = useRef(false);
 
   const assetWizardInputRef = useRef<TextInput>(null);
-  const autoSyncLockRef = useRef(false);
+  // const autoSyncLockRef = useRef(false);
 
   const quantitySaveTimersRef = useRef<
     Record<string, ReturnType<typeof setTimeout>>
@@ -948,14 +955,29 @@ export default function FolderAndAssetScreen({ route }: Props) {
     isOnline,
   ]);
 
+  // const onRefresh = async () => {
+  //   setRefreshing(true);
+  //   if (isOnline) {
+  //     setIsSyncing(true);
+  //     await syncQueue();
+  //     setIsSyncing(false);
+  //   }
+  //   await loadContents(currentFolderId);
+  // };
+
   const onRefresh = async () => {
     setRefreshing(true);
-    if (isOnline) {
-      setIsSyncing(true);
-      await syncQueue();
-      setIsSyncing(false);
+
+    try {
+      if (isOnline === true) {
+        await handleSyncNow(true);
+      }
+
+      await loadContents(currentFolderId);
+      await refreshPendingCount();
+    } finally {
+      setRefreshing(false);
     }
-    await loadContents(currentFolderId);
   };
 
   const askWorkMode = useCallback(async (): Promise<boolean> => {
@@ -989,77 +1011,145 @@ export default function FolderAndAssetScreen({ route }: Props) {
     });
   }, [manualOffline, setManualOffline]);
 
+  // const handleSyncNow = useCallback(
+  //   async (silent = false) => {
+  //     if (isOnline !== true) {
+  //       if (!silent) {
+  //         showSnackbar(t("folderAssetScreen.sync.offlineMessage"), "info");
+  //       }
+  //       return;
+  //     }
+
+  //     const latestPendingCount = await getPendingCount();
+  //     setPendingCount(latestPendingCount);
+
+  //     if (latestPendingCount <= 0) {
+  //       if (!silent) {
+  //         showSnackbar(t("folderAssetScreen.sync.allSyncedMessage"), "success");
+  //       }
+  //       return;
+  //     }
+
+  //     setIsSyncing(true);
+
+  //     try {
+  //       await syncQueue();
+
+  //       await refreshPendingCount();
+
+  //       setUnsyncedAssetIds([]);
+
+  //       // await loadContents(currentFolderId);
+  //     } finally {
+  //       setIsSyncing(false);
+  //     }
+  //   },
+  //   [isOnline, currentFolderId, refreshPendingCount, loadContents, t],
+  // );
+
   const handleSyncNow = useCallback(
     async (silent = false) => {
       if (isOnline !== true) {
         if (!silent) {
           showSnackbar(t("folderAssetScreen.sync.offlineMessage"), "info");
         }
+
+        return;
+      }
+
+      if (isSyncing || connectivityIsSyncing) {
         return;
       }
 
       const latestPendingCount = await getPendingCount();
+
       setPendingCount(latestPendingCount);
 
       if (latestPendingCount <= 0) {
         if (!silent) {
           showSnackbar(t("folderAssetScreen.sync.allSyncedMessage"), "success");
         }
+
         return;
       }
 
       setIsSyncing(true);
 
       try {
-        await syncQueue();
-
+        await connectivitySyncNow();
         await refreshPendingCount();
 
         setUnsyncedAssetIds([]);
-
-        // await loadContents(currentFolderId);
+      } catch (error: any) {
+        if (!silent) {
+          showSnackbar(error?.message || "Synchronization failed", "error");
+        }
       } finally {
         setIsSyncing(false);
       }
     },
-    [isOnline, currentFolderId, refreshPendingCount, loadContents, t],
+    [
+      isOnline,
+      isSyncing,
+      connectivityIsSyncing,
+      connectivitySyncNow,
+      refreshPendingCount,
+      t,
+    ],
   );
   // Auto-sync whenever we come online and there are pending items
+  // useEffect(() => {
+  //   const runAutoSync = async () => {
+  //     if (isOnline !== true) return;
+  //     if (isSyncing) return;
+  //     if (autoSyncLockRef.current) return;
+
+  //     const latestPendingCount = await getPendingCount();
+  //     setPendingCount(latestPendingCount);
+
+  //     if (latestPendingCount <= 0) return;
+
+  //     autoSyncLockRef.current = true;
+
+  //     try {
+  //       await handleSyncNow(true);
+  //     } finally {
+  //       autoSyncLockRef.current = false;
+  //     }
+  //   };
+
+  //   runAutoSync();
+  // }, [isOnline, pendingCount, isSyncing, handleSyncNow]);
+
+  // useEffect(() => {
+  //   const interval = setInterval(async () => {
+  //     const count = await getPendingCount();
+  //     setPendingCount(count);
+
+  //     if (isOnline === true && count > 0 && !isSyncing) {
+  //       handleSyncNow(true);
+  //     }
+  //   }, 5000);
+
+  //   return () => clearInterval(interval);
+  // }, [isOnline, isSyncing, handleSyncNow]);
+
   useEffect(() => {
-    const runAutoSync = async () => {
-      if (isOnline !== true) return;
-      if (isSyncing) return;
-      if (autoSyncLockRef.current) return;
-
-      const latestPendingCount = await getPendingCount();
-      setPendingCount(latestPendingCount);
-
-      if (latestPendingCount <= 0) return;
-
-      autoSyncLockRef.current = true;
-
-      try {
-        await handleSyncNow(true);
-      } finally {
-        autoSyncLockRef.current = false;
-      }
-    };
-
-    runAutoSync();
-  }, [isOnline, pendingCount, isSyncing, handleSyncNow]);
-
-  useEffect(() => {
-    const interval = setInterval(async () => {
+    const refreshCount = async () => {
       const count = await getPendingCount();
       setPendingCount(count);
+    };
 
-      if (isOnline === true && count > 0 && !isSyncing) {
-        handleSyncNow(true);
-      }
+    void refreshCount();
+
+    const interval = setInterval(() => {
+      void refreshCount();
     }, 5000);
 
-    return () => clearInterval(interval);
-  }, [isOnline, isSyncing, handleSyncNow]);
+    return () => {
+      clearInterval(interval);
+    };
+  }, []);
 
   const openFolder = async (folder: FolderItem) => {
     if (navigatingFolderId) return;
@@ -1879,19 +1969,115 @@ export default function FolderAndAssetScreen({ route }: Props) {
       "Delete asset",
       `Are you sure you want to delete "${asset.name}"?`,
       [
-        { text: "Cancel", style: "cancel" },
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
         {
           text: "Delete",
           style: "destructive",
           onPress: async () => {
+            /*
+             * Keep the original asset so we can restore it
+             * if the delete operation fails.
+             */
+            const deletedAsset = asset;
+
             try {
               setDeletingAssetId(asset.id);
 
-              await projectContentApi.deleteAsset(asset.id);
+              /*
+               * Remove immediately from the current UI.
+               */
+              setAssets((prev) => prev.filter((item) => item.id !== asset.id));
+
+              /*
+               * Remove it from advanced search results too.
+               */
+              setAdvancedSearchResults((prev) =>
+                prev.filter((item) => item.id !== asset.id),
+              );
+
+              /*
+               * Remove it from the local SQLite cache.
+               * This prevents loadContents() from showing it again.
+               */
+              await deleteOfflineAssetsByIds([asset.id]);
+
+              /*
+               * Assets with local IDs were created offline
+               * and might not exist on the server yet.
+               */
+              const isLocallyCreatedAsset =
+                asset.id.startsWith("offline_") ||
+                asset.id.startsWith("asset_");
+
+              if (isLocallyCreatedAsset) {
+                await deletePendingCreateAssetByLocalId(asset.id);
+
+                await refreshPendingCount();
+
+                showSnackbar("Offline asset deleted successfully", "success");
+
+                return;
+              }
+
+              const payload = {
+                assetId: asset.id,
+                projectId,
+              };
+
+              const result = await safeApiCall(
+                () => projectContentApi.deleteAsset(asset.id),
+                {
+                  assetId: asset.id,
+                  projectId,
+                },
+                {
+                  type: "deleteAsset",
+                  projectId,
+                },
+              );
+
+              await refreshPendingCount();
+
+              if ("offline" in result) {
+                setUnsyncedAssetIds((prev) =>
+                  prev.filter((id) => id !== asset.id),
+                );
+
+                showSnackbar(
+                  "Asset deleted offline. It will sync when you switch online.",
+                  "info",
+                );
+
+                return;
+              }
 
               showSnackbar("Asset deleted successfully", "success");
-              await loadContents(currentFolderId, { showSkeleton: true });
             } catch (error: any) {
+              /*
+               * Restore the UI item if deleting or queueing failed.
+               */
+              setAssets((prev) => {
+                const alreadyExists = prev.some(
+                  (item) => item.id === deletedAsset.id,
+                );
+
+                if (alreadyExists) {
+                  return prev;
+                }
+
+                return [deletedAsset, ...prev];
+              });
+
+              /*
+               * Restore the local cache too.
+               */
+              if (downloadedOffline) {
+                await upsertOfflineAsset(deletedAsset);
+              }
+
               showSnackbar(error?.message || "Could not delete asset", "error");
             } finally {
               setDeletingAssetId(null);
@@ -1901,6 +2087,36 @@ export default function FolderAndAssetScreen({ route }: Props) {
       ],
     );
   };
+
+  // const handleDeleteAsset = async (asset: AssetItem) => {
+  //   closeAssetMenu();
+
+  //   Alert.alert(
+  //     "Delete asset",
+  //     `Are you sure you want to delete "${asset.name}"?`,
+  //     [
+  //       { text: "Cancel", style: "cancel" },
+  //       {
+  //         text: "Delete",
+  //         style: "destructive",
+  //         onPress: async () => {
+  //           try {
+  //             setDeletingAssetId(asset.id);
+
+  //             await projectContentApi.deleteAsset(asset.id);
+
+  //             showSnackbar("Asset deleted successfully", "success");
+  //             await loadContents(currentFolderId, { showSkeleton: true });
+  //           } catch (error: any) {
+  //             showSnackbar(error?.message || "Could not delete asset", "error");
+  //           } finally {
+  //             setDeletingAssetId(null);
+  //           }
+  //         },
+  //       },
+  //     ],
+  //   );
+  // };
 
   const isAssetUploading = (asset: AssetItem) => {
     return uploadingAssetIds.includes(asset.id);
@@ -2241,9 +2457,9 @@ export default function FolderAndAssetScreen({ route }: Props) {
             <TouchableOpacity
               onPress={() => handleSyncNow(false)}
               style={styles.syncBtn}
-              disabled={isSyncing}
+              disabled={isSyncing || connectivityIsSyncing}
             >
-              {isSyncing ? (
+              {isSyncing || connectivityIsSyncing ? (
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
                   <ActivityIndicator size="small" color="#ffffff" />
 

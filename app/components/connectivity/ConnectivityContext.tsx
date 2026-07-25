@@ -87,31 +87,20 @@ export function ConnectivityProvider({ children }: PropsWithChildren) {
   }, []);
 
   const syncNow = useCallback(async (): Promise<void> => {
-    if (isManualOfflineMode()) {
-      return;
-    }
-
     if (syncRunningRef.current) {
       return;
     }
 
-    const networkState = await NetInfo.fetch();
-
-    if (!isNetworkUsable(networkState)) {
-      if (mountedRef.current) {
-        setHasInternet(false);
-      }
-
-      return;
-    }
-
-    /*
-     * The user may have switched Offline while NetInfo was running.
-     */
     if (isManualOfflineMode()) {
       return;
     }
 
+    /*
+     * Lock before NetInfo.fetch().
+     *
+     * The old code locked after NetInfo.fetch(),
+     * allowing multiple sync calls to start together.
+     */
     syncRunningRef.current = true;
 
     if (mountedRef.current) {
@@ -119,10 +108,28 @@ export function ConnectivityProvider({ children }: PropsWithChildren) {
     }
 
     try {
+      const networkState = await NetInfo.fetch();
+
+      if (!isNetworkUsable(networkState)) {
+        if (mountedRef.current) {
+          setHasInternet(false);
+        }
+
+        return;
+      }
+
+      /*
+       * The user may have switched Offline
+       * while NetInfo.fetch() was running.
+       */
+      if (isManualOfflineMode()) {
+        return;
+      }
+
       await syncQueue();
       await refreshPendingCount();
     } catch (error) {
-      console.error("Manual synchronization failed:", error);
+      console.error("Synchronization failed:", error);
     } finally {
       syncRunningRef.current = false;
 
