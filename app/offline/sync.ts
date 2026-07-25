@@ -21,6 +21,7 @@ import {
   cacheAuthenticatedSession,
   getCachedCompanies,
 } from "./authStorage";
+import { isManualOfflineMode } from "./connectivityMode";
 
 let isSyncing = false;
 
@@ -199,52 +200,176 @@ await markUploadedProjectNeedsDownload(item.projectId);
     return false;
   }
 }
+// export async function syncQueue(): Promise<{
+//   synced: number;
+//   failed: number;
+//   pending: number;
+// }> {
+//   if (isSyncing) return { synced: 0, failed: 0, pending: 0 };
+
+//   const net = await NetInfo.fetch();
+//   const isOnline = !!net.isConnected && !!net.isInternetReachable;
+//   if (!isOnline) return { synced: 0, failed: 0, pending: 0 };
+
+//   const canSync = await ensureValidSessionForSync();
+//   if (!canSync) {
+//     return { synced: 0, failed: 0, pending: 0 };
+//   }
+
+//   isSyncing = true;
+//   console.log("🛜 Starting sync...");
+
+//   try {
+//     const pending = await getPending("pending");
+//     let synced = 0;
+//     let failed = 0;
+
+//     for (const item of pending) {
+//       const success = await processQueueItem(item, pending);
+//       if (success) synced++;
+//       else failed++;
+
+//       await new Promise((resolve) => setTimeout(resolve, 400));
+//     }
+
+//     if (synced > 0) {
+//       console.log(`Sync Complete: ${synced} item(s) synced.`);
+//     }
+
+//     return {
+//       synced,
+//       failed,
+//       pending: Math.max(0, pending.length - synced - failed),
+//     };
+//   } finally {
+//     isSyncing = false;
+//   }
+// }
+
+
+
 export async function syncQueue(): Promise<{
   synced: number;
   failed: number;
   pending: number;
 }> {
-  if (isSyncing) return { synced: 0, failed: 0, pending: 0 };
+  if (isSyncing) {
+    return {
+      synced: 0,
+      failed: 0,
+      pending: 0,
+    };
+  }
+
+  // Hard stop when user manually selected offline mode.
+  if (isManualOfflineMode()) {
+    console.log("Sync skipped: manual offline mode is enabled.");
+
+    const pendingItems = await getPending("pending");
+
+    return {
+      synced: 0,
+      failed: 0,
+      pending: pendingItems.length,
+    };
+  }
 
   const net = await NetInfo.fetch();
-  const isOnline = !!net.isConnected && !!net.isInternetReachable;
-  if (!isOnline) return { synced: 0, failed: 0, pending: 0 };
+
+  const hasInternet =
+    net.isConnected === true &&
+    net.isInternetReachable !== false;
+
+  if (!hasInternet) {
+    const pendingItems = await getPending("pending");
+
+    return {
+      synced: 0,
+      failed: 0,
+      pending: pendingItems.length,
+    };
+  }
 
   const canSync = await ensureValidSessionForSync();
+
   if (!canSync) {
-    return { synced: 0, failed: 0, pending: 0 };
+    const pendingItems = await getPending("pending");
+
+    return {
+      synced: 0,
+      failed: 0,
+      pending: pendingItems.length,
+    };
   }
 
   isSyncing = true;
-  console.log("🛜 Starting sync...");
+
+  console.log("Starting sync...");
 
   try {
     const pending = await getPending("pending");
+
     let synced = 0;
     let failed = 0;
 
     for (const item of pending) {
-      const success = await processQueueItem(item, pending);
-      if (success) synced++;
-      else failed++;
+      // Stop immediately if the user toggles offline
+      // while synchronization is already running.
+      if (isManualOfflineMode()) {
+        console.log(
+          "Sync stopped: manual offline mode was enabled.",
+        );
+        break;
+      }
 
-      await new Promise((resolve) => setTimeout(resolve, 400));
+      const currentNetwork = await NetInfo.fetch();
+
+      const stillHasInternet =
+        currentNetwork.isConnected === true &&
+        currentNetwork.isInternetReachable !== false;
+
+      if (!stillHasInternet) {
+        console.log(
+          "Sync stopped: internet connection was lost.",
+        );
+        break;
+      }
+
+      const success = await processQueueItem(
+        item,
+        pending,
+      );
+
+      if (success) {
+        synced++;
+      } else {
+        failed++;
+      }
+
+      await new Promise((resolve) =>
+        setTimeout(resolve, 400),
+      );
     }
 
+    const remainingPending = await getPending(
+      "pending",
+    );
+
     if (synced > 0) {
-      console.log(`Sync Complete: ${synced} item(s) synced.`);
+      console.log(
+        `Sync complete: ${synced} item(s) synced.`,
+      );
     }
 
     return {
       synced,
       failed,
-      pending: Math.max(0, pending.length - synced - failed),
+      pending: remainingPending.length,
     };
   } finally {
     isSyncing = false;
   }
 }
-
 let unsubscribeSyncListener: (() => void) | null = null;
 
 export function startSyncListener() {
