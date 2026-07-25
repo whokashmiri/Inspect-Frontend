@@ -155,6 +155,10 @@ export default function FolderAndAssetScreen({ route }: Props) {
   );
   const [projectConditions, setProjectConditions] = useState<string[]>([]);
 
+  const [workModeSnackbarVisible, setWorkModeSnackbarVisible] = useState(false);
+
+  const workModeResolverRef = useRef<((proceed: boolean) => void) | null>(null);
+
   const closeMediaViewer = () => {
     setMediaViewerVisible(false);
 
@@ -321,6 +325,8 @@ export default function FolderAndAssetScreen({ route }: Props) {
     setManualOffline,
     syncNow: connectivitySyncNow,
     isSyncing: connectivityIsSyncing,
+    getProjectWorkMode,
+    setProjectWorkMode,
   } = useConnectivity();
 
   const autoEnterRootAttemptedRef = useRef(false);
@@ -486,6 +492,38 @@ export default function FolderAndAssetScreen({ route }: Props) {
       Object.values(quantitySaveTimersRef.current).forEach(clearTimeout);
     };
   }, []);
+
+  const closeWorkModeSnackbar = (proceed: boolean) => {
+    setWorkModeSnackbarVisible(false);
+
+    const resolver = workModeResolverRef.current;
+
+    workModeResolverRef.current = null;
+
+    resolver?.(proceed);
+  };
+
+  const selectProjectWorkMode = async (mode: "online" | "offline") => {
+    try {
+      await setProjectWorkMode(projectId, mode);
+
+      showSnackbar(
+        mode === "offline"
+          ? "Offline mode selected for this project."
+          : "Online mode selected for this project.",
+        "info",
+      );
+
+      closeWorkModeSnackbar(true);
+    } catch (error: any) {
+      showSnackbar(
+        error?.message || "Could not save the project work mode.",
+        "error",
+      );
+
+      closeWorkModeSnackbar(false);
+    }
+  };
 
   const showSnackbar = (
     message: string,
@@ -955,16 +993,6 @@ export default function FolderAndAssetScreen({ route }: Props) {
     isOnline,
   ]);
 
-  // const onRefresh = async () => {
-  //   setRefreshing(true);
-  //   if (isOnline) {
-  //     setIsSyncing(true);
-  //     await syncQueue();
-  //     setIsSyncing(false);
-  //   }
-  //   await loadContents(currentFolderId);
-  // };
-
   const onRefresh = async () => {
     setRefreshing(true);
 
@@ -981,71 +1009,37 @@ export default function FolderAndAssetScreen({ route }: Props) {
   };
 
   const askWorkMode = useCallback(async (): Promise<boolean> => {
-    // Already offline -> don't ask again
-    if (manualOffline) {
+    /*
+     * Check whether this project already has
+     * a saved online/offline choice.
+     */
+    const existingMode = getProjectWorkMode(projectId);
+
+    if (existingMode) {
+      /*
+       * Keep the selected project mode active.
+       *
+       * We normally do not need to call
+       * setProjectWorkMode here because it was
+       * already applied when selected.
+       */
       return true;
     }
-    return new Promise((resolve) => {
-      Alert.alert(
-        "Work Offline?",
-        "Do you want to continue working offline?\n\nAll changes will be saved locally and synchronized when you switch back online.",
-        [
-          {
-            text: "No",
-            onPress: () => resolve(true),
-          },
-          {
-            text: "Yes",
-            onPress: async () => {
-              await setManualOffline(true);
-              resolve(true);
-            },
-          },
-          {
-            text: "Cancel",
-            style: "cancel",
-            onPress: () => resolve(false),
-          },
-        ],
-      );
+
+    /*
+     * Prevent two save actions from opening
+     * two work-mode prompts.
+     */
+    if (workModeSnackbarVisible) {
+      return false;
+    }
+
+    return new Promise<boolean>((resolve) => {
+      workModeResolverRef.current = resolve;
+
+      setWorkModeSnackbarVisible(true);
     });
-  }, [manualOffline, setManualOffline]);
-
-  // const handleSyncNow = useCallback(
-  //   async (silent = false) => {
-  //     if (isOnline !== true) {
-  //       if (!silent) {
-  //         showSnackbar(t("folderAssetScreen.sync.offlineMessage"), "info");
-  //       }
-  //       return;
-  //     }
-
-  //     const latestPendingCount = await getPendingCount();
-  //     setPendingCount(latestPendingCount);
-
-  //     if (latestPendingCount <= 0) {
-  //       if (!silent) {
-  //         showSnackbar(t("folderAssetScreen.sync.allSyncedMessage"), "success");
-  //       }
-  //       return;
-  //     }
-
-  //     setIsSyncing(true);
-
-  //     try {
-  //       await syncQueue();
-
-  //       await refreshPendingCount();
-
-  //       setUnsyncedAssetIds([]);
-
-  //       // await loadContents(currentFolderId);
-  //     } finally {
-  //       setIsSyncing(false);
-  //     }
-  //   },
-  //   [isOnline, currentFolderId, refreshPendingCount, loadContents, t],
-  // );
+  }, [projectId, getProjectWorkMode, workModeSnackbarVisible]);
 
   const handleSyncNow = useCallback(
     async (silent = false) => {
@@ -1097,42 +1091,6 @@ export default function FolderAndAssetScreen({ route }: Props) {
       t,
     ],
   );
-  // Auto-sync whenever we come online and there are pending items
-  // useEffect(() => {
-  //   const runAutoSync = async () => {
-  //     if (isOnline !== true) return;
-  //     if (isSyncing) return;
-  //     if (autoSyncLockRef.current) return;
-
-  //     const latestPendingCount = await getPendingCount();
-  //     setPendingCount(latestPendingCount);
-
-  //     if (latestPendingCount <= 0) return;
-
-  //     autoSyncLockRef.current = true;
-
-  //     try {
-  //       await handleSyncNow(true);
-  //     } finally {
-  //       autoSyncLockRef.current = false;
-  //     }
-  //   };
-
-  //   runAutoSync();
-  // }, [isOnline, pendingCount, isSyncing, handleSyncNow]);
-
-  // useEffect(() => {
-  //   const interval = setInterval(async () => {
-  //     const count = await getPendingCount();
-  //     setPendingCount(count);
-
-  //     if (isOnline === true && count > 0 && !isSyncing) {
-  //       handleSyncNow(true);
-  //     }
-  //   }, 5000);
-
-  //   return () => clearInterval(interval);
-  // }, [isOnline, isSyncing, handleSyncNow]);
 
   useEffect(() => {
     const refreshCount = async () => {
@@ -2087,36 +2045,6 @@ export default function FolderAndAssetScreen({ route }: Props) {
       ],
     );
   };
-
-  // const handleDeleteAsset = async (asset: AssetItem) => {
-  //   closeAssetMenu();
-
-  //   Alert.alert(
-  //     "Delete asset",
-  //     `Are you sure you want to delete "${asset.name}"?`,
-  //     [
-  //       { text: "Cancel", style: "cancel" },
-  //       {
-  //         text: "Delete",
-  //         style: "destructive",
-  //         onPress: async () => {
-  //           try {
-  //             setDeletingAssetId(asset.id);
-
-  //             await projectContentApi.deleteAsset(asset.id);
-
-  //             showSnackbar("Asset deleted successfully", "success");
-  //             await loadContents(currentFolderId, { showSkeleton: true });
-  //           } catch (error: any) {
-  //             showSnackbar(error?.message || "Could not delete asset", "error");
-  //           } finally {
-  //             setDeletingAssetId(null);
-  //           }
-  //         },
-  //       },
-  //     ],
-  //   );
-  // };
 
   const isAssetUploading = (asset: AssetItem) => {
     return uploadingAssetIds.includes(asset.id);
@@ -3584,6 +3512,69 @@ export default function FolderAndAssetScreen({ route }: Props) {
               </View>
             </View>
           )}
+          <Modal
+            visible={workModeSnackbarVisible}
+            transparent
+            animationType="fade"
+            statusBarTranslucent
+            presentationStyle="overFullScreen"
+            hardwareAccelerated
+            onRequestClose={() => closeWorkModeSnackbar(false)}
+          >
+            <View style={styles.workModeModalOverlay}>
+              <View
+                style={[
+                  styles.workModeSnackbar,
+                  {
+                    marginBottom: Math.max(insets.bottom, 12) + 12,
+                  },
+                ]}
+              >
+                <View style={styles.workModeSnackbarContent}>
+                  <View style={styles.workModeSnackbarTextWrap}>
+                    <Text style={styles.workModeSnackbarTitle}>
+                      Choose work mode
+                    </Text>
+
+                    <Text style={styles.workModeSnackbarMessage}>
+                      Select once for this project. You can change it later
+                      using the header toggle.
+                    </Text>
+                  </View>
+
+                  <View style={styles.workModeSnackbarActions}>
+                    <TouchableOpacity
+                      style={styles.workModeOnlineButton}
+                      onPress={() => {
+                        void selectProjectWorkMode("online");
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.workModeOnlineText}>Online</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.workModeOfflineButton}
+                      onPress={() => {
+                        void selectProjectWorkMode("offline");
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.workModeOfflineText}>Offline</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.workModeCancelButton}
+                      onPress={() => closeWorkModeSnackbar(false)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="close" size={18} color="#ffffff" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            </View>
+          </Modal>
 
           {/* ── Snackbar ── */}
           {snackbar && (
@@ -4421,5 +4412,97 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "bold",
     marginLeft: 4,
+  },
+
+  workModeModalOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.15)",
+    paddingHorizontal: 12,
+  },
+
+  workModeSnackbar: {
+    position: "absolute",
+    left: 12,
+    right: 12,
+    zIndex: 9999,
+    elevation: 20,
+  },
+
+  workModeSnackbarContent: {
+    backgroundColor: "#2A324B",
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.24,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+
+  workModeSnackbarTextWrap: {
+    marginBottom: 12,
+  },
+
+  workModeSnackbarTitle: {
+    color: "#ffffff",
+    fontSize: 15,
+    fontWeight: "700",
+    marginBottom: 3,
+  },
+
+  workModeSnackbarMessage: {
+    color: "#E1E5EE",
+    fontSize: 12,
+    lineHeight: 17,
+  },
+
+  workModeSnackbarActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  workModeOnlineButton: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 38,
+    borderRadius: 10,
+    backgroundColor: "#ffffff",
+  },
+
+  workModeOnlineText: {
+    color: "#2A324B",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+
+  workModeOfflineButton: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 38,
+    borderRadius: 10,
+    backgroundColor: "#F7C59F",
+  },
+
+  workModeOfflineText: {
+    color: "#2A324B",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+
+  workModeCancelButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.12)",
   },
 });

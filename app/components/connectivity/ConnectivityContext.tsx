@@ -2,6 +2,7 @@
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo, { NetInfoState } from "@react-native-community/netinfo";
+
 import React, {
   createContext,
   PropsWithChildren,
@@ -23,30 +24,56 @@ import { getPendingCount, syncQueue } from "../../offline";
 
 const STORAGE_KEY = "manual_offline_mode";
 
+/*
+ * Stores one selected work mode for every project.
+ *
+ * Example:
+ * {
+ *   "project-id-1": "online",
+ *   "project-id-2": "offline"
+ * }
+ */
+const PROJECT_WORK_MODES_KEY = "project_work_modes";
+
+export type ProjectWorkMode = "online" | "offline";
+
+type ProjectWorkModeMap = Record<string, ProjectWorkMode>;
+
 type ConnectivityContextValue = {
   initialized: boolean;
 
-  /**
-   * True when the user manually switched this app offline.
-   */
   manualOffline: boolean;
-
-  /**
-   * True when the phone currently has usable internet.
-   */
   hasInternet: boolean;
-
-  /**
-   * True only when the app may use remote APIs.
-   */
   isOnline: boolean;
 
   isSyncing: boolean;
   pendingCount: number;
 
   setManualOffline: (offline: boolean) => Promise<void>;
+
   refreshPendingCount: () => Promise<number>;
   syncNow: () => Promise<void>;
+
+  /*
+   * Returns the saved choice for a project.
+   * Returns null when the user has not chosen yet.
+   */
+  getProjectWorkMode: (projectId: string) => ProjectWorkMode | null;
+
+  /*
+   * Saves the choice and changes the app's
+   * current online/offline mode.
+   */
+  setProjectWorkMode: (
+    projectId: string,
+    mode: ProjectWorkMode,
+  ) => Promise<void>;
+
+  /*
+   * Optional helper if you later want the app
+   * to ask again for a project.
+   */
+  clearProjectWorkMode: (projectId: string) => Promise<void>;
 };
 
 const ConnectivityContext = createContext<ConnectivityContextValue | null>(
@@ -65,8 +92,20 @@ export function ConnectivityProvider({ children }: PropsWithChildren) {
   );
 
   const [hasInternet, setHasInternet] = useState(false);
+
   const [isSyncing, setIsSyncing] = useState(false);
+
   const [pendingCount, setPendingCount] = useState(0);
+
+  const [projectWorkModes, setProjectWorkModes] = useState<ProjectWorkModeMap>(
+    {},
+  );
+
+  /*
+   * A ref gives us the latest value immediately,
+   * without waiting for a React render.
+   */
+  const projectWorkModesRef = useRef<ProjectWorkModeMap>({});
 
   const syncRunningRef = useRef(false);
   const mountedRef = useRef(true);
@@ -82,6 +121,7 @@ export function ConnectivityProvider({ children }: PropsWithChildren) {
       return count;
     } catch (error) {
       console.warn("Could not read pending count:", error);
+
       return 0;
     }
   }, []);
@@ -96,10 +136,7 @@ export function ConnectivityProvider({ children }: PropsWithChildren) {
     }
 
     /*
-     * Lock before NetInfo.fetch().
-     *
-     * The old code locked after NetInfo.fetch(),
-     * allowing multiple sync calls to start together.
+     * Lock immediately before any await.
      */
     syncRunningRef.current = true;
 
@@ -118,10 +155,6 @@ export function ConnectivityProvider({ children }: PropsWithChildren) {
         return;
       }
 
-      /*
-       * The user may have switched Offline
-       * while NetInfo.fetch() was running.
-       */
       if (isManualOfflineMode()) {
         return;
       }
@@ -142,8 +175,8 @@ export function ConnectivityProvider({ children }: PropsWithChildren) {
   const setManualOffline = useCallback(
     async (offline: boolean): Promise<void> => {
       /*
-       * Change the runtime value immediately. Do this before awaiting
-       * AsyncStorage so API calls are blocked immediately.
+       * Update runtime state immediately so API
+       * calls are blocked without waiting for storage.
        */
       setRuntimeManualOfflineMode(offline);
       setManualOfflineState(offline);
@@ -158,12 +191,90 @@ export function ConnectivityProvider({ children }: PropsWithChildren) {
 
       if (!offline) {
         /*
-         * Switching back Online automatically attempts synchronization.
+         * Returning online starts synchronization.
          */
         await syncNow();
       }
     },
     [refreshPendingCount, syncNow],
+  );
+
+  const getProjectWorkMode = useCallback(
+    (projectId: string): ProjectWorkMode | null => {
+      if (!projectId) {
+        return null;
+      }
+
+      return projectWorkModesRef.current[projectId] ?? null;
+    },
+    [],
+  );
+
+  const setProjectWorkMode = useCallback(
+    async (projectId: string, mode: ProjectWorkMode): Promise<void> => {
+      if (!projectId) {
+        return;
+      }
+
+      const nextModes: ProjectWorkModeMap = {
+        ...projectWorkModesRef.current,
+        [projectId]: mode,
+      };
+
+      /*
+       * Update immediately before awaiting storage.
+       */
+      projectWorkModesRef.current = nextModes;
+
+      if (mountedRef.current) {
+        setProjectWorkModes(nextModes);
+      }
+
+      try {
+        await AsyncStorage.setItem(
+          PROJECT_WORK_MODES_KEY,
+          JSON.stringify(nextModes),
+        );
+      } catch (error) {
+        console.warn("Could not save project work mode:", error);
+      }
+
+      /*
+       * Apply the selected work mode.
+       */
+      await setManualOffline(mode === "offline");
+    },
+    [setManualOffline],
+  );
+
+  const clearProjectWorkMode = useCallback(
+    async (projectId: string): Promise<void> => {
+      if (!projectId) {
+        return;
+      }
+
+      const nextModes = {
+        ...projectWorkModesRef.current,
+      };
+
+      delete nextModes[projectId];
+
+      projectWorkModesRef.current = nextModes;
+
+      if (mountedRef.current) {
+        setProjectWorkModes(nextModes);
+      }
+
+      try {
+        await AsyncStorage.setItem(
+          PROJECT_WORK_MODES_KEY,
+          JSON.stringify(nextModes),
+        );
+      } catch (error) {
+        console.warn("Could not clear project work mode:", error);
+      }
+    },
+    [],
   );
 
   useEffect(() => {
@@ -177,20 +288,50 @@ export function ConnectivityProvider({ children }: PropsWithChildren) {
 
     async function initialize() {
       try {
-        const storedValue = await AsyncStorage.getItem(STORAGE_KEY);
+        const [storedOfflineValue, storedProjectModesValue] = await Promise.all(
+          [
+            AsyncStorage.getItem(STORAGE_KEY),
+            AsyncStorage.getItem(PROJECT_WORK_MODES_KEY),
+          ],
+        );
 
-        const storedOffline = storedValue === "true";
+        const storedOffline = storedOfflineValue === "true";
 
         setRuntimeManualOfflineMode(storedOffline);
 
         if (mountedRef.current) {
           setManualOfflineState(storedOffline);
         }
+
+        if (storedProjectModesValue) {
+          try {
+            const parsedModes = JSON.parse(storedProjectModesValue);
+
+            const validModes: ProjectWorkModeMap = {};
+
+            if (parsedModes && typeof parsedModes === "object") {
+              Object.entries(parsedModes).forEach(([projectId, mode]) => {
+                if (mode === "online" || mode === "offline") {
+                  validModes[projectId] = mode;
+                }
+              });
+            }
+
+            projectWorkModesRef.current = validModes;
+
+            if (mountedRef.current) {
+              setProjectWorkModes(validModes);
+            }
+          } catch (error) {
+            console.warn("Could not parse project work modes:", error);
+          }
+        }
       } catch (error) {
         console.warn("Could not restore connectivity preference:", error);
       }
 
       const networkState = await NetInfo.fetch();
+
       const connected = isNetworkUsable(networkState);
 
       if (mountedRef.current) {
@@ -243,6 +384,10 @@ export function ConnectivityProvider({ children }: PropsWithChildren) {
       setManualOffline,
       refreshPendingCount,
       syncNow,
+
+      getProjectWorkMode,
+      setProjectWorkMode,
+      clearProjectWorkMode,
     }),
     [
       initialized,
@@ -250,9 +395,13 @@ export function ConnectivityProvider({ children }: PropsWithChildren) {
       hasInternet,
       isSyncing,
       pendingCount,
+      projectWorkModes,
       setManualOffline,
       refreshPendingCount,
       syncNow,
+      getProjectWorkMode,
+      setProjectWorkMode,
+      clearProjectWorkMode,
     ],
   );
 
