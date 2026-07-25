@@ -46,7 +46,7 @@ type CameraMode = "photos" | "video" | "scan";
 type Props = {
   visible: boolean;
   onClose: () => void;
-  onDone: (media: any[]) => void;
+  onDone: (media: any[]) => void | Promise<void>;
   mode?: CameraMode;
   onScanText?: (text: string) => void;
 };
@@ -63,31 +63,34 @@ export default function AssetCameraModal({
   const { hasPermission, requestPermission } = useCameraPermission();
 
   const {
-  hasPermission: hasMicPermission,
-  requestPermission: requestMicPermission,
-} = useMicrophonePermission();
+    hasPermission: hasMicPermission,
+    requestPermission: requestMicPermission,
+  } = useMicrophonePermission();
 
   const { t } = useTranslation();
 
   const [hasLiveCodeResult, setHasLiveCodeResult] = useState(false);
 
-
   const [recordingSeconds, setRecordingSeconds] = useState(0);
 
   const [photos, setPhotos] = useState<any[]>([]);
   const [captureMode, setCaptureMode] = useState<"photo" | "video">("photo");
-const [videos, setVideos] = useState<any[]>([]);
-const [isRecordingVideo, setIsRecordingVideo] = useState(false);
+  const [videos, setVideos] = useState<any[]>([]);
+  const [isRecordingVideo, setIsRecordingVideo] = useState(false);
   const [zoomDisplay, setZoomDisplay] = useState(1);
 
   const [torch, setTorch] = useState<"off" | "on">("off");
 
   const [isProcessingScan, setIsProcessingScan] = useState(false);
+
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
+
   const [scanText, setScanText] = useState("");
   const [scanError, setScanError] = useState("");
-  const [lastCapturedScanPath, setLastCapturedScanPath] = useState<string | null>(
-    null
-  );
+  const [lastCapturedScanPath, setLastCapturedScanPath] = useState<
+    string | null
+  >(null);
 
   const zoom = useSharedValue(1);
   const zoomStart = useSharedValue(1);
@@ -164,17 +167,17 @@ const [isRecordingVideo, setIsRecordingVideo] = useState(false);
     const t = Math.max(0, Math.min(x, SLIDER_WIDTH)) / SLIDER_WIDTH;
 
     return Math.exp(
-      Math.log(safeMin) + t * (Math.log(safeMax) - Math.log(safeMin))
+      Math.log(safeMin) + t * (Math.log(safeMax) - Math.log(safeMin)),
     );
   };
 
   const lastScannedValueRef = useRef<string | null>(null);
-const lastScannedAtRef = useRef<number>(0);
+  const lastScannedAtRef = useRef<number>(0);
 
   const camera = useRef<Camera>(null);
 
   const recordingStartedAtRef = useRef<number | null>(null);
-const stoppingRecordingRef = useRef(false);
+  const stoppingRecordingRef = useRef(false);
 
   const sliderPanResponder = useRef(
     PanResponder.create({
@@ -186,7 +189,7 @@ const stoppingRecordingRef = useRef(false);
       onPanResponderMove: (e) => {
         applySliderZoom(sliderXToZoom(e.nativeEvent.locationX));
       },
-    })
+    }),
   ).current;
 
   const pinchGesture = Gesture.Pinch()
@@ -206,10 +209,10 @@ const stoppingRecordingRef = useRef(false);
   }, [hasPermission, requestPermission]);
 
   useEffect(() => {
-  if (visible && !hasMicPermission) {
-    requestMicPermission();
-  }
-}, [visible, hasMicPermission, requestMicPermission]);
+    if (visible && !hasMicPermission) {
+      requestMicPermission();
+    }
+  }, [visible, hasMicPermission, requestMicPermission]);
 
   useEffect(() => {
     if (!visible) {
@@ -232,282 +235,321 @@ const stoppingRecordingRef = useRef(false);
       setTorch("off");
       lastScannedValueRef.current = null;
       lastScannedAtRef.current = 0;
+
+      setIsCapturing(false);
+      setIsCompleting(false);
     }
   }, [visible, minZoom, zoom, zoomStart]);
 
   useEffect(() => {
-  let interval: ReturnType<typeof setInterval> | null = null;
+    let interval: ReturnType<typeof setInterval> | null = null;
 
-  if (isRecordingVideo) {
-    setRecordingSeconds(0);
+    if (isRecordingVideo) {
+      setRecordingSeconds(0);
 
-    interval = setInterval(() => {
-      setRecordingSeconds((prev) => prev + 1);
-    }, 1000);
-  }
+      interval = setInterval(() => {
+        setRecordingSeconds((prev) => prev + 1);
+      }, 1000);
+    }
 
-  return () => {
-    if (interval) clearInterval(interval);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isRecordingVideo]);
+
+  const formatRecordingTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
-}, [isRecordingVideo]);
-
-const formatRecordingTime = (seconds: number) => {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}:${secs.toString().padStart(2, "0")}`;
-};
-
 
   const codeScanner = useCodeScanner({
-  codeTypes: [
-    "qr",
-    "ean-13",
-    "ean-8",
-    "code-128",
-    "code-39",
-    "upc-a",
-    "upc-e",
-    "pdf-417",
-  ],
-  onCodeScanned: (codes) => {
-    if (mode !== "scan" || !visible || isProcessingScan) return;
-    if (!codes?.length) return;
+    codeTypes: [
+      "qr",
+      "ean-13",
+      "ean-8",
+      "code-128",
+      "code-39",
+      "upc-a",
+      "upc-e",
+      "pdf-417",
+    ],
+    onCodeScanned: (codes) => {
+      if (mode !== "scan" || !visible || isProcessingScan) return;
+      if (!codes?.length) return;
 
-    const first = codes.find((c) => !!c.value);
-    const value = first?.value?.trim();
+      const first = codes.find((c) => !!c.value);
+      const value = first?.value?.trim();
 
-    if (!value) return;
+      if (!value) return;
 
-    const now = Date.now();
-    const isDuplicate =
-      lastScannedValueRef.current === value && now - lastScannedAtRef.current < 1500;
+      const now = Date.now();
+      const isDuplicate =
+        lastScannedValueRef.current === value &&
+        now - lastScannedAtRef.current < 1500;
 
-    if (isDuplicate) return;
+      if (isDuplicate) return;
 
-    lastScannedValueRef.current = value;
-    lastScannedAtRef.current = now;
+      lastScannedValueRef.current = value;
+      lastScannedAtRef.current = now;
 
-    setScanError("");
-   setScanText(t("camera.codeDetected", { value }));
-    setHasLiveCodeResult(true);
-  },
-});
+      setScanError("");
+      setScanText(t("camera.codeDetected", { value }));
+      setHasLiveCodeResult(true);
+    },
+  });
 
-const handleDismiss = async () => {
-  if (isRecordingVideo) {
-    try {
-      const startedAt = recordingStartedAtRef.current;
-      const elapsed = startedAt ? Date.now() - startedAt : 0;
+  const handleDismiss = async () => {
+    if (isRecordingVideo) {
+      try {
+        const startedAt = recordingStartedAtRef.current;
+        const elapsed = startedAt ? Date.now() - startedAt : 0;
 
-      if (elapsed >= 1200) {
-        stoppingRecordingRef.current = true;
-        await camera.current?.stopRecording();
+        if (elapsed >= 1200) {
+          stoppingRecordingRef.current = true;
+          await camera.current?.stopRecording();
+        }
+      } catch (error) {
+        console.log("[VIDEO] dismiss stop failed:", error);
       }
-    } catch (error) {
-      console.log("[VIDEO] dismiss stop failed:", error);
     }
-  }
 
-  recordingStartedAtRef.current = null;
-  stoppingRecordingRef.current = false;
+    recordingStartedAtRef.current = null;
+    stoppingRecordingRef.current = false;
 
-  setPhotos([]);
-  setVideos([]);
-  setScanText("");
-  setScanError("");
-  setLastCapturedScanPath(null);
-  setIsProcessingScan(false);
-  setIsRecordingVideo(false);
-  setRecordingSeconds(0);
-  onClose();
-};
+    setPhotos([]);
+    setVideos([]);
+    setScanText("");
+    setScanError("");
+    setLastCapturedScanPath(null);
+    setIsProcessingScan(false);
+    setIsRecordingVideo(false);
+    setRecordingSeconds(0);
+    onClose();
+  };
 
   const takePhoto = async () => {
-  if (!camera.current || isProcessingScan) return;
-
-  try {
-    const photo = await camera.current.takePhoto({
-      enableShutterSound: false,
-    });
-
-    if (mode === "photos") {
-      setPhotos((prev) => [...prev, photo]);
+    if (!camera.current || isProcessingScan || isCapturing || isCompleting) {
       return;
     }
 
-    const imageUri = `file://${photo.path}`;
-    setLastCapturedScanPath(imageUri);
-    setScanError("");
-    setScanText("");
-    setHasLiveCodeResult(false);
-    setIsProcessingScan(true);
+    setIsCapturing(true);
 
     try {
-      const extracted = await processOfflineScanFromImage(imageUri, { mode: "auto" });
-      const cleaned = extracted?.trim() ?? "";
+      const photo = await camera.current.takePhoto({
+        enableShutterSound: false,
+      });
 
-      if (!cleaned) {
-        setScanError(t("camera.noTextDetected"));
+      if (mode === "photos") {
+        setPhotos((prev) => [...prev, photo]);
         return;
       }
 
-      setScanText(cleaned);
-    } catch (error) {
-     
-      setScanError(t("camera.extractFailed"));
-    } finally {
-      setIsProcessingScan(false);
-    }
-  } catch (error) {
-   
-    if (mode === "scan") {
-     setScanError(t("camera.captureFailed"));
-    }
-  }
-};
+      const imageUri = `file://${photo.path}`;
 
-const startVideoRecording = async () => {
-  if (!camera.current || isRecordingVideo || stoppingRecordingRef.current) return;
+      setLastCapturedScanPath(imageUri);
+      setScanError("");
+      setScanText("");
+      setHasLiveCodeResult(false);
+      setIsProcessingScan(true);
 
-  try {
-    if (!hasMicPermission) {
-      const granted = await requestMicPermission();
+      try {
+        const extracted = await processOfflineScanFromImage(imageUri, {
+          mode: "auto",
+        });
 
-      if (!granted) {
-        console.log("[VIDEO] microphone permission denied");
-        return;
-      }
-    }
+        const cleaned = extracted?.trim() ?? "";
 
-    
-
-    recordingStartedAtRef.current = Date.now();
-    stoppingRecordingRef.current = false;
-    setRecordingSeconds(0);
-    setIsRecordingVideo(true);
-
-    camera.current.startRecording({
-      fileType: "mp4",
-
-      onRecordingFinished: (video) => {
-        console.log("[VIDEO] recording finished", video);
-
-        const rawPath = video?.path;
-        const uri = rawPath?.startsWith?.("file://")
-          ? rawPath
-          : rawPath
-          ? `file://${rawPath}`
-          : null;
-
-        if (!uri) {
-          console.log("[VIDEO] finished but no video uri", video);
-          setIsRecordingVideo(false);
-          recordingStartedAtRef.current = null;
-          stoppingRecordingRef.current = false;
+        if (!cleaned) {
+          setScanError(t("camera.noTextDetected"));
           return;
         }
 
-        setVideos((prev) => [
-          ...prev,
-          {
-            ...video,
-            uri,
-            localUri: uri,
-            originalUri: uri,
-            mediaType: "video",
-            type: "video/mp4",
-            mimeType: "video/mp4",
-            name: `video_${Date.now()}.mp4`,
-          },
-        ]);
-
-        setIsRecordingVideo(false);
-        recordingStartedAtRef.current = null;
-        stoppingRecordingRef.current = false;
-      },
-
-      onRecordingError: (error: any) => {
-        console.log("VIDEO RECORDING ERROR:", error);
-
-        if (error?.code === "capture/no-data") {
-          console.log("[VIDEO] ignored too-short recording");
-        }
-
-        setIsRecordingVideo(false);
-        recordingStartedAtRef.current = null;
-        stoppingRecordingRef.current = false;
-      },
-    });
-  } catch (error) {
-    console.log("START VIDEO ERROR:", error);
-    setIsRecordingVideo(false);
-    recordingStartedAtRef.current = null;
-    stoppingRecordingRef.current = false;
-  }
-};
-
-const stopVideoRecording = async () => {
-  if (!camera.current || !isRecordingVideo || stoppingRecordingRef.current) return;
-
-  const startedAt = recordingStartedAtRef.current;
-  const elapsed = startedAt ? Date.now() - startedAt : 0;
-
-  if (elapsed < 1200) {
-    console.log("[VIDEO] stop blocked, recording too short", {
-      elapsed,
-    });
-    return;
-  }
-
-  try {
-    console.log("[VIDEO] stopping recording", { elapsed });
-
-    stoppingRecordingRef.current = true;
-    await camera.current.stopRecording();
-  } catch (error: any) {
-    console.log("STOP VIDEO ERROR:", error);
-
-    setIsRecordingVideo(false);
-    recordingStartedAtRef.current = null;
-    stoppingRecordingRef.current = false;
-  }
-};
-const handleCapturePress = async () => {
-  if (mode === "photos" && captureMode === "video") {
-    if (isRecordingVideo) {
-      await stopVideoRecording();
-    } else {
-      await startVideoRecording();
+        setScanText(cleaned);
+      } catch (error) {
+        setScanError(t("camera.extractFailed"));
+      } finally {
+        setIsProcessingScan(false);
+      }
+    } catch (error) {
+      if (mode === "scan") {
+        setScanError(t("camera.captureFailed"));
+      }
+    } finally {
+      setIsCapturing(false);
     }
-    return;
-  }
+  };
 
-  await takePhoto();
-};
+  const startVideoRecording = async () => {
+    if (!camera.current || isRecordingVideo || stoppingRecordingRef.current)
+      return;
 
- const handlePrimaryDone = () => {
- if (mode === "photos") {
-  onDone([
-    ...photos.map((item) => ({ ...item, mediaType: "photo" })),
-    ...videos.map((item) => ({ ...item, mediaType: "video" })),
-  ]);
+    try {
+      if (!hasMicPermission) {
+        const granted = await requestMicPermission();
 
-  setPhotos([]);
-  setVideos([]);
-  onClose();
-  return;
-}
+        if (!granted) {
+          console.log("[VIDEO] microphone permission denied");
+          return;
+        }
+      }
 
+      recordingStartedAtRef.current = Date.now();
+      stoppingRecordingRef.current = false;
+      setRecordingSeconds(0);
+      setIsRecordingVideo(true);
 
-  const cleaned = scanText.trim();
-  if (!cleaned) return;
+      camera.current.startRecording({
+        fileType: "mp4",
 
-  onScanText?.(cleaned);
-  setScanText("");
-  setScanError("");
-  setLastCapturedScanPath(null);
-  onClose();
-};
+        onRecordingFinished: (video) => {
+          console.log("[VIDEO] recording finished", video);
+
+          const rawPath = video?.path;
+          const uri = rawPath?.startsWith?.("file://")
+            ? rawPath
+            : rawPath
+              ? `file://${rawPath}`
+              : null;
+
+          if (!uri) {
+            console.log("[VIDEO] finished but no video uri", video);
+            setIsRecordingVideo(false);
+            recordingStartedAtRef.current = null;
+            stoppingRecordingRef.current = false;
+            return;
+          }
+
+          setVideos((prev) => [
+            ...prev,
+            {
+              ...video,
+              uri,
+              localUri: uri,
+              originalUri: uri,
+              mediaType: "video",
+              type: "video/mp4",
+              mimeType: "video/mp4",
+              name: `video_${Date.now()}.mp4`,
+            },
+          ]);
+
+          setIsRecordingVideo(false);
+          recordingStartedAtRef.current = null;
+          stoppingRecordingRef.current = false;
+        },
+
+        onRecordingError: (error: any) => {
+          console.log("VIDEO RECORDING ERROR:", error);
+
+          if (error?.code === "capture/no-data") {
+            console.log("[VIDEO] ignored too-short recording");
+          }
+
+          setIsRecordingVideo(false);
+          recordingStartedAtRef.current = null;
+          stoppingRecordingRef.current = false;
+        },
+      });
+    } catch (error) {
+      console.log("START VIDEO ERROR:", error);
+      setIsRecordingVideo(false);
+      recordingStartedAtRef.current = null;
+      stoppingRecordingRef.current = false;
+    }
+  };
+
+  const stopVideoRecording = async () => {
+    if (!camera.current || !isRecordingVideo || stoppingRecordingRef.current)
+      return;
+
+    const startedAt = recordingStartedAtRef.current;
+    const elapsed = startedAt ? Date.now() - startedAt : 0;
+
+    if (elapsed < 1200) {
+      console.log("[VIDEO] stop blocked, recording too short", {
+        elapsed,
+      });
+      return;
+    }
+
+    try {
+      console.log("[VIDEO] stopping recording", { elapsed });
+
+      stoppingRecordingRef.current = true;
+      await camera.current.stopRecording();
+    } catch (error: any) {
+      console.log("STOP VIDEO ERROR:", error);
+
+      setIsRecordingVideo(false);
+      recordingStartedAtRef.current = null;
+      stoppingRecordingRef.current = false;
+    }
+  };
+  const handleCapturePress = async () => {
+    if (isCapturing || isCompleting) {
+      return;
+    }
+
+    if (mode === "photos" && captureMode === "video") {
+      if (isRecordingVideo) {
+        await stopVideoRecording();
+      } else {
+        await startVideoRecording();
+      }
+
+      return;
+    }
+
+    await takePhoto();
+  };
+
+  const handlePrimaryDone = async () => {
+    if (isCompleting || isCapturing) {
+      return;
+    }
+
+    setIsCompleting(true);
+
+    try {
+      if (mode === "photos") {
+        const selectedMedia = [
+          ...photos.map((item) => ({
+            ...item,
+            mediaType: "photo",
+          })),
+          ...videos.map((item) => ({
+            ...item,
+            mediaType: "video",
+          })),
+        ];
+
+        await Promise.resolve(onDone(selectedMedia));
+
+        setPhotos([]);
+        setVideos([]);
+        onClose();
+        return;
+      }
+
+      const cleaned = scanText.trim();
+
+      if (!cleaned) {
+        return;
+      }
+
+      await Promise.resolve(onScanText?.(cleaned));
+
+      setScanText("");
+      setScanError("");
+      setLastCapturedScanPath(null);
+      onClose();
+    } catch (error) {
+      console.log("[CAMERA] Done processing failed:", error);
+    } finally {
+      setIsCompleting(false);
+    }
+  };
 
   if (!device || !hasPermission) return null;
 
@@ -515,17 +557,15 @@ const handleCapturePress = async () => {
   const activeStep =
     zoomSteps.find((s) => Math.abs(s - zoomDisplay) < 0.3) ?? null;
 
- const doneDisabled =
-  mode === "photos"
-    ? photos.length === 0 && videos.length === 0
-    : !scanText.trim() || isProcessingScan;
+  const doneDisabled =
+    isCompleting ||
+    isCapturing ||
+    (mode === "photos"
+      ? photos.length === 0 && videos.length === 0
+      : !scanText.trim() || isProcessingScan);
 
   return (
-
-
-    
     <Modal visible={visible} animationType="fade" statusBarTranslucent>
-      
       <View style={styles.container}>
         <StatusBar
           barStyle="light-content"
@@ -554,33 +594,34 @@ const handleCapturePress = async () => {
           </TouchableOpacity>
 
           <View style={styles.topRightGroup}>
-
             <TouchableOpacity
-  style={[styles.flashBtn, torch === "on" && styles.flashBtnActive]}
-  onPress={() => setTorch((prev) => (prev === "on" ? "off" : "on"))}
-  activeOpacity={0.85}
->
-  <Text
-    style={[
-      styles.flashBtnText,
-      torch === "on" && styles.flashBtnTextActive,
-    ]}
-  >
-    {torch === "on" ? "Flash On" : "Flash Off"}
-  </Text>
-</TouchableOpacity>
+              style={[styles.flashBtn, torch === "on" && styles.flashBtnActive]}
+              onPress={() => setTorch((prev) => (prev === "on" ? "off" : "on"))}
+              activeOpacity={0.85}
+            >
+              <Text
+                style={[
+                  styles.flashBtnText,
+                  torch === "on" && styles.flashBtnTextActive,
+                ]}
+              >
+                {torch === "on" ? "Flash On" : "Flash Off"}
+              </Text>
+            </TouchableOpacity>
             <View style={styles.modeBadge}>
               <Text style={styles.modeBadgeText}>
-  {mode === "scan"
-  ? t("camera.scanMode")
-  : mode === "video"
-  ? "Video Mode"
-  : t("camera.photoMode")}
-</Text>
+                {mode === "scan"
+                  ? t("camera.scanMode")
+                  : mode === "video"
+                    ? "Video Mode"
+                    : t("camera.photoMode")}
+              </Text>
             </View>
 
             <View style={styles.zoomBadge}>
-              <Text style={styles.zoomBadgeText}>{zoomDisplay.toFixed(1)}×</Text>
+              <Text style={styles.zoomBadgeText}>
+                {zoomDisplay.toFixed(1)}×
+              </Text>
             </View>
           </View>
         </View>
@@ -612,10 +653,7 @@ const handleCapturePress = async () => {
           <View style={styles.sliderTrack} {...sliderPanResponder.panHandlers}>
             <View style={[styles.sliderFill, { width: thumbX }]} />
             <View
-              style={[
-                styles.sliderThumb,
-                { left: thumbX - SLIDER_THUMB / 2 },
-              ]}
+              style={[styles.sliderThumb, { left: thumbX - SLIDER_THUMB / 2 }]}
             />
           </View>
 
@@ -628,56 +666,56 @@ const handleCapturePress = async () => {
         </View>
 
         {mode === "photos" && (
-  <View style={styles.cameraModeToggle}>
-    <TouchableOpacity
-      style={[
-        styles.cameraModeBtn,
-        captureMode === "photo" && styles.cameraModeBtnActive,
-      ]}
-      onPress={() => setCaptureMode("photo")}
-      disabled={isRecordingVideo}
-    >
-      <Text
-        style={[
-          styles.cameraModeText,
-          captureMode === "photo" && styles.cameraModeTextActive,
-        ]}
-      >
-        Photo
-      </Text>
-    </TouchableOpacity>
+          <View style={styles.cameraModeToggle}>
+            <TouchableOpacity
+              style={[
+                styles.cameraModeBtn,
+                captureMode === "photo" && styles.cameraModeBtnActive,
+              ]}
+              onPress={() => setCaptureMode("photo")}
+              disabled={isRecordingVideo}
+            >
+              <Text
+                style={[
+                  styles.cameraModeText,
+                  captureMode === "photo" && styles.cameraModeTextActive,
+                ]}
+              >
+                Photo
+              </Text>
+            </TouchableOpacity>
 
-    <TouchableOpacity
-      style={[
-        styles.cameraModeBtn,
-        captureMode === "video" && styles.cameraModeBtnActive,
-      ]}
-      onPress={() => setCaptureMode("video")}
-      disabled={isRecordingVideo}
-    >
-      <Text
-        style={[
-          styles.cameraModeText,
-          captureMode === "video" && styles.cameraModeTextActive,
-        ]}
-      >
-        Video
-      </Text>
-    </TouchableOpacity>
-  </View>
-)}
+            <TouchableOpacity
+              style={[
+                styles.cameraModeBtn,
+                captureMode === "video" && styles.cameraModeBtnActive,
+              ]}
+              onPress={() => setCaptureMode("video")}
+              disabled={isRecordingVideo}
+            >
+              <Text
+                style={[
+                  styles.cameraModeText,
+                  captureMode === "video" && styles.cameraModeTextActive,
+                ]}
+              >
+                Video
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {mode === "scan" && (
           <View style={styles.scanCard}>
             <Text style={styles.scanCardTitle}>
-            {t("camera.extractedText")}
+              {t("camera.extractedText")}
             </Text>
 
             {isProcessingScan ? (
               <View style={styles.processingRow}>
                 <ActivityIndicator color={ACC} />
                 <Text style={styles.processingText}>
-                {t("camera.processing")}
+                  {t("camera.processing")}
                 </Text>
               </View>
             ) : scanText ? (
@@ -686,72 +724,80 @@ const handleCapturePress = async () => {
               </Text>
             ) : scanError ? (
               <Text style={styles.scanErrorText}>
-              {scanError || t("camera.scanError")}
+                {scanError || t("camera.scanError")}
               </Text>
             ) : (
               <Text style={styles.scanPlaceholderText}>
-            {t("camera.scanPlaceholder")}
-            </Text>
+                {t("camera.scanPlaceholder")}
+              </Text>
             )}
 
             {!!lastCapturedScanPath && !scanText && !isProcessingScan && (
               <Text style={styles.scanHintText}>
-              {t("camera.captureAgain")}
+                {t("camera.captureAgain")}
               </Text>
             )}
           </View>
         )}
 
         {mode === "photos" && captureMode === "video" && isRecordingVideo && (
-  <View style={styles.recordingTimerBadge}>
-    <View style={styles.recordingDot} />
-    <Text style={styles.recordingTimerText}>
-      {formatRecordingTime(recordingSeconds)}
-    </Text>
-  </View>
-)}
+          <View style={styles.recordingTimerBadge}>
+            <View style={styles.recordingDot} />
+            <Text style={styles.recordingTimerText}>
+              {formatRecordingTime(recordingSeconds)}
+            </Text>
+          </View>
+        )}
 
         <View style={[styles.bottomBar, { bottom: insets.bottom + 10 }]}>
           <TouchableOpacity style={styles.smallBtn} onPress={handleDismiss}>
             <Text style={styles.btnText}>{t("commonT.cancel")}</Text>
           </TouchableOpacity>
 
-    <View style={styles.captureCenter}>
-  <TouchableOpacity
-    style={[
-      styles.captureOuter,
-      isProcessingScan && styles.captureOuterDisabled,
-    ]}
-    onPress={handleCapturePress}
-    disabled={isProcessingScan}
-  >
-    <View
-      style={[
-        styles.captureInner,
-        mode === "photos" &&
-          captureMode === "video" &&
-          styles.videoCaptureInner,
-        isRecordingVideo && styles.videoRecordingInner,
-      ]}
-    />
-  </TouchableOpacity>
-
-</View>
-
+          <View style={styles.captureCenter}>
+            <TouchableOpacity
+              style={[
+                styles.captureOuter,
+                (isProcessingScan || isCapturing || isCompleting) &&
+                  styles.captureOuterDisabled,
+              ]}
+              onPress={handleCapturePress}
+              disabled={isProcessingScan || isCapturing || isCompleting}
+            >
+              {isCapturing ? (
+                <ActivityIndicator size="large" color="#fff" />
+              ) : (
+                <View
+                  style={[
+                    styles.captureInner,
+                    mode === "photos" &&
+                      captureMode === "video" &&
+                      styles.videoCaptureInner,
+                    isRecordingVideo && styles.videoRecordingInner,
+                  ]}
+                />
+              )}
+            </TouchableOpacity>
+          </View>
 
           <TouchableOpacity
             style={[styles.smallBtn, doneDisabled && styles.smallBtnDisabled]}
             onPress={handlePrimaryDone}
             disabled={doneDisabled}
           >
-            <Text
-            style={[styles.btnText, doneDisabled && styles.btnTextDisabled]}>
-           {mode === "photos"
-  ? `Done (${photos.length + videos.length})`
-  : scanText
-  ? t("camera.useResult")
-  : t("camera.scan")}
-            </Text>
+            {isCompleting ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text
+                style={[styles.btnText, doneDisabled && styles.btnTextDisabled]}
+              >
+                {mode === "photos"
+                  ? `Done (${photos.length + videos.length})`
+                  : scanText
+                    ? t("camera.useResult")
+                    : t("camera.scan")}
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
       </View>
@@ -792,28 +838,27 @@ const styles = StyleSheet.create({
   },
 
   recordingTimerBadge: {
-  marginTop: 8,
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 6,
-  paddingHorizontal: 10,
-  paddingVertical: 4,
-  borderRadius: 999,
- 
-},
+    marginTop: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
 
-recordingDot: {
-  width: 7,
-  height: 7,
-  borderRadius: 4,
-  backgroundColor: "#FF3B30",
-},
+  recordingDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: "#FF3B30",
+  },
 
-recordingTimerText: {
-  color: "#fff",
-  fontSize: 11,
-  fontWeight: "700",
-},
+  recordingTimerText: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "700",
+  },
 
   topBtn: {
     paddingHorizontal: 14,
@@ -963,57 +1008,53 @@ recordingTimerText: {
     lineHeight: 20,
   },
 
+  cameraModeToggle: {
+    position: "absolute",
+    bottom: 155,
+    alignSelf: "center",
+    flexDirection: "row",
+    // backgroundColor: "rgba(0,0,0,0.45)",
+    borderRadius: 999,
+    padding: 4,
+    zIndex: 20,
+  },
 
-cameraModeToggle: {
-  position: "absolute",
-  bottom: 155,
-  alignSelf: "center",
-  flexDirection: "row",
-  // backgroundColor: "rgba(0,0,0,0.45)",
-  borderRadius: 999,
-  padding: 4,
-  zIndex: 20,
-},
+  captureCenter: {
+    alignItems: "center",
+    justifyContent: "center",
+    width: 96,
+  },
 
+  cameraModeBtn: {
+    paddingHorizontal: 15,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
 
-captureCenter: {
-  alignItems: "center",
-  justifyContent: "center",
-  width: 96,
-},
+  cameraModeBtnActive: {
+    backgroundColor: "#ffffff",
+  },
 
-cameraModeBtn: {
-  paddingHorizontal: 15,
-  paddingVertical: 3,
-  borderRadius: 999,
-},
+  cameraModeText: {
+    color: "#ffffff",
+    fontSize: 7,
+    fontWeight: "500",
+  },
 
-cameraModeBtnActive: {
-  backgroundColor: "#ffffff",
-},
-
-cameraModeText: {
-  color: "#ffffff",
-  fontSize: 7,
-  fontWeight: "500",
-},
-
-cameraModeTextActive: {
-  color: "#111827",
-},
-  
-
+  cameraModeTextActive: {
+    color: "#111827",
+  },
 
   videoCaptureInner: {
-  backgroundColor: "#FF3B30",
-},
+    backgroundColor: "#FF3B30",
+  },
 
-videoRecordingInner: {
-  width: 34,
-  height: 34,
-  borderRadius: 8,
-  backgroundColor: "#FF3B30",
-},
+  videoRecordingInner: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: "#FF3B30",
+  },
 
   scanHintText: {
     color: "#bcbcbc",
@@ -1082,26 +1123,26 @@ videoRecordingInner: {
   },
 
   flashBtn: {
-  paddingHorizontal: 10,
-  paddingVertical: 7,
-  borderRadius: 999,
-  backgroundColor: "rgba(255,255,255,0.14)",
-  borderWidth: 1,
-  borderColor: "rgba(255,255,255,0.18)",
-},
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+  },
 
-flashBtnActive: {
-  backgroundColor: ACC,
-  borderColor: ACC,
-},
+  flashBtnActive: {
+    backgroundColor: ACC,
+    borderColor: ACC,
+  },
 
-flashBtnText: {
-  color: "#fff",
-  fontSize: 12,
-  fontWeight: "700",
-},
+  flashBtnText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "700",
+  },
 
-flashBtnTextActive: {
-  color: "#000",
-},
+  flashBtnTextActive: {
+    color: "#000",
+  },
 });
