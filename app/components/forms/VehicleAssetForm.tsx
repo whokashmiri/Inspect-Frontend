@@ -1,5 +1,6 @@
 //VehiclesAssetForm.tsx
 import React, { useMemo, useState } from "react";
+import ImageViewer from "react-native-image-zoom-viewer";
 import {
   View,
   Text,
@@ -43,7 +44,7 @@ type VehicleAssetFormProps = {
   height: number;
 
   openVehiclePhotoCamera: (slot: VehiclePhotoSlot) => void;
-
+  onPreviewImage: (uri: string) => void;
   // t: any;
 };
 
@@ -341,14 +342,9 @@ export default function VehicleAssetForm({
                   return;
                 }
 
-                // One Other image: open it directly.
-                if (isOtherSlot && otherPhotos.length === 1 && imageUri) {
-                  setSelectedImageUri(imageUri);
-                  return;
-                }
-
-                // Multiple Other images: open the gallery.
-                if (isOtherSlot && otherPhotos.length > 1) {
+                // Any existing "other" photos (1 or more): open the gallery,
+                // which lets the user view individual photos AND add more.
+                if (isOtherSlot && otherPhotos.length > 0) {
                   setOtherPhotosOpen(true);
                   return;
                 }
@@ -728,7 +724,7 @@ export default function VehicleAssetForm({
           </View>
         </TouchableWithoutFeedback>
       </Modal>
-
+      {/* 
       <Modal
         visible={Boolean(selectedImageUri)}
         transparent={false}
@@ -766,6 +762,57 @@ export default function VehicleAssetForm({
               backgroundColor: "rgba(0,0,0,0.65)",
               alignItems: "center",
               justifyContent: "center",
+            }}
+            onPress={() => setSelectedImageUri(null)}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="close" size={28} color="#ffffff" />
+          </TouchableOpacity>
+        </View>
+      </Modal> */}
+
+      <Modal
+        visible={Boolean(selectedImageUri)}
+        transparent={false}
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setSelectedImageUri(null)}
+      >
+        <View style={{ flex: 1, backgroundColor: "#000000" }}>
+          {selectedImageUri && (
+            <ImageViewer
+              imageUrls={[
+                {
+                  url: selectedImageUri,
+                },
+              ]}
+              index={0}
+              enableSwipeDown
+              enablePreload
+              saveToLocalByLongPress={false}
+              backgroundColor="#000000"
+              onSwipeDown={() => setSelectedImageUri(null)}
+              onCancel={() => setSelectedImageUri(null)}
+              loadingRender={() => (
+                <ActivityIndicator size="large" color="#ffffff" />
+              )}
+              renderIndicator={() => <View />}
+            />
+          )}
+
+          <TouchableOpacity
+            style={{
+              position: "absolute",
+              top: 48,
+              right: 20,
+              width: 42,
+              height: 42,
+              borderRadius: 21,
+              backgroundColor: "rgba(0,0,0,0.65)",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 100,
+              elevation: 20,
             }}
             onPress={() => setSelectedImageUri(null)}
             activeOpacity={0.85}
