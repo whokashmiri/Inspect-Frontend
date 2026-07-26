@@ -230,6 +230,8 @@ export default function CreateAssetWizardModal({
   const scrollRef = useRef<ScrollView>(null);
   const fieldPositions = useRef<Record<string, number>>({});
 
+  const [previewImageUri, setPreviewImageUri] = useState<string | null>(null);
+
   const didAutoOpenCameraRef = useRef(false);
 
   const { width, height } = useWindowDimensions();
@@ -1013,6 +1015,7 @@ export default function CreateAssetWizardModal({
                           setImageLoading={setImageLoading}
                           height={height}
                           openOtherPhotoCamera={openOtherPhotoCamera}
+                          onPreviewImage={setPreviewImageUri}
                         />
                       )}
 
@@ -1028,6 +1031,7 @@ export default function CreateAssetWizardModal({
                           manufactureYears={manufactureYears}
                           height={height}
                           openVehiclePhotoCamera={openVehiclePhotoCamera}
+                          onPreviewImage={setPreviewImageUri}
                           // t={t}
                         />
                       )}
@@ -1384,7 +1388,7 @@ export default function CreateAssetWizardModal({
               <View style={styles.conditionModalCard}>
                 <View style={styles.vehicleSelectHeader}>
                   <Text style={styles.vehicleSelectTitle}>
-                    Choose condition
+                    {t("asset.addACondition")}
                   </Text>
 
                   <TouchableOpacity
@@ -1543,7 +1547,7 @@ export default function CreateAssetWizardModal({
                   ...prev.images,
 
                   // Plate/details/odometer/brand accept one image.
-                  [slot]: mapped[0],
+                  [slot]: mapped[mapped.length - 1],
                 },
               };
             });
