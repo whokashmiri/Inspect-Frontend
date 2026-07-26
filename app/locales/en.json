@@ -275,7 +275,10 @@
     "playbackNotAvailable": "Playback not available",
     "remoteVoicePlaybackMessage": "Voice notes from saved assets cannot be played in the editor. You can listen to them after saving the asset.",
     "couldNotPlayVoiceNote": "Could not play voice note.",
-    "removeNotesConfirm":"Remove Notes?"
+    "removeNotesConfirm":"Remove Notes?",
+    "canChange":"Select once for this project. You can change it later using the header toggle.",
+    "chooseWorkMode":"Choose Work Mode"
+
 },
   "camera": {
     "close": "Close",
