@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { AssetDraft, AssetMediaInput } from "../utils/types";
 import { formStyles as styles, ACC, TEXT } from "./formStyles";
 import { useTranslation } from "react-i18next";
+import ImageViewer from "react-native-image-zoom-viewer";
 
 type OtherPhotoSlot = "details" | "brand" | "other";
 
@@ -45,6 +46,7 @@ type OtherAssetFormProps = {
   height: number;
 
   openOtherPhotoCamera: (slot: OtherPhotoSlot) => void;
+  onPreviewImage: (uri: string) => void;
 };
 
 const cleanAssetRawData = (rawData?: Record<string, any> | null) => {
@@ -129,6 +131,7 @@ export default function OtherAssetForm({
   setImageLoading,
   height,
   openOtherPhotoCamera,
+  onPreviewImage,
 }: OtherAssetFormProps) {
   const { t, i18n } = useTranslation();
   const [assetTypeDropdownOpen, setAssetTypeDropdownOpen] = useState(false);
@@ -389,16 +392,13 @@ export default function OtherAssetForm({
                 ]}
                 onPress={() => {
                   if (!isOtherSlot && imageUri) {
-                    setSelectedImageUri(imageUri);
+                    onPreviewImage(imageUri);
                     return;
                   }
 
-                  if (isOtherSlot && otherPhotos.length === 1 && imageUri) {
-                    setSelectedImageUri(imageUri);
-                    return;
-                  }
-
-                  if (isOtherSlot && otherPhotos.length > 1) {
+                  // Any existing "other" photos (1 or more): open the gallery,
+                  // which lets the user view individual photos AND add more.
+                  if (isOtherSlot && otherPhotos.length > 0) {
                     setOtherPhotosOpen(true);
                     return;
                   }
@@ -718,7 +718,7 @@ export default function OtherAssetForm({
         </TouchableWithoutFeedback>
       </Modal>
 
-      <Modal
+      {/* <Modal
         visible={Boolean(selectedImageUri)}
         transparent={false}
         animationType="fade"
@@ -755,6 +755,57 @@ export default function OtherAssetForm({
               backgroundColor: "rgba(0, 0, 0, 0.65)",
               justifyContent: "center",
               alignItems: "center",
+            }}
+            onPress={() => setSelectedImageUri(null)}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="close" size={28} color="#ffffff" />
+          </TouchableOpacity>
+        </View>
+      </Modal> */}
+
+      <Modal
+        visible={Boolean(selectedImageUri)}
+        transparent={false}
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setSelectedImageUri(null)}
+      >
+        <View style={{ flex: 1, backgroundColor: "#000000" }}>
+          {selectedImageUri && (
+            <ImageViewer
+              imageUrls={[
+                {
+                  url: selectedImageUri,
+                },
+              ]}
+              index={0}
+              enableSwipeDown
+              enablePreload
+              saveToLocalByLongPress={false}
+              backgroundColor="#000000"
+              onSwipeDown={() => setSelectedImageUri(null)}
+              onCancel={() => setSelectedImageUri(null)}
+              loadingRender={() => (
+                <ActivityIndicator size="large" color="#ffffff" />
+              )}
+              renderIndicator={() => <View />}
+            />
+          )}
+
+          <TouchableOpacity
+            style={{
+              position: "absolute",
+              top: 50,
+              right: 20,
+              width: 42,
+              height: 42,
+              borderRadius: 21,
+              backgroundColor: "rgba(0,0,0,0.65)",
+              justifyContent: "center",
+              alignItems: "center",
+              zIndex: 100,
+              elevation: 20,
             }}
             onPress={() => setSelectedImageUri(null)}
             activeOpacity={0.85}
