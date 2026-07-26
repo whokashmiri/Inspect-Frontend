@@ -3152,13 +3152,25 @@ export default function FolderAndAssetScreen({ route }: Props) {
                     {item.mediaType === "video" ? (
                       <MediaVideoPlayer key={item.uri} uri={item.uri} />
                     ) : (
-                      <Image
-                        source={{ uri: item.uri }}
+                      <ImageViewer
+                        imageUrls={[
+                          {
+                            url: item.uri,
+                          },
+                        ]}
+                        index={0}
+                        enableSwipeDown={false}
+                        enablePreload
+                        saveToLocalByLongPress={false}
+                        backgroundColor="#000000"
+                        renderIndicator={() => <View />}
+                        loadingRender={() => (
+                          <ActivityIndicator size="large" color="#ffffff" />
+                        )}
                         style={{
                           width: SCREEN_WIDTH,
                           height: Dimensions.get("window").height,
                         }}
-                        resizeMode="contain"
                       />
                     )}
                   </View>
@@ -3533,12 +3545,11 @@ export default function FolderAndAssetScreen({ route }: Props) {
                 <View style={styles.workModeSnackbarContent}>
                   <View style={styles.workModeSnackbarTextWrap}>
                     <Text style={styles.workModeSnackbarTitle}>
-                      Choose work mode
+                      {t("asset.chooseWorkMode")}
                     </Text>
 
                     <Text style={styles.workModeSnackbarMessage}>
-                      Select once for this project. You can change it later
-                      using the header toggle.
+                      {t("asset.canChange")}
                     </Text>
                   </View>
 
