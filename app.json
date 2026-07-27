@@ -14,8 +14,9 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.anonymous.valuetech",
       "infoPlist": {
-        "NSCameraUsageDescription": "ValueTech needs camera access to capture photos",
-        "NSPhotoLibraryAddUsageDescription": "ValueTech needs access to save photos to your library."
+        "NSCameraUsageDescription": "BatchCam needs camera access to capture photos",
+        "NSPhotoLibraryAddUsageDescription": "ValueTech needs access to save photos to your library.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {

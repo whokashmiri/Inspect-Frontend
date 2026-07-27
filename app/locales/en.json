@@ -295,7 +295,8 @@
     "extractFailed": "Could not extract text or barcode from this image.",
     "captureFailed": "Could not capture image. Please try again.",
     "codeDetected": "Code: {{value}}",
-    "scanError": "Something went wrong"
+    "scanError": "Something went wrong",
+    "uploadFromGallery":"Upload"
   },
   "commonT": {
     "cancel": "Cancel"
