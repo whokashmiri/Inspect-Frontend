@@ -1,6 +1,7 @@
 // components/AssetCameraModal.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { launchImageLibrary, Asset } from "react-native-image-picker";
 import { useTranslation } from "react-i18next";
 import {
   Modal,
@@ -380,6 +381,95 @@ export default function AssetCameraModal({
     }
   };
 
+  const handleUploadFromGallery = async () => {
+    if (isProcessingScan || isCapturing || isCompleting) return;
+
+    try {
+      if (mode === "scan") {
+        // Single image, feed straight into your OCR pipeline
+        const result = await launchImageLibrary({
+          mediaType: "photo",
+          selectionLimit: 1,
+        });
+
+        if (result.didCancel || !result.assets?.length) return;
+
+        const asset = result.assets[0];
+        const imageUri = asset.uri!;
+
+        setLastCapturedScanPath(imageUri);
+        setScanError("");
+        setScanText("");
+        setHasLiveCodeResult(false);
+        setIsProcessingScan(true);
+
+        try {
+          const extracted = await processOfflineScanFromImage(imageUri, {
+            mode: "auto",
+          });
+          const cleaned = extracted?.trim() ?? "";
+
+          if (!cleaned) {
+            setScanError(t("camera.noTextDetected"));
+            return;
+          }
+          setScanText(cleaned);
+        } catch (error) {
+          setScanError(t("camera.extractFailed"));
+        } finally {
+          setIsProcessingScan(false);
+        }
+
+        return;
+      }
+
+      // photos mode: allow multi-select, mixed photo + video
+      const result = await launchImageLibrary({
+        mediaType: "mixed",
+        selectionLimit: 0, // 0 = unlimited
+      });
+
+      if (result.didCancel || !result.assets?.length) return;
+
+      const newPhotos: any[] = [];
+      const newVideos: any[] = [];
+
+      result.assets.forEach((asset: Asset, idx: number) => {
+        const isVideo = asset.type?.startsWith("video");
+        const uri = asset.uri!;
+        const path = uri.replace("file://", "");
+
+        if (isVideo) {
+          newVideos.push({
+            uri,
+            localUri: uri,
+            originalUri: uri,
+            path,
+            mediaType: "video",
+            type: asset.type ?? "video/mp4",
+            mimeType: asset.type ?? "video/mp4",
+            name: asset.fileName ?? `gallery_video_${Date.now()}_${idx}.mp4`,
+            fromGallery: true,
+          });
+        } else {
+          newPhotos.push({
+            uri,
+            path,
+            width: asset.width,
+            height: asset.height,
+            mediaType: "photo",
+            name: asset.fileName ?? `gallery_photo_${Date.now()}_${idx}.jpg`,
+            fromGallery: true,
+          });
+        }
+      });
+
+      if (newPhotos.length) setPhotos((prev) => [...prev, ...newPhotos]);
+      if (newVideos.length) setVideos((prev) => [...prev, ...newVideos]);
+    } catch (error) {
+      console.log("[GALLERY] pick failed:", error);
+    }
+  };
   const startVideoRecording = async () => {
     if (!camera.current || isRecordingVideo || stoppingRecordingRef.current)
       return;
@@ -702,6 +792,18 @@ export default function AssetCameraModal({
                 Video
               </Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.cameraModeBtn}
+              onPress={handleUploadFromGallery}
+              disabled={
+                isRecordingVideo ||
+                isProcessingScan ||
+                isCapturing ||
+                isCompleting
+              }
+            >
+              <Text style={styles.cameraModeText}>Upload</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -710,6 +812,16 @@ export default function AssetCameraModal({
             <Text style={styles.scanCardTitle}>
               {t("camera.extractedText")}
             </Text>
+
+            <TouchableOpacity
+              onPress={handleUploadFromGallery}
+              disabled={isProcessingScan || isCapturing || isCompleting}
+              style={styles.scanUploadBtn}
+            >
+              <Text style={styles.scanUploadBtnText}>
+                {t("camera.uploadImage")}
+              </Text>
+            </TouchableOpacity>
 
             {isProcessingScan ? (
               <View style={styles.processingRow}>
@@ -820,6 +932,23 @@ const styles = StyleSheet.create({
     height: height * 0.82,
   },
 
+  scanCardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  scanUploadBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.15)",
+  },
+  scanUploadBtnText: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "700",
+  },
   topBar: {
     position: "absolute",
     top: Platform.OS === "android" ? 48 : 58,
