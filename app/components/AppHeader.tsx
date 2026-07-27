@@ -1,4 +1,5 @@
 import React, { memo, useCallback, useMemo, useState } from "react";
+import version from "../../version.json";
 import {
   View,
   Text,
@@ -356,6 +357,8 @@ function AppHeaderComponent({
             <Text style={styles.companyName}>{title}</Text>
             {/* <Text style={styles.companySub}>{t("companyPage.header")}</Text> */}
           </View>
+
+          <Text style={styles.version}>{version.build}</Text>
         </View>
 
         {isAuthenticated ? (
@@ -777,6 +780,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "400",
     color: TEXT,
+    letterSpacing: -0.5,
+  },
+
+  version: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: TEXT,
+    marginLeft: 6,
     letterSpacing: -0.5,
   },
   companySub: {
