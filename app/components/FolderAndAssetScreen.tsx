@@ -862,9 +862,14 @@ export default function FolderAndAssetScreen({ route }: Props) {
         return { folders: [], assets: [] };
       }
 
+      // Stay on the local cache until everything created/edited offline has
+      // actually finished syncing — otherwise the moment connectivity comes
+      // back we'd switch to the server response, which doesn't have those
+      // not-yet-synced items yet, and they'd flash away until the next load.
       const shouldUseOffline =
         offlineMode ||
-        (downloadedOffline && (isOnline === false || isOnline === null));
+        (downloadedOffline && (isOnline === false || isOnline === null)) ||
+        (downloadedOffline && pendingCount > 0);
 
       if (shouldUseOffline) {
         return getOfflineContents(projectId, parent);
@@ -877,7 +882,15 @@ export default function FolderAndAssetScreen({ route }: Props) {
         ignoreFilters ? "" : searchQuery,
       );
     },
-    [projectId, offlineMode, downloadedOffline, isOnline, filter, searchQuery],
+    [
+      projectId,
+      offlineMode,
+      downloadedOffline,
+      isOnline,
+      pendingCount,
+      filter,
+      searchQuery,
+    ],
   );
 
   const autoEnterAdminRootFolder = useCallback(async () => {
@@ -1108,6 +1121,19 @@ export default function FolderAndAssetScreen({ route }: Props) {
       clearInterval(interval);
     };
   }, []);
+
+  const prevPendingCountRef = useRef(pendingCount);
+
+  useEffect(() => {
+    const wasPending = prevPendingCountRef.current > 0;
+    const isFullySynced = pendingCount === 0;
+
+    if (wasPending && isFullySynced && isOnline) {
+      loadContents(currentFolderId);
+    }
+
+    prevPendingCountRef.current = pendingCount;
+  }, [pendingCount, isOnline, currentFolderId, loadContents]);
 
   const openFolder = async (folder: FolderItem) => {
     if (navigatingFolderId) return;
@@ -2981,7 +3007,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
               <View style={styles.modalOverlay}>
                 <KeyboardAvoidingView
                   style={styles.modalKeyboardWrap}
-                  behavior={Platform.OS === "ios" ? "padding" : undefined}
+                  behavior={Platform.OS === "ios" ? "padding" : "height"}
                   keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
                 >
                   <TouchableWithoutFeedback>
@@ -4180,14 +4206,17 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 24,
+    // paddingHorizontal: 16,
+    // paddingVertical: 24,
     backgroundColor: "rgba(0,0,0,0.45)",
+    paddingBottom: 60,
   },
   modalKeyboardWrap: {
     width: "100%",
     alignItems: "center",
     justifyContent: "center",
+    // paddingBottom: 70,
+    // backgroundColor: "rgba(241, 23, 23, 0.45)",
   },
   modalCard: {
     backgroundColor: "#ffffff",
@@ -4198,7 +4227,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER,
   },
-  modalTitle: { color: TEXT, fontSize: 15, marginBottom: 16 },
+  modalTitle: { color: TEXT, fontSize: 15, marginBottom: 8 },
   input: {
     backgroundColor: SURFACE,
     color: TEXT,
