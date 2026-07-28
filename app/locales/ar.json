@@ -271,8 +271,13 @@
     "remoteVoicePlaybackMessage": "لا يمكن تشغيل الملاحظات الصوتية المحفوظة داخل شاشة التعديل. يمكنك الاستماع إليها بعد حفظ الأصل.",
     "couldNotPlayVoiceNote": "تعذر تشغيل الملاحظة الصوتية.",
     "removeNotesConfirm": "إزالة الملاحظات؟",
- "canChange": "اختره مرة واحدة لهذا المشروع. يمكنك تغييره لاحقًا باستخدام زر التبديل في الأعلى.",
-  "chooseWorkMode": "اختر وضع العمل"
+    "canChange": "اختره مرة واحدة لهذا المشروع. يمكنك تغييره لاحقًا باستخدام زر التبديل في الأعلى.",
+    "chooseWorkMode": "اختر وضع العمل",
+    "photoProcessedSuccessfully": "تمت معالجة الصورة بنجاح",
+    "photosProcessedSuccessfully": "تمت معالجة {{count}} صورة بنجاح",
+    "couldNotProcessCapturedPhotos": "تعذر معالجة الصور الملتقطة",
+    "noValidPhotosCaptured": "لم يتم التقاط أي صور صالحة",
+    "conditionExample": "مثال: يحتاج إلى إصلاح"
   },
   "camera": {
     "close": "إغلاق",

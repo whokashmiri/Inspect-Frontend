@@ -240,7 +240,7 @@
     "markAsDone": "Mark as Done",
     "voiceNotesAdded": "{{count}} voice note added",
     "voiceNotesAdded_plural": "{{count}} voice notes added",
-     "processingPhotos": "Processing photos...",
+    "processingPhotos": "Processing photos...",
     "saving": "Saving...",
     "saveAndNext": "Save & Next",
     "saveAndNewAsset": "Save & New Asset",
@@ -253,8 +253,8 @@
     "enterAssetType":"Please enter asset type",
     "assetTypeUpdated": "Asset type updated",
     "failedToUpdateAssetType": "Failed to update asset type",
-     "typeNotesHere": "Type notes here...",
-        "recording": "Recording...",
+    "typeNotesHere": "Type notes here...",
+    "recording": "Recording...",
     "addVoice": "Add voice",
     "playYourVoiceNote": "Play your voice note",
     "saved": "saved",
@@ -277,7 +277,12 @@
     "couldNotPlayVoiceNote": "Could not play voice note.",
     "removeNotesConfirm":"Remove Notes?",
     "canChange":"Select once for this project. You can change it later using the header toggle.",
-    "chooseWorkMode":"Choose Work Mode"
+    "chooseWorkMode":"Choose Work Mode",
+    "photoProcessedSuccessfully": "Photo processed successfully",
+    "photosProcessedSuccessfully": "{{count}} photos processed successfully",
+    "couldNotProcessCapturedPhotos": "Could not process the captured photos",
+    "noValidPhotosCaptured": "No valid photos were captured",
+     "conditionExample": "e.g. Needs Repair"
 
 },
   "camera": {
