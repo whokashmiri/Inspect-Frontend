@@ -263,7 +263,7 @@ export default function CreateAssetWizardModal({
     }
 
     setSnackbar({ message, type });
-    snackbarTimeout.current = setTimeout(() => setSnackbar(null), 3000);
+    snackbarTimeout.current = setTimeout(() => setSnackbar(null), 1500);
   };
 
   useEffect(() => {
@@ -1361,6 +1361,23 @@ export default function CreateAssetWizardModal({
                 </View>
               </TouchableWithoutFeedback>
             </KeyboardAvoidingView>
+
+            {snackbar && (
+              <View style={styles.snackbarModalOverlay} pointerEvents="none">
+                <View
+                  style={[
+                    styles.snackbar,
+                    snackbar.type === "error"
+                      ? styles.snackbarError
+                      : snackbar.type === "success"
+                        ? styles.snackbarSuccess
+                        : styles.snackbarInfo,
+                  ]}
+                >
+                  <Text style={styles.snackbarText}>{snackbar.message}</Text>
+                </View>
+              </View>
+            )}
           </View>
         </TouchableWithoutFeedback>
       </Modal>
@@ -1433,7 +1450,7 @@ export default function CreateAssetWizardModal({
                       <TextInput
                         value={newConditionText}
                         onChangeText={setNewConditionText}
-                        placeholder="e.g. Needs Repair"
+                        placeholder={t("asset.conditionExample")}
                         placeholderTextColor="#767B91"
                         style={styles.conditionInput}
                         autoFocus
@@ -1500,6 +1517,9 @@ export default function CreateAssetWizardModal({
       <AssetCameraModal
         visible={cameraOpen}
         mode={cameraMode}
+        singleCapture={
+          cameraMode === "photos" && photoSlot !== "other" && photoSlot !== null
+        }
         onClose={() => {
           if (processingImagesRef.current) return;
 
@@ -1526,7 +1546,7 @@ export default function CreateAssetWizardModal({
             const mapped = await processCapturedMedia(media, slot);
 
             if (!mapped.length) {
-              showSnackbar("No valid photos were captured", "error");
+              showSnackbar(t("asset.noValidPhotosCaptured"), "error");
               return;
             }
 
@@ -1554,14 +1574,16 @@ export default function CreateAssetWizardModal({
 
             showSnackbar(
               mapped.length === 1
-                ? "Photo processed successfully"
-                : `${mapped.length} photos processed successfully`,
+                ? t("asset.photoProcessedSuccessfully")
+                : t("asset.photosProcessedSuccessfully", {
+                    count: mapped.length,
+                  }),
               "success",
             );
           } catch (error) {
             console.error("Failed to process captured media:", error);
 
-            showSnackbar("Could not process the captured photos", "error");
+            showSnackbar(t("asset.couldNotProcessCapturedPhotos"), "error");
           } finally {
             processingImagesRef.current = false;
             setProcessingImages(false);
@@ -1576,31 +1598,6 @@ export default function CreateAssetWizardModal({
           setCameraOpen(false);
         }}
       />
-
-      <Modal
-        visible={!!snackbar}
-        transparent
-        animationType="fade"
-        statusBarTranslucent
-        onRequestClose={() => setSnackbar(null)}
-      >
-        <View style={styles.snackbarModalOverlay} pointerEvents="none">
-          {snackbar && (
-            <View
-              style={[
-                styles.snackbar,
-                snackbar.type === "error"
-                  ? styles.snackbarError
-                  : snackbar.type === "success"
-                    ? styles.snackbarSuccess
-                    : styles.snackbarInfo,
-              ]}
-            >
-              <Text style={styles.snackbarText}>{snackbar.message}</Text>
-            </View>
-          )}
-        </View>
-      </Modal>
     </>
   );
 }
@@ -1743,8 +1740,10 @@ const styles = StyleSheet.create({
   },
 
   snackbarModalOverlay: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     alignItems: "center",
+    zIndex: 9999,
+    elevation: 9999,
   },
 
   snackbar: {
