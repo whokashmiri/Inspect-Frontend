@@ -50,6 +50,7 @@ type Props = {
   onDone: (media: any[]) => void | Promise<void>;
   mode?: CameraMode;
   onScanText?: (text: string) => void;
+  singleCapture?: boolean;
 };
 
 export default function AssetCameraModal({
@@ -58,6 +59,7 @@ export default function AssetCameraModal({
   onDone,
   mode = "photos",
   onScanText,
+  singleCapture = false,
 }: Props) {
   const device = useCameraDevice("back");
   const insets = useSafeAreaInsets();
@@ -342,10 +344,15 @@ export default function AssetCameraModal({
       });
 
       if (mode === "photos") {
+        if (singleCapture) {
+          setIsCapturing(false);
+          await finishWithSinglePhoto(photo);
+          return;
+        }
+
         setPhotos((prev) => [...prev, photo]);
         return;
       }
-
       const imageUri = `file://${photo.path}`;
 
       setLastCapturedScanPath(imageUri);
@@ -378,6 +385,34 @@ export default function AssetCameraModal({
       }
     } finally {
       setIsCapturing(false);
+    }
+  };
+
+  const finishWithSinglePhoto = async (photo: any) => {
+    if (isCompleting) return;
+
+    setIsCompleting(true);
+
+    try {
+      const media = [{ ...photo, mediaType: "photo" }];
+
+      // onDone (the wizard's handler) is responsible for closing the
+      // camera itself once it's done processing — it flips `cameraOpen`
+      // to false in its own finally block regardless of success/failure.
+      // We deliberately don't call onClose() here too, so there's only
+      // one place deciding when the modal actually closes.
+      await Promise.resolve(onDone(media));
+
+      setPhotos([]);
+      setVideos([]);
+    } catch (error) {
+      console.log("[CAMERA] single-capture done failed:", error);
+      // If onDone throws before it gets to its own finally/close logic,
+      // fall back to closing here so the user isn't stuck looking at
+      // the camera with no way out.
+      onClose();
+    } finally {
+      setIsCompleting(false);
     }
   };
 
@@ -423,13 +458,31 @@ export default function AssetCameraModal({
         return;
       }
 
-      // photos mode: allow multi-select, mixed photo + video
+      // photos mode: single-image slots get one photo and auto-finish;
+      // multi-image slots (e.g. "other") allow multi-select, mixed photo + video
       const result = await launchImageLibrary({
-        mediaType: "mixed",
-        selectionLimit: 0, // 0 = unlimited
+        mediaType: singleCapture ? "photo" : "mixed",
+        selectionLimit: singleCapture ? 1 : 0, // 0 = unlimited
       });
 
       if (result.didCancel || !result.assets?.length) return;
+
+      if (singleCapture) {
+        const asset = result.assets[0];
+        const uri = asset.uri!;
+
+        await finishWithSinglePhoto({
+          uri,
+          path: uri.replace("file://", ""),
+          width: asset.width,
+          height: asset.height,
+          mediaType: "photo",
+          name: asset.fileName ?? `gallery_photo_${Date.now()}.jpg`,
+          fromGallery: true,
+        });
+
+        return;
+      }
 
       const newPhotos: any[] = [];
       const newVideos: any[] = [];
@@ -470,6 +523,7 @@ export default function AssetCameraModal({
       console.log("[GALLERY] pick failed:", error);
     }
   };
+
   const startVideoRecording = async () => {
     if (!camera.current || isRecordingVideo || stoppingRecordingRef.current)
       return;
@@ -755,7 +809,7 @@ export default function AssetCameraModal({
           </Text>
         </View>
 
-        {mode === "photos" && (
+        {mode === "photos" && !singleCapture && (
           <View style={styles.cameraModeToggle}>
             <TouchableOpacity
               style={[
