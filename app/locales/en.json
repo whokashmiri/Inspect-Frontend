@@ -169,7 +169,44 @@
     "yes": "Yes",
     "no": "No",
     "other": "Other",
-    "noResultsFound": "No results found"
+    "noResultsFound": "No results found", 
+    "refresh": "Refresh"
+  },
+   "project": {
+    "projectInfo": "Project Info",
+    "inspectorFiles": "Inspector Files",
+    "noFilesForLocation": "No files for this location"
+  },
+
+   "profile": {
+    "phone": "Phone", 
+    "serviceCities": "Service Cities",
+    "completeProfileToWork": "Complete your profile to work",
+    "name": "Name",
+    "enterYourName": "Enter your name",
+    "areaOfService": "Area of Service",
+    "searchCity": "Search city, e.g. Dammam"
+  },
+
+    "location": {
+    "location": "الموقع",
+    "locations": "المواقع",
+    "noLocationsFound": "لم يتم العثور على مواقع",
+    "noAddress": "لا يوجد عنوان",
+    "noPhoneNumbers": "لا توجد أرقام هاتف"
+  },
+
+   "workMode": {
+    "workOfflineTitle": "Work offline?",
+    "workOfflineMessage": "API requests will stop and your changes will be stored locally until you switch back online.",
+    "workOffline": "Work Offline"
+  },
+
+  "company": {
+    "company": "Company",
+    "allCompanies": "All Companies",
+     "filterByCompany": "Filter by Company",
+    "selectCompanyToShowProjects": "Select a company to show assigned projects"
   },
 
 
