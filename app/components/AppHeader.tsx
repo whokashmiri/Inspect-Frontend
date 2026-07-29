@@ -11,6 +11,7 @@ import {
   TextInput,
   Alert,
   Switch,
+  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import i18n from "../i18n/i18n";
@@ -272,16 +273,16 @@ function AppHeaderComponent({
   const confirmOfflineMode = useCallback((): Promise<boolean> => {
     return new Promise((resolve) => {
       Alert.alert(
-        "Work offline?",
-        "API requests will stop and your changes will be stored locally until you switch back online.",
+        t("workMode.workOfflineTitle"),
+        t("workMode.workOfflineMessage"),
         [
           {
-            text: "Cancel",
+            text: t("common.cancel"),
             style: "cancel",
             onPress: () => resolve(false),
           },
           {
-            text: "Work Offline",
+            text: t("workMode.workOffline"),
             onPress: () => resolve(true),
           },
         ],
@@ -349,9 +350,11 @@ function AppHeaderComponent({
             { flexDirection: isRTL ? "row-reverse" : "row" },
           ]}
         >
-          <View style={styles.logoMark}>
-            <View style={styles.logoInner} />
-          </View>
+          <Image
+            source={require("../../assets/Logo.png")}
+            style={styles.logoMark}
+            resizeMode="contain"
+          />
 
           <View>
             <Text style={styles.companyName}>{title}</Text>
@@ -507,22 +510,23 @@ function AppHeaderComponent({
             {showProfileForm ? (
               <View style={styles.completeProfileBox}>
                 <Text style={styles.completeTitle}>
-                  Complete your profile to work
+                  {t("profile.completeProfileToWork")}
                 </Text>
 
-                <Text style={styles.label}>Name</Text>
+                <Text style={styles.label}>{t("profile.name")}</Text>
+
                 <TextInput
                   style={styles.input}
-                  placeholder="Enter your name"
+                  placeholder={t("profile.enterYourName")}
                   placeholderTextColor={MUTED}
                   value={profileName}
                   onChangeText={setProfileName}
                 />
 
-                <Text style={styles.label}>Area of Service</Text>
+                <Text style={styles.label}>{t("profile.areaOfService")}</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="Search city, e.g. Dammam"
+                  placeholder={t("profile.searchCity")}
                   placeholderTextColor={MUTED}
                   value={citySearch}
                   onChangeText={setCitySearch}
@@ -602,13 +606,13 @@ function AppHeaderComponent({
 
             <View style={styles.infoGrid}>
               <InfoRow
-                label="Phone"
+                label={t("profile.phone")}
                 value={user?.phone || user?.username}
                 icon="call-outline"
               />
 
               <InfoRow
-                label="Name"
+                label={t("profile.name")}
                 value={user?.name || undefined}
                 icon="person-outline"
               />
@@ -620,12 +624,11 @@ function AppHeaderComponent({
               />
 
               <InfoRow
-                label="Service Cities"
+                label={t("profile.serviceCities")}
                 value={user?.serviceCities?.join(", ")}
                 icon="location-outline"
               />
             </View>
-
             {onLogout ? (
               <TouchableOpacity
                 style={[
@@ -666,7 +669,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: BORDER,
     paddingHorizontal: 20,
-    paddingTop: 28,
+    paddingTop: 10,
     paddingBottom: 14,
     flexDirection: "row",
     alignItems: "center",
@@ -768,7 +771,7 @@ const styles = StyleSheet.create({
     backgroundColor: ACC,
     alignItems: "center",
     justifyContent: "center",
-    marginLeft: 7,
+    marginRight: 5,
   },
   logoInner: {
     width: 10,
