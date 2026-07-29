@@ -168,9 +168,47 @@
     "yes": "نعم",
     "no": "لا",
     "other": "أخرى",
-    "noResultsFound": "لم يتم العثور على نتائج"
+    "noResultsFound": "لم يتم العثور على نتائج",
+    "refresh": "تحديث"
 
 
+  },
+
+   "profile": {
+    "phone": "رقم الهاتف",
+    "completeProfileToWork": "أكمل ملفك الشخصي للبدء في العمل",
+    "name": "الاسم",
+    "enterYourName": "أدخل اسمك",
+    "areaOfService": "منطقة الخدمة",
+    "searchCity": "ابحث عن مدينة، مثل الدمام",
+    "serviceCities": "مدن الخدمة"
+  },
+
+ 
+   "project": {
+    "projectInfo": "معلومات المشروع",
+    "inspectorFiles": "ملفات المفتش",
+    "noFilesForLocation": "لا توجد ملفات لهذا الموقع"
+  },
+  "location": {
+    "location": "Location",
+    "locations": "Locations",
+    "noLocationsFound": "No locations found",
+    "noAddress": "No address",
+    "noPhoneNumbers": "No phone numbers"
+  },
+
+   "workMode": {
+    "workOfflineTitle": "العمل دون اتصال؟",
+    "workOfflineMessage": "سيتم إيقاف طلبات واجهة البرمجة (API)، وسيتم حفظ جميع التغييرات محليًا حتى تعود إلى وضع الاتصال بالإنترنت.",
+    "workOffline": "العمل دون اتصال"
+  },
+
+  "company": {
+    "company": "الشركة",
+    "filterByCompany": "تصفية حسب الشركة",
+    "selectCompanyToShowProjects": "اختر شركة لعرض المشاريع المخصصة لها",
+    "allCompanies": "جميع الشركات"
   },
 
   "conditions": {
