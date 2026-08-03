@@ -11,14 +11,18 @@ import {
   TextInput,
   Modal,
   Linking,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons, Entypo } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
 import { useTranslation } from "react-i18next";
 import * as MediaLibrary from "expo-media-library";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
+import * as Location from "expo-location";
 
 import { useAuth } from "../../api/AuthContext";
 import {
@@ -41,8 +45,54 @@ import {
 import { downloadProjectForOffline } from "../offline/downloader";
 import { useFonts } from "expo-font";
 import fonts from "../fonts/fonts";
+import AssetCameraModal from "../components/AssetCameraModal";
 
 type FilterType = "new" | "recent" | "favorite" | "done";
+
+const ACC = "#2A324B";
+const SURFACE = "#E1E5EE";
+const BORDER = "#C7CCDB";
+const TEXT = "#2A324B";
+const MUTED = "#767B91";
+const SOFT = "#F7C59F";
+
+function parseInspectionDate(value?: string | null) {
+  if (!value) return null;
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function toInspectionDatePayload(value: Date | null) {
+  if (!value) return null;
+
+  return new Date(
+    Date.UTC(value.getFullYear(), value.getMonth(), value.getDate(), 12),
+  ).toISOString();
+}
+
+function buildLocationLabel(address?: Location.LocationGeocodedAddress) {
+  if (!address) return "";
+
+  return [
+    address.name,
+    address.street,
+    address.district,
+    address.city,
+    address.region,
+    address.country,
+  ]
+    .map((part) => String(part || "").trim())
+    .filter((part, index, values) => part && values.indexOf(part) === index)
+    .join(", ");
+}
+
+function upsertInspectorFile(
+  files: InspectorFile[] | undefined,
+  nextFile: InspectorFile,
+) {
+  return [...(files || []).filter((file) => file.id !== nextFile.id), nextFile];
+}
 
 function getProjectStatusLabel(project: Project, t: (key: string) => string) {
   const raw = (project.workflowStatus ?? "").toLowerCase();
@@ -119,8 +169,23 @@ export default function ProjectScreen() {
   const [inspectorFiles, setInspectorFiles] = useState<InspectorFile[]>([]);
   const [filesLoading, setFilesLoading] = useState(false);
 
+  const [inspectionLocationDraft, setInspectionLocationDraft] = useState("");
+  const [inspectionMapUrlDraft, setInspectionMapUrlDraft] = useState("");
+  const [inspectionDateDraft, setInspectionDateDraft] = useState<Date | null>(
+    null,
+  );
+  const [inspectionDatePickerVisible, setInspectionDatePickerVisible] =
+    useState(false);
+  const [savingInspectionDetails, setSavingInspectionDetails] = useState(false);
+  const [findingCurrentLocation, setFindingCurrentLocation] = useState(false);
+
+  const [projectVideoCameraVisible, setProjectVideoCameraVisible] =
+    useState(false);
+  const [uploadingProjectVideo, setUploadingProjectVideo] = useState(false);
+
   const autoRefreshStartedRef = React.useRef(false);
   const autoRefreshRunningRef = React.useRef(false);
+  const projectInfoRequestRef = React.useRef(0);
 
   const refreshPendingProjects = useCallback(async () => {
     const pending = await getPending("pending");
@@ -433,24 +498,57 @@ export default function ProjectScreen() {
   if (!loaded) return null;
 
   async function openProjectInfoModal(project: Project) {
+    const requestId = ++projectInfoRequestRef.current;
+
+    // Clear every value that belongs to the previously opened project before
+    // showing the modal. In particular, keeping selectedLocation here caused
+    // the inspector files from Project A to remain visible for Project B.
+    setSelectedProjectForFiles(project);
+    setSelectedLocation(null);
+    setInspectorFiles([]);
+    setProjectLocations([]);
+    setActiveInfoTab("locations");
+    setInspectionLocationDraft(project.inspectionLocation || "");
+    setInspectionMapUrlDraft(project.inspectionMapUrl || "");
+    setInspectionDateDraft(parseInspectionDate(project.inspectionDate));
+    setInspectionDatePickerVisible(false);
+    setLocationsLoading(true);
+    setProjectInfoModalVisible(true);
+
     try {
-      setSelectedProjectForFiles(project);
-      setProjectInfoModalVisible(true);
-      setActiveInfoTab("locations");
-
-      setInspectorFiles([]);
-      setProjectLocations([]);
-
-      setLocationsLoading(true);
-
       const result = await projectApi.listLocations(project.id);
 
-      setProjectLocations(result.locations || []);
+      // Ignore an older response if the user has already opened another
+      // project's menu.
+      if (projectInfoRequestRef.current !== requestId) return;
+
+      setProjectLocations(
+        Array.isArray(result.locations) ? result.locations : [],
+      );
     } catch (error: any) {
+      if (projectInfoRequestRef.current !== requestId) return;
       Alert.alert("Error", error?.message || "Could not load locations");
     } finally {
-      setLocationsLoading(false);
+      if (projectInfoRequestRef.current === requestId) {
+        setLocationsLoading(false);
+      }
     }
+  }
+
+  function closeProjectInfoModal() {
+    // Invalidate an in-flight request so it cannot repopulate closed/stale UI.
+    projectInfoRequestRef.current += 1;
+    setProjectInfoModalVisible(false);
+    setSelectedProjectForFiles(null);
+    setSelectedLocation(null);
+    setProjectLocations([]);
+    setInspectorFiles([]);
+    setLocationsLoading(false);
+    setInspectionLocationDraft("");
+    setInspectionMapUrlDraft("");
+    setInspectionDateDraft(null);
+    setInspectionDatePickerVisible(false);
+    setProjectVideoCameraVisible(false);
   }
 
   function getFileIcon(type: InspectorFile["type"]) {
@@ -458,6 +556,7 @@ export default function ProjectScreen() {
     if (type === "excel") return "grid-outline";
     if (type === "word") return "document-outline";
     if (type === "image") return "image-outline";
+    if (type === "video") return "videocam-outline";
     if (type === "audio") return "musical-notes-outline";
     return "attach-outline";
   }
@@ -503,21 +602,26 @@ export default function ProjectScreen() {
 
       const downloaded = await FileSystem.downloadAsync(result.url, fileUri);
 
-      // Save images directly to gallery
-      if (file.type === "image" || file.mimeType?.startsWith("image/")) {
+      // Save images and videos directly to the device gallery.
+      if (
+        file.type === "image" ||
+        file.type === "video" ||
+        file.mimeType?.startsWith("image/") ||
+        file.mimeType?.startsWith("video/")
+      ) {
         const permission = await MediaLibrary.requestPermissionsAsync();
 
         if (!permission.granted) {
           Alert.alert(
             "Permission required",
-            "Please allow photo access to save this image.",
+            "Please allow media access to save this file.",
           );
           return;
         }
 
         await MediaLibrary.saveToLibraryAsync(downloaded.uri);
 
-        Alert.alert("Saved", "Image saved to your gallery.");
+        Alert.alert("Saved", "Media saved to your gallery.");
         return;
       }
 
@@ -565,6 +669,225 @@ export default function ProjectScreen() {
     } finally {
       setFilesLoading(false);
     }
+  }
+
+  async function useCurrentInspectionLocation() {
+    if (findingCurrentLocation) return;
+
+    try {
+      setFindingCurrentLocation(true);
+
+      const permission = await Location.requestForegroundPermissionsAsync();
+
+      if (!permission.granted) {
+        Alert.alert(
+          "Location permission required",
+          "Allow location access to use your current inspection location.",
+        );
+        return;
+      }
+
+      const current = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      const latitude = Number(current.coords.latitude.toFixed(6));
+      const longitude = Number(current.coords.longitude.toFixed(6));
+      const coordinateLabel = `${latitude}, ${longitude}`;
+
+      let addressLabel = "";
+
+      try {
+        const addresses = await Location.reverseGeocodeAsync({
+          latitude,
+          longitude,
+        });
+
+        addressLabel = buildLocationLabel(addresses[0]);
+      } catch (error) {
+        console.warn("Reverse geocoding failed:", error);
+      }
+
+      setInspectionLocationDraft(addressLabel || coordinateLabel);
+      setInspectionMapUrlDraft(
+        `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`,
+      );
+    } catch (error: any) {
+      Alert.alert(
+        "Location unavailable",
+        error?.message || "Could not get your current location.",
+      );
+    } finally {
+      setFindingCurrentLocation(false);
+    }
+  }
+
+  async function saveInspectionDetails() {
+    const project = selectedProjectForFiles;
+
+    if (!project || savingInspectionDetails) return;
+
+    if (!isOnline) {
+      Alert.alert(
+        "Internet required",
+        "Switch the app online before saving inspection details.",
+      );
+      return;
+    }
+
+    try {
+      setSavingInspectionDetails(true);
+
+      const result = await projectApi.updateInspectionDetails(project.id, {
+        inspectionLocation: inspectionLocationDraft.trim(),
+        inspectionMapUrl: inspectionMapUrlDraft.trim(),
+        inspectionDate: toInspectionDatePayload(inspectionDateDraft),
+      });
+
+      setProjects((current) =>
+        current.map((item) =>
+          item.id === result.project.id ? result.project : item,
+        ),
+      );
+      setSelectedProjectForFiles(result.project);
+      setInspectionLocationDraft(result.project.inspectionLocation || "");
+      setInspectionMapUrlDraft(result.project.inspectionMapUrl || "");
+      setInspectionDateDraft(
+        parseInspectionDate(result.project.inspectionDate),
+      );
+
+      Alert.alert("Saved", "Inspection details were updated successfully.");
+    } catch (error: any) {
+      Alert.alert(
+        "Save failed",
+        error?.message || "Could not update inspection details.",
+      );
+    } finally {
+      setSavingInspectionDetails(false);
+    }
+  }
+
+  async function handleProjectVideoDone(media: any[]) {
+    const project = selectedProjectForFiles;
+    const locationId = selectedLocation?.id;
+
+    if (!project) {
+      throw new Error("No project selected");
+    }
+
+    if (!isOnline) {
+      Alert.alert(
+        "Internet required",
+        "Switch the app online before uploading a project video.",
+      );
+      throw new Error("Project video upload requires internet");
+    }
+
+    const capturedVideo = media.find(
+      (item) =>
+        item?.mediaType === "video" ||
+        item?.mimeType?.startsWith?.("video/") ||
+        item?.type?.startsWith?.("video/"),
+    );
+
+    if (!capturedVideo) {
+      Alert.alert("Video required", "Please record or select a video.");
+      throw new Error("No video selected");
+    }
+
+    const rawUri =
+      capturedVideo.uri || capturedVideo.localUri || capturedVideo.path;
+
+    if (!rawUri) {
+      throw new Error("Video URI is unavailable");
+    }
+
+    const uri = /^[a-z][a-z0-9+.-]*:\/\//i.test(rawUri)
+      ? rawUri
+      : `file://${rawUri}`;
+
+    try {
+      setUploadingProjectVideo(true);
+
+      const result = await projectApi.addProjectVideo({
+        projectId: project.id,
+        video: {
+          uri,
+          name: capturedVideo.name || `inspection-video-${Date.now()}.mp4`,
+          type: capturedVideo.mimeType || capturedVideo.type || "video/mp4",
+        },
+        locationIds: locationId ? [locationId] : [],
+      });
+
+      setProjects((current) =>
+        current.map((item) =>
+          item.id === result.project.id ? result.project : item,
+        ),
+      );
+      setSelectedProjectForFiles(result.project);
+      setInspectorFiles((current) =>
+        upsertInspectorFile(current, result.video),
+      );
+
+      if (locationId) {
+        setSelectedLocation((current) =>
+          current?.id === locationId
+            ? {
+                ...current,
+                inspectorFiles: upsertInspectorFile(
+                  current.inspectorFiles,
+                  result.video,
+                ),
+              }
+            : current,
+        );
+
+        setProjectLocations((current) =>
+          current.map((location) =>
+            location.id === locationId
+              ? {
+                  ...location,
+                  inspectorFiles: upsertInspectorFile(
+                    location.inspectorFiles,
+                    result.video,
+                  ),
+                }
+              : location,
+          ),
+        );
+      }
+
+      Alert.alert(
+        "Video uploaded",
+        "The inspection video was added successfully.",
+      );
+    } catch (error: any) {
+      Alert.alert(
+        "Upload failed",
+        error?.message || "Could not upload the inspection video.",
+      );
+      throw error;
+    } finally {
+      setUploadingProjectVideo(false);
+    }
+  }
+
+  function openProjectVideoCamera(project: Project) {
+    if (uploadingProjectVideo) return;
+
+    if (!isOnline) {
+      Alert.alert(
+        "Internet required",
+        "Switch the app online before recording a project video.",
+      );
+      return;
+    }
+
+    // The project-card camera saves a project-level video. A video started
+    // from inside a selected location remains linked to that location.
+    setSelectedProjectForFiles(project);
+    setSelectedLocation(null);
+    setProjectVideoCameraVisible(true);
   }
 
   async function openPhone(phone: string) {
@@ -943,34 +1266,56 @@ export default function ProjectScreen() {
                             )}
                           </Pressable>
                         ) : (
-                          <>
-                            <Pressable
-                              style={[
-                                styles.iconBtn,
-                                styles.refreshIconBtn,
-                                isDownloading && styles.iconBtnDisabled,
-                              ]}
-                              onPress={(e) => {
-                                e.stopPropagation();
-                                handleDownloadProject(project, true);
-                              }}
-                              disabled={isDownloading}
-                            >
-                              {isDownloading ? (
-                                <ActivityIndicator
-                                  size="small"
-                                  color={BORDER}
-                                />
-                              ) : (
-                                <Ionicons
-                                  name="refresh-outline"
-                                  size={20}
-                                  color={SURFACE}
-                                />
-                              )}
-                            </Pressable>
-                          </>
+                          <Pressable
+                            style={[
+                              styles.iconBtn,
+                              styles.refreshIconBtn,
+                              isDownloading && styles.iconBtnDisabled,
+                            ]}
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              handleDownloadProject(project, true);
+                            }}
+                            disabled={isDownloading}
+                          >
+                            {isDownloading ? (
+                              <ActivityIndicator size="small" color={BORDER} />
+                            ) : (
+                              <Ionicons
+                                name="refresh-outline"
+                                size={20}
+                                color={SURFACE}
+                              />
+                            )}
+                          </Pressable>
                         )}
+
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Record inspection video"
+                          style={[
+                            styles.iconBtn,
+                            styles.videoIconBtn,
+                            (!isOnline || uploadingProjectVideo) &&
+                              styles.iconBtnDisabled,
+                          ]}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            openProjectVideoCamera(project);
+                          }}
+                          disabled={!isOnline || uploadingProjectVideo}
+                        >
+                          {uploadingProjectVideo &&
+                          selectedProjectForFiles?.id === project.id ? (
+                            <ActivityIndicator size="small" color="#ffffff" />
+                          ) : (
+                            <Ionicons
+                              name="videocam-outline"
+                              size={21}
+                              color="#ffffff"
+                            />
+                          )}
+                        </Pressable>
                       </View>
                     )}
                   </View>
@@ -1048,9 +1393,12 @@ export default function ProjectScreen() {
           visible={projectInfoModalVisible}
           transparent
           animationType="fade"
-          onRequestClose={() => setProjectInfoModalVisible(false)}
+          onRequestClose={closeProjectInfoModal}
         >
-          <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView
+            style={styles.modalOverlay}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+          >
             <View style={styles.filesModalCard}>
               <View style={styles.filesModalHeader}>
                 <View style={{ flex: 1 }}>
@@ -1064,13 +1412,128 @@ export default function ProjectScreen() {
 
                 <Pressable
                   style={styles.filesCloseBtn}
-                  onPress={() => setProjectInfoModalVisible(false)}
+                  onPress={closeProjectInfoModal}
                 >
                   <Ionicons name="close" size={20} color={TEXT} />
                 </Pressable>
               </View>
 
               <ScrollView style={{ maxHeight: 420 }}>
+                <View style={styles.inspectionDetailsCard}>
+                  <View style={styles.inspectionHeaderRow}>
+                    {inspectionMapUrlDraft.trim() ? (
+                      <Pressable
+                        style={styles.smallMapBtn}
+                        onPress={() =>
+                          Linking.openURL(inspectionMapUrlDraft.trim())
+                        }
+                      >
+                        <Ionicons name="map-outline" size={10} color={ACC} />
+                      </Pressable>
+                    ) : null}
+                  </View>
+
+                  <Text style={styles.fieldLabel}>Inspection location</Text>
+                  <TextInput
+                    value={inspectionLocationDraft}
+                    onChangeText={setInspectionLocationDraft}
+                    placeholder="Enter inspection location"
+                    placeholderTextColor={MUTED}
+                    style={styles.inspectionInput}
+                    multiline
+                    textAlignVertical="top"
+                  />
+
+                  <Pressable
+                    style={styles.currentLocationBtn}
+                    onPress={useCurrentInspectionLocation}
+                    disabled={findingCurrentLocation}
+                  >
+                    {findingCurrentLocation ? (
+                      <ActivityIndicator size="small" color={ACC} />
+                    ) : (
+                      <Ionicons name="locate-outline" size={18} color={ACC} />
+                    )}
+                    <Text style={styles.currentLocationText}>
+                      {findingCurrentLocation
+                        ? "Getting current location..."
+                        : "Use current location"}
+                    </Text>
+                  </Pressable>
+
+                  <Text style={styles.fieldLabel}>Google Maps URL</Text>
+                  <TextInput
+                    value={inspectionMapUrlDraft}
+                    onChangeText={setInspectionMapUrlDraft}
+                    placeholder="Map URL (filled automatically from GPS)"
+                    placeholderTextColor={MUTED}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="url"
+                    style={styles.inspectionInputSingle}
+                  />
+
+                  <Text style={styles.fieldLabel}>Inspection date</Text>
+                  <View style={styles.inspectionDateRow}>
+                    <Pressable
+                      style={styles.inspectionDateBtn}
+                      onPress={() => setInspectionDatePickerVisible(true)}
+                    >
+                      <Ionicons name="calendar-outline" size={18} color={ACC} />
+                      <Text style={styles.inspectionDateText}>
+                        {inspectionDateDraft
+                          ? inspectionDateDraft.toLocaleDateString()
+                          : "Select inspection date"}
+                      </Text>
+                    </Pressable>
+
+                    {inspectionDateDraft ? (
+                      <Pressable
+                        style={styles.clearDateBtn}
+                        onPress={() => setInspectionDateDraft(null)}
+                      >
+                        <Ionicons name="close" size={18} color={MUTED} />
+                      </Pressable>
+                    ) : null}
+                  </View>
+
+                  {inspectionDatePickerVisible ? (
+                    <DateTimePicker
+                      value={inspectionDateDraft || new Date()}
+                      mode="date"
+                      display={Platform.OS === "ios" ? "inline" : "default"}
+                      onChange={(event, nextDate) => {
+                        setInspectionDatePickerVisible(false);
+
+                        if (event.type !== "dismissed" && nextDate) {
+                          setInspectionDateDraft(nextDate);
+                        }
+                      }}
+                    />
+                  ) : null}
+
+                  <Pressable
+                    style={[
+                      styles.saveInspectionBtn,
+                      (!isOnline || savingInspectionDetails) &&
+                        styles.actionBtnDisabled,
+                    ]}
+                    onPress={saveInspectionDetails}
+                    disabled={savingInspectionDetails}
+                  >
+                    {savingInspectionDetails ? (
+                      <ActivityIndicator size="small" color="#ffffff" />
+                    ) : (
+                      <Ionicons name="save-outline" size={18} color="#ffffff" />
+                    )}
+                    <Text style={styles.saveInspectionText}>
+                      {isOnline
+                        ? "Save inspection details"
+                        : "Switch online to save"}
+                    </Text>
+                  </Pressable>
+                </View>
+
                 {locationsLoading ? (
                   <ActivityIndicator color={ACC} style={{ marginTop: 24 }} />
                 ) : projectLocations.length === 0 ? (
@@ -1215,6 +1678,31 @@ export default function ProjectScreen() {
                       </View>
                     </View>
 
+                    <Pressable
+                      style={[
+                        styles.recordVideoBtn,
+                        (!isOnline || uploadingProjectVideo) &&
+                          styles.actionBtnDisabled,
+                      ]}
+                      onPress={() => setProjectVideoCameraVisible(true)}
+                      disabled={!isOnline || uploadingProjectVideo}
+                    >
+                      {uploadingProjectVideo ? (
+                        <ActivityIndicator size="small" color="#ffffff" />
+                      ) : (
+                        <Ionicons
+                          name="videocam-outline"
+                          size={19}
+                          color="#ffffff"
+                        />
+                      )}
+                      <Text style={styles.recordVideoText}>
+                        {isOnline
+                          ? "Record inspection video"
+                          : "Video upload requires internet"}
+                      </Text>
+                    </Pressable>
+
                     <Text style={styles.sectionTitle}>
                       {t("project.inspectorFiles")}
                     </Text>
@@ -1294,9 +1782,16 @@ export default function ProjectScreen() {
                 )}
               </ScrollView>
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </Modal>
       </ScrollView>
+
+      <AssetCameraModal
+        visible={projectVideoCameraVisible}
+        mode="video"
+        onClose={() => setProjectVideoCameraVisible(false)}
+        onDone={handleProjectVideoDone}
+      />
 
       <Pressable
         onPress={() => router.push("/inspection/InspectionType")}
@@ -1307,13 +1802,12 @@ export default function ProjectScreen() {
     </View>
   );
 }
-
-const ACC = "#2A324B";
-const SURFACE = "#E1E5EE";
-const BORDER = "#C7CCDB";
-const TEXT = "#2A324B";
-const MUTED = "#767B91";
-const SOFT = "#F7C59F";
+// const ACC = "#2A324B";
+// const SURFACE = "#E1E5EE";
+// const BORDER = "#C7CCDB";
+// const TEXT = "#2A324B";
+// const MUTED = "#767B91";
+// const SOFT = "#F7C59F";
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: "#ffffff" },
@@ -1753,6 +2247,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: SOFT,
   },
+  videoIconBtn: {
+    backgroundColor: ACC,
+    borderWidth: 1,
+    borderColor: ACC,
+  },
   removeIconBtn: {
     backgroundColor: "#2A324B",
     borderWidth: 1,
@@ -1947,5 +2446,148 @@ const styles = StyleSheet.create({
 
   downloadBtn: {
     backgroundColor: "#2A324B",
+  },
+
+  inspectionDetailsCard: {
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 14,
+    backgroundColor: "#F8F9FC",
+    padding: 13,
+    marginBottom: 14,
+  },
+  inspectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginBottom: 1,
+  },
+  smallMapBtn: {
+    width: 20,
+    height: 20,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 11,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  fieldLabel: {
+    marginTop: 10,
+    marginBottom: 6,
+    color: TEXT,
+    fontSize: 12,
+    fontFamily: "Inter-SemiBold",
+  },
+
+  inspectionInput: {
+    minHeight: 70,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 11,
+    backgroundColor: "#FFFFFF",
+    color: TEXT,
+    fontSize: 13,
+    fontFamily: "Inter-Regular",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  currentLocationBtn: {
+    minHeight: 42,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: ACC,
+    borderRadius: 11,
+    backgroundColor: "#FFFFFF",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+  },
+  currentLocationText: {
+    color: ACC,
+    fontSize: 12,
+    fontFamily: "Inter-SemiBold",
+  },
+  inspectionInputSingle: {
+    minHeight: 44,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 11,
+    backgroundColor: "#FFFFFF",
+    color: TEXT,
+    fontSize: 12,
+    fontFamily: "Inter-Regular",
+    paddingHorizontal: 12,
+  },
+  inspectionDateBtn: {
+    flex: 1,
+    minHeight: 44,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 11,
+    backgroundColor: "#FFFFFF",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+  },
+  inspectionDateText: {
+    flex: 1,
+    color: TEXT,
+    fontSize: 13,
+    fontFamily: "Inter-Regular",
+  },
+  inspectionDateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  clearDateBtn: {
+    width: 42,
+    height: 42,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 11,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  saveInspectionBtn: {
+    minHeight: 46,
+    marginTop: 14,
+    borderRadius: 12,
+    backgroundColor: ACC,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingHorizontal: 14,
+  },
+  saveInspectionText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontFamily: "Inter-SemiBold",
+  },
+  actionBtnDisabled: {
+    opacity: 0.5,
+  },
+  recordVideoBtn: {
+    minHeight: 46,
+    marginTop: 5,
+    marginBottom: 14,
+    borderRadius: 12,
+    backgroundColor: ACC,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingHorizontal: 14,
+  },
+  recordVideoText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontFamily: "Inter-SemiBold",
   },
 });
