@@ -14,6 +14,8 @@ import {
   StatusBar,
   PanResponder,
   ActivityIndicator,
+  Alert,
+  Linking,
 } from "react-native";
 import {
   Camera,
@@ -77,9 +79,12 @@ export default function AssetCameraModal({
   const [recordingSeconds, setRecordingSeconds] = useState(0);
 
   const [photos, setPhotos] = useState<any[]>([]);
-  const [captureMode, setCaptureMode] = useState<"photo" | "video">("photo");
+  const [captureMode, setCaptureMode] = useState<"photo" | "video">(
+    mode === "video" ? "video" : "photo",
+  );
   const [videos, setVideos] = useState<any[]>([]);
   const [isRecordingVideo, setIsRecordingVideo] = useState(false);
+  const [isCameraInitialized, setIsCameraInitialized] = useState(false);
   const [zoomDisplay, setZoomDisplay] = useState(1);
 
   const [torch, setTorch] = useState<"off" | "on">("off");
@@ -101,6 +106,11 @@ export default function AssetCameraModal({
   const minZoom = device?.minZoom ?? 1;
   const maxZoom = device?.maxZoom ?? 1;
   const sliderMaxZoom = Math.min(maxZoom, 10);
+
+  const needsMicrophone =
+    mode === "video" || (mode === "photos" && captureMode === "video");
+
+  const audioEnabled = needsMicrophone && hasMicPermission;
 
   const zoomSteps = useMemo(() => {
     const steps = new Set<number>([minZoom]);
@@ -212,10 +222,22 @@ export default function AssetCameraModal({
   }, [hasPermission, requestPermission]);
 
   useEffect(() => {
-    if (visible && !hasMicPermission) {
-      requestMicPermission();
+    if (visible && needsMicrophone && !hasMicPermission) {
+      void requestMicPermission();
     }
-  }, [visible, hasMicPermission, requestMicPermission]);
+  }, [visible, needsMicrophone, hasMicPermission, requestMicPermission]);
+
+  // Enabling audio changes the native capture session. Wait for the newly
+  // mounted camera to initialize before allowing video recording.
+  useEffect(() => {
+    setIsCameraInitialized(false);
+  }, [audioEnabled]);
+
+  useEffect(() => {
+    if (visible) {
+      setCaptureMode(mode === "video" ? "video" : "photo");
+    }
+  }, [visible, mode]);
 
   useEffect(() => {
     if (!visible) {
@@ -226,7 +248,6 @@ export default function AssetCameraModal({
       setPhotos([]);
       setVideos([]);
       setIsRecordingVideo(false);
-      setPhotos([]);
       setScanText("");
       setScanError("");
       recordingStartedAtRef.current = null;
@@ -461,8 +482,9 @@ export default function AssetCameraModal({
       // photos mode: single-image slots get one photo and auto-finish;
       // multi-image slots (e.g. "other") allow multi-select, mixed photo + video
       const result = await launchImageLibrary({
-        mediaType: singleCapture ? "photo" : "mixed",
-        selectionLimit: singleCapture ? 1 : 0, // 0 = unlimited
+        mediaType:
+          mode === "video" ? "video" : singleCapture ? "photo" : "mixed",
+        selectionLimit: mode === "video" || singleCapture ? 1 : 0,
       });
 
       if (result.didCancel || !result.assets?.length) return;
@@ -533,9 +555,28 @@ export default function AssetCameraModal({
         const granted = await requestMicPermission();
 
         if (!granted) {
-          console.log("[VIDEO] microphone permission denied");
+          Alert.alert(
+            "Microphone permission required",
+            "Allow microphone access to record video with audio.",
+            [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Open Settings",
+                onPress: () => void Linking.openSettings(),
+              },
+            ],
+          );
           return;
         }
+
+        // The permission hook will update, which remounts Camera with audio
+        // enabled. Recording starts only after that session initializes.
+        return;
+      }
+
+      if (!audioEnabled || !isCameraInitialized) {
+        console.log("[VIDEO] waiting for audio-enabled camera session");
+        return;
       }
 
       recordingStartedAtRef.current = Date.now();
@@ -564,19 +605,20 @@ export default function AssetCameraModal({
             return;
           }
 
-          setVideos((prev) => [
-            ...prev,
-            {
-              ...video,
-              uri,
-              localUri: uri,
-              originalUri: uri,
-              mediaType: "video",
-              type: "video/mp4",
-              mimeType: "video/mp4",
-              name: `video_${Date.now()}.mp4`,
-            },
-          ]);
+          const capturedVideo = {
+            ...video,
+            uri,
+            localUri: uri,
+            originalUri: uri,
+            mediaType: "video",
+            type: "video/mp4",
+            mimeType: "video/mp4",
+            name: `video_${Date.now()}.mp4`,
+          };
+
+          setVideos((prev) =>
+            mode === "video" ? [capturedVideo] : [...prev, capturedVideo],
+          );
 
           setIsRecordingVideo(false);
           recordingStartedAtRef.current = null;
@@ -635,7 +677,7 @@ export default function AssetCameraModal({
       return;
     }
 
-    if (mode === "photos" && captureMode === "video") {
+    if ((mode === "photos" || mode === "video") && captureMode === "video") {
       if (isRecordingVideo) {
         await stopVideoRecording();
       } else {
@@ -656,17 +698,20 @@ export default function AssetCameraModal({
     setIsCompleting(true);
 
     try {
-      if (mode === "photos") {
-        const selectedMedia = [
-          ...photos.map((item) => ({
-            ...item,
-            mediaType: "photo",
-          })),
-          ...videos.map((item) => ({
-            ...item,
-            mediaType: "video",
-          })),
-        ];
+      if (mode === "photos" || mode === "video") {
+        const selectedMedia =
+          mode === "video"
+            ? videos
+            : [
+                ...photos.map((item) => ({
+                  ...item,
+                  mediaType: "photo",
+                })),
+                ...videos.map((item) => ({
+                  ...item,
+                  mediaType: "video",
+                })),
+              ];
 
         await Promise.resolve(onDone(selectedMedia));
 
@@ -704,9 +749,12 @@ export default function AssetCameraModal({
   const doneDisabled =
     isCompleting ||
     isCapturing ||
-    (mode === "photos"
-      ? photos.length === 0 && videos.length === 0
-      : !scanText.trim() || isProcessingScan);
+    isRecordingVideo ||
+    (mode === "video"
+      ? videos.length === 0
+      : mode === "photos"
+        ? photos.length === 0 && videos.length === 0
+        : !scanText.trim() || isProcessingScan);
 
   return (
     <Modal visible={visible} animationType="fade" statusBarTranslucent>
@@ -719,13 +767,15 @@ export default function AssetCameraModal({
 
         <GestureDetector gesture={pinchGesture}>
           <AnimatedCamera
+            key={audioEnabled ? "camera-with-audio" : "camera-without-audio"}
             ref={camera}
             style={styles.camera}
             device={device}
             isActive={visible}
             photo
             video
-            audio
+            audio={audioEnabled}
+            onInitialized={() => setIsCameraInitialized(true)}
             animatedProps={animatedProps}
             codeScanner={mode === "scan" ? codeScanner : undefined}
             torch={torch}
@@ -809,43 +859,48 @@ export default function AssetCameraModal({
           </Text>
         </View>
 
-        {mode === "photos" && !singleCapture && (
+        {((mode === "photos" && !singleCapture) || mode === "video") && (
           <View style={styles.cameraModeToggle}>
-            <TouchableOpacity
-              style={[
-                styles.cameraModeBtn,
-                captureMode === "photo" && styles.cameraModeBtnActive,
-              ]}
-              onPress={() => setCaptureMode("photo")}
-              disabled={isRecordingVideo}
-            >
-              <Text
+            {mode === "photos" && (
+              <TouchableOpacity
                 style={[
-                  styles.cameraModeText,
-                  captureMode === "photo" && styles.cameraModeTextActive,
+                  styles.cameraModeBtn,
+                  captureMode === "photo" && styles.cameraModeBtnActive,
                 ]}
+                onPress={() => setCaptureMode("photo")}
+                disabled={isRecordingVideo}
               >
-                Photo
-              </Text>
-            </TouchableOpacity>
+                <Text
+                  style={[
+                    styles.cameraModeText,
+                    captureMode === "photo" && styles.cameraModeTextActive,
+                  ]}
+                >
+                  Photo
+                </Text>
+              </TouchableOpacity>
+            )}
 
-            <TouchableOpacity
-              style={[
-                styles.cameraModeBtn,
-                captureMode === "video" && styles.cameraModeBtnActive,
-              ]}
-              onPress={() => setCaptureMode("video")}
-              disabled={isRecordingVideo}
-            >
-              <Text
+            {mode === "photos" && (
+              <TouchableOpacity
                 style={[
-                  styles.cameraModeText,
-                  captureMode === "video" && styles.cameraModeTextActive,
+                  styles.cameraModeBtn,
+                  captureMode === "video" && styles.cameraModeBtnActive,
                 ]}
+                onPress={() => setCaptureMode("video")}
+                disabled={isRecordingVideo}
               >
-                Video
-              </Text>
-            </TouchableOpacity>
+                <Text
+                  style={[
+                    styles.cameraModeText,
+                    captureMode === "video" && styles.cameraModeTextActive,
+                  ]}
+                >
+                  Video
+                </Text>
+              </TouchableOpacity>
+            )}
+
             <TouchableOpacity
               style={styles.cameraModeBtn}
               onPress={handleUploadFromGallery}
@@ -906,14 +961,16 @@ export default function AssetCameraModal({
           </View>
         )}
 
-        {mode === "photos" && captureMode === "video" && isRecordingVideo && (
-          <View style={styles.recordingTimerBadge}>
-            <View style={styles.recordingDot} />
-            <Text style={styles.recordingTimerText}>
-              {formatRecordingTime(recordingSeconds)}
-            </Text>
-          </View>
-        )}
+        {(mode === "photos" || mode === "video") &&
+          captureMode === "video" &&
+          isRecordingVideo && (
+            <View style={styles.recordingTimerBadge}>
+              <View style={styles.recordingDot} />
+              <Text style={styles.recordingTimerText}>
+                {formatRecordingTime(recordingSeconds)}
+              </Text>
+            </View>
+          )}
 
         <View style={[styles.bottomBar, { bottom: insets.bottom + 10 }]}>
           <TouchableOpacity style={styles.smallBtn} onPress={handleDismiss}>
@@ -924,19 +981,30 @@ export default function AssetCameraModal({
             <TouchableOpacity
               style={[
                 styles.captureOuter,
-                (isProcessingScan || isCapturing || isCompleting) &&
+                (isProcessingScan ||
+                  isCapturing ||
+                  isCompleting ||
+                  (needsMicrophone &&
+                    hasMicPermission &&
+                    !isCameraInitialized)) &&
                   styles.captureOuterDisabled,
               ]}
               onPress={handleCapturePress}
-              disabled={isProcessingScan || isCapturing || isCompleting}
+              disabled={
+                isProcessingScan ||
+                isCapturing ||
+                isCompleting ||
+                (needsMicrophone && hasMicPermission && !isCameraInitialized)
+              }
             >
-              {isCapturing ? (
+              {isCapturing ||
+              (needsMicrophone && hasMicPermission && !isCameraInitialized) ? (
                 <ActivityIndicator size="large" color="#fff" />
               ) : (
                 <View
                   style={[
                     styles.captureInner,
-                    mode === "photos" &&
+                    (mode === "photos" || mode === "video") &&
                       captureMode === "video" &&
                       styles.videoCaptureInner,
                     isRecordingVideo && styles.videoRecordingInner,
@@ -957,11 +1025,15 @@ export default function AssetCameraModal({
               <Text
                 style={[styles.btnText, doneDisabled && styles.btnTextDisabled]}
               >
-                {mode === "photos"
-                  ? `Done (${photos.length + videos.length})`
-                  : scanText
-                    ? t("camera.useResult")
-                    : t("camera.scan")}
+                {mode === "video"
+                  ? videos.length
+                    ? "Use video"
+                    : "Record"
+                  : mode === "photos"
+                    ? `Done (${photos.length + videos.length})`
+                    : scanText
+                      ? t("camera.useResult")
+                      : t("camera.scan")}
               </Text>
             )}
           </TouchableOpacity>
