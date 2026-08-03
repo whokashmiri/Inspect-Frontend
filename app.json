@@ -26,6 +26,12 @@
         "softwareKeyboardLayoutMode": "resize"
       },
       "usesCleartextTraffic": true,
+      "infoPlist": {
+  "NSCameraUsageDescription": "ValueTech needs camera access to capture photos and videos.",
+  "NSMicrophoneUsageDescription": "ValueTech needs microphone access to record audio with videos.",
+  "NSPhotoLibraryAddUsageDescription": "ValueTech needs access to save photos to your library.",
+  "ITSAppUsesNonExemptEncryption": false
+},
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_MEDIA_IMAGES",
@@ -51,9 +57,19 @@
       [
         "react-native-vision-camera",
         {
-          "cameraPermissionText": "BatchCam needs camera access to capture photos"
+          
+          "cameraPermissionText": "ValueTech needs camera access to capture photos and videos.",
+    "enableMicrophonePermission": true,
+    "microphonePermissionText": "ValueTech needs microphone access to record audio with videos."
         }
       ],
+      [
+  "expo-location",
+  {
+    "locationWhenInUsePermission": "Allow this app to use your location during inspections."
+    
+  }
+],
       [
         "expo-media-library",
         {
@@ -62,7 +78,7 @@
           "isAccessMediaLocationEnabled": false
         }
       ],
-      "react-native-vision-camera",
+     
       "expo-secure-store",
       "expo-font",
       "expo-sqlite",
@@ -70,7 +86,8 @@
       "expo-router",
       "expo-sharing",
       "expo-video",
-      "expo-background-task"
+      "expo-background-task",
+      "@react-native-community/datetimepicker"
     ],
     "extra": {
       "eas": {
