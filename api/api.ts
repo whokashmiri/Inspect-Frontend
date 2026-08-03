@@ -1,3 +1,5 @@
+
+
 //api/api.ts
 
 import * as SecureStore from "expo-secure-store";
@@ -5,8 +7,7 @@ import * as SecureStore from "expo-secure-store";
 // ─── Config ────────────────────────────────────────────────────────────────
 // export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://api.167.71.231.64.nip.io/api/v1";
 
-
-export const BASE_URL = process.env.EXPO_PUBLIC_API_URL
+export const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
 const TOKEN_KEY = "auth.accessToken";
 const REFRESH_KEY = "auth.refreshToken";
@@ -23,11 +24,9 @@ export const tokenStore = {
     await SecureStore.deleteItemAsync(TOKEN_KEY);
     await SecureStore.deleteItemAsync(REFRESH_KEY);
   },
-};;
+};
 
 type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-
-
 
 export interface AssetMediaInput {
   uri?: string;
@@ -50,7 +49,6 @@ export interface AssetImagesInput {
   other: AssetMediaInput[];
 }
 
-
 interface JsonRequestOptions {
   method?: Method;
   body?: Record<string, unknown>;
@@ -62,7 +60,6 @@ interface FormRequestOptions {
   body?: FormData;
   auth?: boolean;
 }
-
 
 export class ApiError extends Error {
   constructor(
@@ -127,10 +124,13 @@ async function request<T>(
   return data as T;
 }
 
-export async function requestForm<T>(url: string, options: {
-  method?: string;
-  body: FormData;
-}): Promise<T> {
+export async function requestForm<T>(
+  url: string,
+  options: {
+    method?: string;
+    body: FormData;
+  },
+): Promise<T> {
   const token = await tokenStore.getToken();
 
   const response = await fetch(`${BASE_URL}${url}`, {
@@ -147,22 +147,19 @@ export async function requestForm<T>(url: string, options: {
     const message =
       typeof data?.message === "string"
         ? data.message
-        : data?.message?.toString() ?? "Invalid request";
+        : (data?.message?.toString() ?? "Invalid request");
     throw new ApiError(response.status, message, data);
   }
 
   return data;
 }
 
-
 async function uploadFilesInBatches<T>(
-
   files: UploadFileInput[],
   uploadFn: (file: UploadFileInput) => Promise<T>,
-  batchSize = 3
+  batchSize = 3,
 ): Promise<T[]> {
   const results: T[] = [];
-
 
   for (let i = 0; i < files.length; i += batchSize) {
     const batch = files.slice(i, i + batchSize);
@@ -216,7 +213,6 @@ export interface AuthResponse {
 }
 
 export const authApi = {
-
   requestSignupOtp: (payload: { phone: string }) =>
     request<RequestSignupOtpResponse>("/auth/signup/request-otp", {
       method: "POST",
@@ -232,39 +228,36 @@ export const authApi = {
     }),
 
   requestResetPasswordOtp: (payload: { phone: string }) =>
-  request<{ success: boolean; message: string; phone: string }>(
-    "/auth/forgot-password/request-otp",
-    {
-      method: "POST",
-      body: payload,
-      auth: false,
-    }
-  ),
+    request<{ success: boolean; message: string; phone: string }>(
+      "/auth/forgot-password/request-otp",
+      {
+        method: "POST",
+        body: payload,
+        auth: false,
+      },
+    ),
 
-verifyResetPasswordOtp: (payload: { phone: string; otp: string }) =>
-  request<{ success: boolean; message: string; resetToken: string }>(
-    "/auth/forgot-password/verify-otp",
-    {
-      method: "POST",
-      body: payload,
-      auth: false,
-    }
-  ),
+  verifyResetPasswordOtp: (payload: { phone: string; otp: string }) =>
+    request<{ success: boolean; message: string; resetToken: string }>(
+      "/auth/forgot-password/verify-otp",
+      {
+        method: "POST",
+        body: payload,
+        auth: false,
+      },
+    ),
 
-resetPassword: (payload: { resetToken: string; password: string }) =>
-  request<{ success: boolean; message: string }>(
-    "/auth/forgot-password/reset",
-    {
-      method: "POST",
-      body: payload,
-      auth: false,
-    }
-  ),
+  resetPassword: (payload: { resetToken: string; password: string }) =>
+    request<{ success: boolean; message: string }>(
+      "/auth/forgot-password/reset",
+      {
+        method: "POST",
+        body: payload,
+        auth: false,
+      },
+    ),
 
-  completeProfile: (payload: {
-    name: string;
-    serviceCities: string[];
-  }) =>
+  completeProfile: (payload: { name: string; serviceCities: string[] }) =>
     request<User>("/auth/me/profile", {
       method: "PUT",
       body: payload,
@@ -273,7 +266,12 @@ resetPassword: (payload: { resetToken: string; password: string }) =>
   setSignupPassword: (payload: {
     setupToken: string;
     password: string;
-    role?: "Manager" | "Inspector" | "Freelance Inspector" | "Valuator" | "company_admin";
+    role?:
+      | "Manager"
+      | "Inspector"
+      | "Freelance Inspector"
+      | "Valuator"
+      | "company_admin";
   }) =>
     request<AuthResponse>("/auth/signup/set-password", {
       method: "POST",
@@ -298,19 +296,18 @@ resetPassword: (payload: { resetToken: string; password: string }) =>
   me: () => request<User>("/auth/me"),
 
   getCompanies: () =>
-    request<{ companies: { id: string; name: string | null }[] }>("/auth/companies", {
-      method: "GET",
-    }),
+    request<{ companies: { id: string; name: string | null }[] }>(
+      "/auth/companies",
+      {
+        method: "GET",
+      },
+    ),
 
   logout: () =>
     request<void>("/auth/logout", { method: "POST" }).finally(() =>
       tokenStore.clear(),
     ),
 };
-
-
-
-
 
 export async function loginAndSave(username: string, password: string) {
   const res = await authApi.login({ username, password });
@@ -323,8 +320,6 @@ export async function loginAndSave(username: string, password: string) {
 
   return res;
 }
-
-
 
 export async function setSignupPasswordAndSave(payload: {
   setupToken: string;
@@ -343,13 +338,13 @@ export async function setSignupPasswordAndSave(payload: {
 }
 
 function isRemoteUrl(value?: string | null) {
-  const text = String(value || "").trim().toLowerCase();
+  const text = String(value || "")
+    .trim()
+    .toLowerCase();
 
   return text.startsWith("http://") || text.startsWith("https://");
 }
 function getExistingUploadedMedia(files?: AssetMediaInput[]) {
-  
-
   const result = (files || [])
     .filter((file: any, index) => {
       const url = String(file.url || "").trim();
@@ -367,15 +362,16 @@ function getExistingUploadedMedia(files?: AssetMediaInput[]) {
       const remoteUrl = isRemoteUrl(file.url)
         ? file.url
         : isRemoteUrl(file.uri)
-        ? file.uri
-        : file.url || file.uri;
+          ? file.uri
+          : file.url || file.uri;
 
       return {
         url: remoteUrl,
         publicId: file.publicId ?? null,
         mediaType:
           file.mediaType ??
-          (file.type?.startsWith("video/") || file.mimeType?.startsWith("video/")
+          (file.type?.startsWith("video/") ||
+          file.mimeType?.startsWith("video/")
             ? "video"
             : "image"),
         mimeType: file.mimeType ?? file.type ?? null,
@@ -414,12 +410,9 @@ export interface ProjectLocation {
   inspectorFiles?: InspectorFile[];
 }
 
-
 export interface ListProjectLocationsResponse {
   locations: ProjectLocation[];
 }
-
-
 
 export interface UploadedImageInput {
   url: string;
@@ -440,8 +433,8 @@ export interface CloudinarySignUploadResponse {
   folder: string;
   publicId: string;
   resourceType: "image" | "video";
+  target: "asset" | "project";
 }
-
 
 export interface ProjectStats {
   totalAssets: number;
@@ -457,6 +450,7 @@ export type InspectorFileType =
   | "pdf"
   | "word"
   | "image"
+  | "video"
   | "audio"
   | "other";
 
@@ -467,10 +461,13 @@ export interface InspectorFile {
   url: string;
   uploadedBy: string;
   createdAt: string;
-  storage?: string;
-  spacesKey?: string;
-  mimeType?: string;
+  storage?: "digitalocean" | "cloudinary";
+  spacesKey?: string | null;
+  publicId?: string | null;
+  mimeType?: string | null;
   sizeBytes?: number;
+  duration?: number | null;
+  thumbnailUrl?: string | null;
   locationIds?: string[];
 }
 
@@ -500,16 +497,24 @@ export interface Project {
   stats?: ProjectStats;
   reportType?: string;
   reportData?: Record<string, any>;
+  inspectionLocation?: string;
+  inspectionMapUrl?: string;
+  inspectionDate?: string | null;
   inspectorFiles?: InspectorFile[];
 
   locations?: ProjectLocation[];
 
-   syncVersion?: number;
+  syncVersion?: number;
   lastSyncedChangeAt?: string | null;
+}
 
+export interface UpdateProjectInspectionDetailsResponse {
+  project: Project;
+}
 
-
-
+export interface AddProjectVideoResponse {
+  video: InspectorFile;
+  project: Project;
 }
 
 export interface CreateProjectResponse {
@@ -527,42 +532,51 @@ export interface ListProjectsResponse {
   selectedCompanyId?: string | null;
 }
 
-
-
 export const mediaApi = {
   signUpload: (payload: {
     projectId: string;
     mediaType: "image" | "voice" | "video";
+    target?: "asset" | "project";
   }) =>
     request<CloudinarySignUploadResponse>("/media/sign-upload", {
       method: "POST",
       body: payload,
     }),
-
-
 };
 
+type CloudinaryUploadTarget = "asset" | "project";
 
 function uploadSingleFileToCloudinary(params: {
   file: UploadFileInput;
   projectId: string;
   mediaType: "voice";
+  target?: "asset";
 }): Promise<UploadedVoiceMedia>;
 
 function uploadSingleFileToCloudinary(params: {
   file: UploadFileInput;
   projectId: string;
   mediaType: "image" | "video";
+  target?: "asset";
+}): Promise<UploadedAssetMedia>;
+
+function uploadSingleFileToCloudinary(params: {
+  file: UploadFileInput;
+  projectId: string;
+  mediaType: "video";
+  target: "project";
 }): Promise<UploadedAssetMedia>;
 
 async function uploadSingleFileToCloudinary(params: {
   file: UploadFileInput;
   projectId: string;
   mediaType: "image" | "voice" | "video";
+  target?: CloudinaryUploadTarget;
 }): Promise<UploadedVoiceMedia | UploadedAssetMedia> {
   const signData = await mediaApi.signUpload({
     projectId: params.projectId,
     mediaType: params.mediaType,
+    target: params.target ?? "asset",
   });
 
   const form = new FormData();
@@ -575,8 +589,8 @@ async function uploadSingleFileToCloudinary(params: {
       (params.mediaType === "voice"
         ? "audio/m4a"
         : params.mediaType === "video"
-        ? "video/mp4"
-        : "image/jpeg"),
+          ? "video/mp4"
+          : "image/jpeg"),
   } as any);
 
   form.append("api_key", signData.apiKey);
@@ -600,7 +614,7 @@ async function uploadSingleFileToCloudinary(params: {
     throw new ApiError(
       response.status,
       data?.error?.message || "Cloudinary upload failed",
-      data
+      data,
     );
   }
 
@@ -609,14 +623,12 @@ async function uploadSingleFileToCloudinary(params: {
       url: data.secure_url,
       publicId: data.public_id,
       duration:
-        typeof data.duration === "number"
-          ? Math.round(data.duration)
-          : null,
+        typeof data.duration === "number" ? Math.round(data.duration) : null,
     };
   }
 
-const mediaType: "image" | "video" =
-  params.mediaType === "video" ? "video" : "image";
+  const mediaType: "image" | "video" =
+    params.mediaType === "video" ? "video" : "image";
 
   return {
     url: data.secure_url,
@@ -624,21 +636,16 @@ const mediaType: "image" | "video" =
     mediaType,
     mimeType: params.file.type,
     duration:
-      mediaType === "video" &&
-      typeof data.duration === "number"
+      mediaType === "video" && typeof data.duration === "number"
         ? Math.round(data.duration)
         : null,
     thumbnailUrl:
       mediaType === "video"
-        ? data.secure_url.replace(
-            "/video/upload/",
-            "/video/upload/so_1,f_jpg/"
-          )
+        ? data.secure_url.replace("/video/upload/", "/video/upload/so_1,f_jpg/")
         : null,
     existing: true,
   };
 }
-
 
 export const projectApi = {
   create: (payload: { name: string }) =>
@@ -654,46 +661,88 @@ export const projectApi = {
         : "/projects",
       {
         method: "GET",
-      }
+      },
     ),
 
-      offlineManifest: (projectId: string) =>
+  offlineManifest: (projectId: string) =>
     request<OfflineManifestResponse>(
       `/projects/${projectId}/offline-manifest`,
       {
         method: "GET",
-      }
+      },
     ),
 
   offlineChanges: (projectId: string, sinceVersion = 0) =>
     request<OfflineChangesResponse>(
       `/projects/${projectId}/offline-changes?sinceVersion=${encodeURIComponent(
-        String(sinceVersion)
+        String(sinceVersion),
       )}`,
       {
         method: "GET",
-      }
+      },
     ),
-
 
   updateProjectWorkflow: (
     projectId: string,
     payload: {
       workflowStatus?: "new" | "done";
       isFavorite?: boolean;
-    }
+    },
   ) =>
     request<{ project: Project }>(`/projects/${projectId}/workflow`, {
       method: "PATCH",
       body: payload,
     }),
 
+  updateInspectionDetails: (
+    projectId: string,
+    payload: {
+      inspectionLocation?: string;
+      inspectionMapUrl?: string;
+      inspectionDate?: string | null;
+    },
+  ) =>
+    request<UpdateProjectInspectionDetailsResponse>(
+      `/projects/${projectId}/inspection-details`,
+      {
+        method: "PATCH",
+        body: payload,
+      },
+    ),
+
+  addProjectVideo: async (payload: {
+    projectId: string;
+    video: UploadFileInput;
+    name?: string;
+    locationIds?: string[];
+  }) => {
+    const uploaded = await uploadSingleFileToCloudinary({
+      file: payload.video,
+      projectId: payload.projectId,
+      mediaType: "video",
+      target: "project",
+    });
+
+    return request<AddProjectVideoResponse>(
+      `/projects/${payload.projectId}/videos`,
+      {
+        method: "POST",
+        body: {
+          publicId: uploaded.publicId,
+          name:
+            payload.name?.trim() || payload.video.name || "project-video.mp4",
+          locationIds: payload.locationIds ?? [],
+        },
+      },
+    );
+  },
+
   listInspectorFiles: (projectId: string) =>
     request<ListInspectorFilesResponse>(
       `/projects/${projectId}/inspector-files`,
       {
         method: "GET",
-      }
+      },
     ),
 
   getInspectorFile: (projectId: string, fileId: string) =>
@@ -701,7 +750,7 @@ export const projectApi = {
       `/projects/${projectId}/inspector-files/${fileId}`,
       {
         method: "GET",
-      }
+      },
     ),
 
   downloadInspectorFile: (projectId: string, fileId: string) =>
@@ -709,19 +758,13 @@ export const projectApi = {
       `/projects/${projectId}/inspector-files/${fileId}/download`,
       {
         method: "GET",
-      }
+      },
     ),
   listLocations: (projectId: string) =>
-    request<ListProjectLocationsResponse>(
-      `/projects/${projectId}/locations`,
-      {
-        method: "GET",
-      }
-    ),
-
-
+    request<ListProjectLocationsResponse>(`/projects/${projectId}/locations`, {
+      method: "GET",
+    }),
 };
-
 
 export interface FolderItem {
   id: string;
@@ -788,8 +831,7 @@ type UploadedAssetMedia = AssetMediaInput & {
   mediaType: "image" | "video";
 };
 
-
-export type AssetCondition = string | null; 
+export type AssetCondition = string | null;
 export interface AssetItem {
   id: string;
   name: string;
@@ -831,7 +873,7 @@ export interface AssetItem {
     email: string;
   };
 
- images: StructuredAssetImages | AssetImageItem[];
+  images: StructuredAssetImages | AssetImageItem[];
   voiceNotes: AssetVoiceNoteItem[];
 }
 
@@ -899,10 +941,7 @@ export interface UploadFileInput {
   type: string;
 }
 
-
-
 function getLocalUploadFiles(files?: AssetMediaInput[]): UploadFileInput[] {
-  
   const result = (files || [])
     .filter((file: any, index) => {
       const uri = String(file.uri || "").trim();
@@ -914,8 +953,6 @@ function getLocalUploadFiles(files?: AssetMediaInput[]): UploadFileInput[] {
         !file.publicId &&
         !isRemoteUrl(url) &&
         !isRemoteUrl(uri);
-
-    
 
       return shouldUpload;
     })
@@ -936,19 +973,20 @@ function isVideoFile(file: UploadFileInput) {
   );
 }
 
-
 export interface AdvancedRawDataKeysResponse {
   keys: string[];
 }
 
 const normalizeAssetType = (
-  assetType?: "vehicle" | "other" | "Vehicle" | "Other"
+  assetType?: "vehicle" | "other" | "Vehicle" | "Other",
 ): "vehicle" | "other" | undefined => {
   if (!assetType) return undefined;
   return String(assetType).toLowerCase() === "vehicle" ? "vehicle" : "other";
 };
 
-const normalizeQuantity = (value?: number | string | null): number | undefined => {
+const normalizeQuantity = (
+  value?: number | string | null,
+): number | undefined => {
   if (value === undefined || value === null || value === "") return undefined;
 
   const numberValue = Number(value);
@@ -992,13 +1030,9 @@ const getPayloadSubAssetType = (payload: {
   const rawData = normalizeRawData(payload.rawData);
 
   return normalizeSubAssetType(
-    payload.subAssetType ??
-      rawData.subAssetType ??
-      rawData.customAssetType
+    payload.subAssetType ?? rawData.subAssetType ?? rawData.customAssetType,
   );
 };
-
-
 
 type FixedAssetImageSlot = "plate" | "details" | "odometer" | "brand";
 
@@ -1011,7 +1045,7 @@ const createEmptyAssetImages = (): AssetImagesInput => ({
 });
 
 const normalizeAssetImagesInput = (
-  images?: AssetImagesInput | AssetMediaInput[] | null
+  images?: AssetImagesInput | AssetMediaInput[] | null,
 ): AssetImagesInput => {
   if (!images) return createEmptyAssetImages();
 
@@ -1043,7 +1077,7 @@ const isExistingAssetMedia = (media?: AssetMediaInput | null) => {
 };
 
 const normalizeExistingAssetMedia = (
-  media: AssetMediaInput
+  media: AssetMediaInput,
 ): AssetMediaInput => {
   const existing = getExistingUploadedMedia([media])[0];
 
@@ -1058,7 +1092,7 @@ const normalizeExistingAssetMedia = (
 
 const uploadOneAssetMedia = async (
   media: AssetMediaInput | null,
-  projectId: string
+  projectId: string,
 ): Promise<AssetMediaInput | null> => {
   if (!media) return null;
 
@@ -1072,8 +1106,9 @@ const uploadOneAssetMedia = async (
     return null;
   }
 
-  const mediaType: "image" | "video" =
-    isVideoFile(localFile) ? "video" : "image";
+  const mediaType: "image" | "video" = isVideoFile(localFile)
+    ? "video"
+    : "image";
 
   return uploadSingleFileToCloudinary({
     file: localFile,
@@ -1082,10 +1117,9 @@ const uploadOneAssetMedia = async (
   });
 };
 
-
 const resolveStructuredAssetImages = async (
   images: AssetImagesInput | AssetMediaInput[] | null | undefined,
-  projectId: string
+  projectId: string,
 ): Promise<AssetImagesInput> => {
   const normalized = normalizeAssetImagesInput(images);
   const slots: FixedAssetImageSlot[] = [
@@ -1096,10 +1130,10 @@ const resolveStructuredAssetImages = async (
   ];
 
   const fixedEntries = await Promise.all(
-    slots.map(async (slot) => [
-      slot,
-      await uploadOneAssetMedia(normalized[slot], projectId),
-    ] as const)
+    slots.map(
+      async (slot) =>
+        [slot, await uploadOneAssetMedia(normalized[slot], projectId)] as const,
+    ),
   );
 
   const resolvedOther: Array<AssetMediaInput | null> = [];
@@ -1107,7 +1141,7 @@ const resolveStructuredAssetImages = async (
   for (let index = 0; index < normalized.other.length; index += 3) {
     const batch = normalized.other.slice(index, index + 3);
     const uploadedBatch = await Promise.all(
-      batch.map((media) => uploadOneAssetMedia(media, projectId))
+      batch.map((media) => uploadOneAssetMedia(media, projectId)),
     );
 
     resolvedOther.push(...uploadedBatch);
@@ -1119,8 +1153,8 @@ const resolveStructuredAssetImages = async (
     result[slot] = media;
   });
 
-  result.other = resolvedOther.filter(
-    (media): media is AssetMediaInput => Boolean(media)
+  result.other = resolvedOther.filter((media): media is AssetMediaInput =>
+    Boolean(media),
   );
 
   return result;
@@ -1140,72 +1174,67 @@ export const projectContentApi = {
       },
     }),
 
-
-getProjectSubAssetTypes: (projectId: string) =>
-  request<SubAssetTypesResponse>(
-    `/projects/${projectId}/assets/sub-asset-types`,
-    {
-      method: "GET",
-    }
-  ),
-
+  getProjectSubAssetTypes: (projectId: string) =>
+    request<SubAssetTypesResponse>(
+      `/projects/${projectId}/assets/sub-asset-types`,
+      {
+        method: "GET",
+      },
+    ),
 
   getProjectConditions: (projectId: string) =>
-  request<ConditionsResponse>(
-    `/projects/${projectId}/assets/conditions`,
-    {
+    request<ConditionsResponse>(`/projects/${projectId}/assets/conditions`, {
       method: "GET",
-    }
-  ),
+    }),
 
-renameProjectSubAssetType: (payload: {
-  projectId: string;
-  oldSubAssetType: string;
-  newSubAssetType: string;
-  parent?: string | null;
-}) =>
-  request<RenameSubAssetTypeResponse>(
-    `/projects/${payload.projectId}/assets/sub-asset-types/rename`,
-    {
-      method: "PATCH",
-      body: {
-        oldSubAssetType: payload.oldSubAssetType,
-        newSubAssetType: payload.newSubAssetType,
-        parent: payload.parent ?? undefined,
+  renameProjectSubAssetType: (payload: {
+    projectId: string;
+    oldSubAssetType: string;
+    newSubAssetType: string;
+    parent?: string | null;
+  }) =>
+    request<RenameSubAssetTypeResponse>(
+      `/projects/${payload.projectId}/assets/sub-asset-types/rename`,
+      {
+        method: "PATCH",
+        body: {
+          oldSubAssetType: payload.oldSubAssetType,
+          newSubAssetType: payload.newSubAssetType,
+          parent: payload.parent ?? undefined,
+        },
       },
-    }
-  ),
+    ),
 
- createAsset: async (payload: {
-  projectId: string;
-  name: string;
-  parent?: string | null;
-  folderId?: string | null;
+  createAsset: async (payload: {
+    projectId: string;
+    name: string;
+    parent?: string | null;
+    folderId?: string | null;
 
-  rawData?: Record<string, any> | null;
-  subAssetType?: string | null;
-  quantity?: number | string | null;
+    rawData?: Record<string, any> | null;
+    subAssetType?: string | null;
+    quantity?: number | string | null;
 
- images?: AssetImagesInput;
-  voiceNotes?: AssetMediaInput[];
+    images?: AssetImagesInput;
+    voiceNotes?: AssetMediaInput[];
 
-  condition?: string | null;
-  assetType?: "vehicle" | "other" | "Vehicle" | "Other";
+    condition?: string | null;
+    assetType?: "vehicle" | "other" | "Vehicle" | "Other";
 
-  brand?: string | null;
-  model?: string | null;
-  code?: string | null;
-  manufactureYear?: string | null;
-  kilometersDriven?: string | null;
+    brand?: string | null;
+    model?: string | null;
+    code?: string | null;
+    manufactureYear?: string | null;
+    kilometersDriven?: string | null;
 
-  isDone?: boolean;
-  isPresent?: boolean;
+    isDone?: boolean;
+    isPresent?: boolean;
 
-  notes?: string | null;
-}) => {
+    notes?: string | null;
+  }) => {
     const resolvedImages = await resolveStructuredAssetImages(
       payload.images,
-      payload.projectId
+      payload.projectId,
     );
 
     const localVoiceNotes = getLocalUploadFiles(payload.voiceNotes);
@@ -1217,64 +1246,62 @@ renameProjectSubAssetType: (payload: {
           projectId: payload.projectId,
           mediaType: "voice",
         }),
-      2
+      2,
     );
 
     const resolvedParentSubProjectId =
       payload.parent ?? payload.folderId ?? null;
 
-      const rawData = normalizeRawData(payload.rawData);
+    const rawData = normalizeRawData(payload.rawData);
 
-const quantity = getPayloadQuantity(payload);
-const subAssetType = getPayloadSubAssetType(payload);
+    const quantity = getPayloadQuantity(payload);
+    const subAssetType = getPayloadSubAssetType(payload);
 
-const finalRawData = {
-  ...rawData,
-  ...(quantity !== undefined ? { quantity } : {}),
-  ...(subAssetType !== undefined ? { subAssetType } : {}),
-};
+    const finalRawData = {
+      ...rawData,
+      ...(quantity !== undefined ? { quantity } : {}),
+      ...(subAssetType !== undefined ? { subAssetType } : {}),
+    };
 
     return request<CreateAssetResponse>(
       `/projects/${payload.projectId}/assets`,
       {
         method: "POST",
-       
+
         body: {
-  name: payload.name,
-  parent: resolvedParentSubProjectId,
+          name: payload.name,
+          parent: resolvedParentSubProjectId,
 
-  condition: normalizeCondition(payload.condition),
-  assetType: normalizeAssetType(payload.assetType) ?? "other",
+          condition: normalizeCondition(payload.condition),
+          assetType: normalizeAssetType(payload.assetType) ?? "other",
 
-  subAssetType,
-  quantity,
-  rawData: finalRawData,
+          subAssetType,
+          quantity,
+          rawData: finalRawData,
 
-  brand: payload.brand?.trim() || null,
-  model: payload.model?.trim() || null,
-  code: payload.code?.trim() || null,
-  manufactureYear: payload.manufactureYear?.trim() || null,
-  kilometersDriven: payload.kilometersDriven?.trim() || null,
+          brand: payload.brand?.trim() || null,
+          model: payload.model?.trim() || null,
+          code: payload.code?.trim() || null,
+          manufactureYear: payload.manufactureYear?.trim() || null,
+          kilometersDriven: payload.kilometersDriven?.trim() || null,
 
-  isDone: payload.isDone ?? false,
-  isPresent: payload.isPresent ?? true,
+          isDone: payload.isDone ?? false,
+          isPresent: payload.isPresent ?? true,
 
-  notes: payload.notes?.trim() || null,
+          notes: payload.notes?.trim() || null,
 
-  images: resolvedImages,
-  voiceNotes: uploadedVoiceNotes,
-},
-      }
+          images: resolvedImages,
+          voiceNotes: uploadedVoiceNotes,
+        },
+      },
     );
   },
   getAssetByCode: async (projectId: string, code: string) => {
-
-
     return request<GetAssetByCodeResponse>(
       `/projects/${projectId}/assets/by-code?code=${encodeURIComponent(code)}`,
       {
         method: "GET",
-      }
+      },
     );
   },
 
@@ -1282,7 +1309,7 @@ const finalRawData = {
     projectId: string,
     parentId?: string | null,
     filter?: "all" | "done" | "incomplete" | "not_present",
-    search?: string
+    search?: string,
   ) => {
     const params = new URLSearchParams();
 
@@ -1307,7 +1334,7 @@ const finalRawData = {
       `/projects/${projectId}/contents${qs ? `?${qs}` : ""}`,
       {
         method: "GET",
-      }
+      },
     );
   },
   toggleAssetDone: (projectId: string, assetId: string, isDone: boolean) =>
@@ -1316,36 +1343,35 @@ const finalRawData = {
       body: { isDone },
     }),
 
- updateAsset: async (payload: {
-  assetId: string;
-  projectId: string;
-  name?: string | null;
+  updateAsset: async (payload: {
+    assetId: string;
+    projectId: string;
+    name?: string | null;
 
-  rawData?: Record<string, any> | null;
-  subAssetType?: string | null;
-  quantity?: number | string | null;
+    rawData?: Record<string, any> | null;
+    subAssetType?: string | null;
+    quantity?: number | string | null;
 
-  images?: AssetImagesInput;
-  voiceNotes?: AssetMediaInput[];
+    images?: AssetImagesInput;
+    voiceNotes?: AssetMediaInput[];
 
-  condition?: string | null;
-  assetType?: "vehicle" | "other" | "Vehicle" | "Other";
+    condition?: string | null;
+    assetType?: "vehicle" | "other" | "Vehicle" | "Other";
 
-  brand?: string | null;
-  model?: string | null;
-  code?: string | null;
-  manufactureYear?: string | null;
-  kilometersDriven?: string | null;
+    brand?: string | null;
+    model?: string | null;
+    code?: string | null;
+    manufactureYear?: string | null;
+    kilometersDriven?: string | null;
 
-  notes?: string | null;
+    notes?: string | null;
 
-  isDone?: boolean;
-  isPresent?: boolean;
-}) => {
-
+    isDone?: boolean;
+    isPresent?: boolean;
+  }) => {
     const resolvedImages = await resolveStructuredAssetImages(
       payload.images,
-      payload.projectId
+      payload.projectId,
     );
 
     const localVoiceNotes = getLocalUploadFiles(payload.voiceNotes);
@@ -1357,48 +1383,47 @@ const finalRawData = {
           projectId: payload.projectId,
           mediaType: "voice",
         }),
-      2
+      2,
     );
 
     const rawData = normalizeRawData(payload.rawData);
 
-const quantity = getPayloadQuantity(payload);
-const subAssetType = getPayloadSubAssetType(payload);
+    const quantity = getPayloadQuantity(payload);
+    const subAssetType = getPayloadSubAssetType(payload);
 
-const finalRawData = {
-  ...rawData,
-  ...(quantity !== undefined ? { quantity } : {}),
-  ...(subAssetType !== undefined ? { subAssetType } : {}),
-};
+    const finalRawData = {
+      ...rawData,
+      ...(quantity !== undefined ? { quantity } : {}),
+      ...(subAssetType !== undefined ? { subAssetType } : {}),
+    };
 
     return request<UpdateAssetResponse>(`/projects/assets/${payload.assetId}`, {
       method: "PATCH",
-     body: {
-  name: payload.name,
+      body: {
+        name: payload.name,
 
-  condition: normalizeCondition(payload.condition),
-  assetType: normalizeAssetType(payload.assetType),
+        condition: normalizeCondition(payload.condition),
+        assetType: normalizeAssetType(payload.assetType),
 
-  subAssetType,
-  quantity,
-  rawData: finalRawData,
+        subAssetType,
+        quantity,
+        rawData: finalRawData,
 
-  brand: payload.brand,
-  model: payload.model,
-  code: payload.code,
-  manufactureYear: payload.manufactureYear,
-  kilometersDriven: payload.kilometersDriven,
+        brand: payload.brand,
+        model: payload.model,
+        code: payload.code,
+        manufactureYear: payload.manufactureYear,
+        kilometersDriven: payload.kilometersDriven,
 
-  notes: payload.notes,
+        notes: payload.notes,
 
-  isDone: payload.isDone,
-  isPresent: payload.isPresent,
+        isDone: payload.isDone,
+        isPresent: payload.isPresent,
 
-  images: resolvedImages,
+        images: resolvedImages,
 
-
-  voiceNotes: uploadedVoiceNotes,
-},
+        voiceNotes: uploadedVoiceNotes,
+      },
     });
   },
 
@@ -1407,13 +1432,10 @@ const finalRawData = {
       method: "DELETE",
     }),
 
- 
-
-
   advancedGetRawDataKeys: (projectId: string) => {
     return request<AdvancedRawDataKeysResponse>(
       `/projects/${projectId}/contents/advanced-keys`,
-      { method: "GET" }
+      { method: "GET" },
     );
   },
 
@@ -1425,7 +1447,7 @@ const finalRawData = {
       `/projects/${projectId}/contents/advanced-key-values?${params.toString()}`,
       {
         method: "GET",
-      }
+      },
     );
   },
 
@@ -1435,7 +1457,7 @@ const finalRawData = {
     search?: string,
     filter?: "all" | "done" | "incomplete" | "not_present",
     page = 1,
-    limit = 15
+    limit = 15,
   ) => {
     const params = new URLSearchParams();
 
@@ -1460,25 +1482,29 @@ const finalRawData = {
       `/projects/${projectId}/contents/advanced-search?${params.toString()}`,
       {
         method: "GET",
-      }
+      },
     );
   },
-
 };
-
 
 // ─── Transactions ───────────────────────────────────────────────────────────
 
 export type TransactionMediaType = "image" | "video";
 
 export interface TransactionBuildingCondition {
-  status?: "Completion %" | "Other" | "Under Construction" | "Used" | "New" | string;
+  status?:
+    | "Completion %"
+    | "Other"
+    | "Under Construction"
+    | "Used"
+    | "New"
+    | string;
   completionPct?: number | null;
   otherText?: string | null;
 }
 
 export interface SearchCompanyTransactionsResponse
-  extends PaginatedCompanyTransactionsResponse { }
+  extends PaginatedCompanyTransactionsResponse {}
 
 export interface TransactionAvailableServices {
   electricity?: boolean;
@@ -1608,13 +1634,13 @@ export interface UpdateTransactionInspectionResponse {
   data: any;
 }
 
-function getTransactionLocalMedia(files?: AssetMediaInput[]): UploadFileInput[] {
+function getTransactionLocalMedia(
+  files?: AssetMediaInput[],
+): UploadFileInput[] {
   return getLocalUploadFiles(files);
 }
 
 export const transactionApi = {
-
-
   listCompany: (params?: { page?: number; limit?: number }) => {
     const page = params?.page ?? 1;
     const limit = params?.limit ?? 10;
@@ -1623,10 +1649,9 @@ export const transactionApi = {
       `/transactions/company?page=${page}&limit=${limit}`,
       {
         method: "GET",
-      }
+      },
     );
   },
-
 
   downloadCompany: (params?: { page?: number; limit?: number }) => {
     const page = params?.page ?? 1;
@@ -1636,7 +1661,7 @@ export const transactionApi = {
       `/transactions/company/download?page=${page}&limit=${limit}`,
       {
         method: "GET",
-      }
+      },
     );
   },
 
@@ -1651,7 +1676,7 @@ export const transactionApi = {
       `/transactions/${transactionId}/open`,
       {
         method: "PATCH",
-      }
+      },
     ),
 
   searchCompany: (params: {
@@ -1661,28 +1686,26 @@ export const transactionApi = {
   }) => {
     const page = params.page ?? 1;
     const limit = params.limit ?? 10;
-    const assignmentNumber = encodeURIComponent(
-      params.assignmentNumber.trim()
-    );
+    const assignmentNumber = encodeURIComponent(params.assignmentNumber.trim());
 
     return request<SearchCompanyTransactionsResponse>(
       `/transactions/company/search?assignmentNumber=${assignmentNumber}&page=${page}&limit=${limit}`,
       {
         method: "GET",
-      }
+      },
     );
   },
 
   updateInspectionData: (
     transactionId: string,
-    payload: UpdateTransactionInspectionPayload
+    payload: UpdateTransactionInspectionPayload,
   ) =>
     request<UpdateTransactionInspectionResponse>(
       `/transactions/${transactionId}/inspection-data`,
       {
         method: "PATCH",
         body: payload as Record<string, unknown>,
-      }
+      },
     ),
 
   addMedia: async (payload: {
@@ -1702,7 +1725,6 @@ export const transactionApi = {
     const localImages = localMedia.filter((file) => !isVideoFile(file));
     const localVideos = localMedia.filter(isVideoFile);
 
-
     const uploadedImages = await uploadFilesInBatches(
       localImages,
       async (image) => {
@@ -1720,7 +1742,7 @@ export const transactionApi = {
           localId: (image as any).localId,
         };
       },
-      3
+      3,
     );
 
     const uploadedVideos = await uploadFilesInBatches(
@@ -1740,7 +1762,7 @@ export const transactionApi = {
           localId: (video as any).localId,
         };
       },
-      1
+      1,
     );
 
     const media = [...uploadedImages, ...uploadedVideos].map((item, index) => ({
@@ -1753,7 +1775,7 @@ export const transactionApi = {
       {
         method: "POST",
         body: { media },
-      }
+      },
     );
   },
 
@@ -1762,7 +1784,7 @@ export const transactionApi = {
       `/transactions/${transactionId}/media`,
       {
         method: "GET",
-      }
+      },
     ),
 
   getById: (transactionId: string) =>
