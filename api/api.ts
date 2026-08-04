@@ -1,8 +1,7 @@
-
-
 //api/api.ts
 
 import * as SecureStore from "expo-secure-store";
+import { File as ExpoFile, Paths as ExpoPaths } from "expo-file-system";
 
 // ─── Config ────────────────────────────────────────────────────────────────
 // export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://api.167.71.231.64.nip.io/api/v1";
@@ -546,6 +545,552 @@ export const mediaApi = {
 
 type CloudinaryUploadTarget = "asset" | "project";
 
+const CLOUDINARY_CHUNK_THRESHOLD_BYTES = 90 * 1024 * 1024;
+const CLOUDINARY_CHUNK_SIZE_BYTES = 8 * 1024 * 1024;
+const CLOUDINARY_CHUNK_COPY_BUFFER_BYTES = 512 * 1024;
+const CLOUDINARY_CHUNK_MAX_ATTEMPTS = 3;
+const CLOUDINARY_CHUNK_RETRY_BASE_DELAY_MS = 750;
+
+type CloudinaryParsedResponse = {
+  data: any;
+  responseText: string;
+  headerError: string | null;
+  requestId: string | null;
+};
+
+function normalizeLocalFileUri(uri: string): string {
+  const trimmed = String(uri || "").trim();
+
+  if (trimmed.startsWith("/")) {
+    return `file://${trimmed}`;
+  }
+
+  return trimmed;
+}
+
+function getReadableLocalFile(uri: string): ExpoFile | null {
+  try {
+    if (!uri || isRemoteUrl(uri)) return null;
+
+    const file = new ExpoFile(normalizeLocalFileUri(uri));
+
+    if (!file.exists || !Number.isFinite(file.size) || file.size <= 0) {
+      return null;
+    }
+
+    return file;
+  } catch (error: any) {
+    console.warn("[Cloudinary local file inspection failed]", {
+      message: error?.message,
+      uri,
+    });
+
+    return null;
+  }
+}
+
+function createCloudinaryUploadId(): string {
+  return [
+    "cld",
+    Date.now().toString(36),
+    Math.random().toString(36).slice(2),
+    Math.random().toString(36).slice(2),
+  ].join("-");
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function readCloudinaryResponse(
+  response: Response,
+): Promise<CloudinaryParsedResponse> {
+  let responseText = "";
+
+  try {
+    responseText = await response.text();
+  } catch (error: any) {
+    throw new ApiError(
+      response.status,
+      "Cloudinary responded, but its response could not be read",
+      {
+        stage: "response-read",
+        status: response.status,
+        message: error?.message,
+      },
+    );
+  }
+
+  let data: any = null;
+
+  if (responseText) {
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      data = null;
+    }
+  }
+
+  return {
+    data,
+    responseText,
+    headerError:
+      response.headers.get("x-cld-error") ||
+      response.headers.get("X-Cld-Error"),
+    requestId:
+      response.headers.get("x-request-id") ||
+      response.headers.get("x-cld-request-id"),
+  };
+}
+
+function getCloudinaryResponseMessage(
+  response: Response,
+  parsed: CloudinaryParsedResponse,
+): string {
+  const rawMessage =
+    parsed.data?.error?.message ||
+    parsed.headerError ||
+    parsed.responseText.trim();
+
+  if (response.status === 413) {
+    return "The video is too large for a single upload";
+  }
+
+  if (rawMessage && !/^\s*<html[\s>]/i.test(rawMessage)) {
+    return rawMessage;
+  }
+
+  return `Cloudinary upload failed with HTTP ${response.status}`;
+}
+
+function appendCloudinarySigningFields(
+  form: FormData,
+  signData: CloudinarySignUploadResponse,
+) {
+  form.append("api_key", signData.apiKey);
+  form.append("timestamp", String(signData.timestamp));
+  form.append("signature", signData.signature);
+  form.append("folder", signData.folder);
+  form.append("public_id", signData.publicId);
+}
+
+function isRetryableCloudinaryStatus(status: number): boolean {
+  return (
+    status === 0 ||
+    status === 408 ||
+    status === 420 ||
+    status === 429 ||
+    status >= 500
+  );
+}
+
+async function createTemporaryCloudinaryChunk(params: {
+  sourceFile: ExpoFile;
+  uploadId: string;
+  chunkIndex: number;
+  start: number;
+  endExclusive: number;
+}): Promise<ExpoFile> {
+  const expectedSize = params.endExclusive - params.start;
+  const temporaryFile = new ExpoFile(
+    ExpoPaths.cache,
+    `cloudinary-${params.uploadId}-${params.chunkIndex}.part`,
+  );
+
+  let sourceHandle: ReturnType<ExpoFile["open"]> | null = null;
+  let temporaryHandle: ReturnType<ExpoFile["open"]> | null = null;
+
+  try {
+    if (temporaryFile.exists) {
+      temporaryFile.delete();
+    }
+
+    temporaryFile.create({ overwrite: true });
+
+    sourceHandle = params.sourceFile.open();
+    temporaryHandle = temporaryFile.open();
+    sourceHandle.offset = params.start;
+
+    let remaining = expectedSize;
+
+    while (remaining > 0) {
+      const bytesToRead = Math.min(
+        CLOUDINARY_CHUNK_COPY_BUFFER_BYTES,
+        remaining,
+      );
+      const bytes = sourceHandle.readBytes(bytesToRead);
+
+      if (bytes.length === 0) {
+        throw new Error(
+          `Unexpected end of video while preparing chunk ${params.chunkIndex + 1}`,
+        );
+      }
+
+      temporaryHandle.writeBytes(bytes);
+      remaining -= bytes.length;
+
+      // Let React Native render between the small synchronous file operations.
+      await delay(0);
+    }
+
+    if (temporaryFile.size !== expectedSize) {
+      throw new Error(
+        `Prepared chunk has ${temporaryFile.size} bytes; expected ${expectedSize}`,
+      );
+    }
+
+    return temporaryFile;
+  } catch (error: any) {
+    try {
+      if (temporaryFile.exists) {
+        temporaryFile.delete();
+      }
+    } catch {
+      // Preserve the original chunk preparation error.
+    }
+
+    throw new ApiError(
+      0,
+      error?.message || "Could not prepare a video chunk",
+      {
+        stage: "chunk-file-copy",
+        chunkIndex: params.chunkIndex,
+        start: params.start,
+        end: params.endExclusive - 1,
+        expectedSize,
+        originalError: error,
+      },
+    );
+  } finally {
+    try {
+      temporaryHandle?.close();
+    } catch {
+      // The handle may already be closed after a native file error.
+    }
+
+    try {
+      sourceHandle?.close();
+    } catch {
+      // The handle may already be closed after a native file error.
+    }
+  }
+}
+
+async function uploadCloudinaryChunk(params: {
+  sourceFile: ExpoFile;
+  uploadUrl: string;
+  signData: CloudinarySignUploadResponse;
+  uploadId: string;
+  fileName: string;
+  mimeType: string;
+  start: number;
+  endExclusive: number;
+  totalBytes: number;
+  chunkIndex: number;
+  totalChunks: number;
+}): Promise<any> {
+  let lastError: ApiError | null = null;
+  const temporaryChunk = await createTemporaryCloudinaryChunk({
+    sourceFile: params.sourceFile,
+    uploadId: params.uploadId,
+    chunkIndex: params.chunkIndex,
+    start: params.start,
+    endExclusive: params.endExclusive,
+  });
+
+  try {
+    for (let attempt = 1; attempt <= CLOUDINARY_CHUNK_MAX_ATTEMPTS; attempt++) {
+      try {
+        const form = new FormData();
+        form.append(
+          "file",
+          {
+            uri: temporaryChunk.uri,
+            name: params.fileName,
+            type: params.mimeType,
+          } as any,
+        );
+        appendCloudinarySigningFields(form, params.signData);
+
+        const response = await fetch(params.uploadUrl, {
+          method: "POST",
+          headers: {
+            "X-Unique-Upload-Id": params.uploadId,
+            "Content-Range":
+              `bytes ${params.start}-${params.endExclusive - 1}` +
+              `/${params.totalBytes}`,
+          },
+          body: form,
+        });
+
+        const parsed = await readCloudinaryResponse(response);
+
+        if (!response.ok) {
+          throw new ApiError(
+            response.status,
+            getCloudinaryResponseMessage(response, parsed),
+            {
+              stage: "chunked-upload-response",
+              status: response.status,
+              statusText: response.statusText,
+              requestId: parsed.requestId,
+              chunkIndex: params.chunkIndex,
+              totalChunks: params.totalChunks,
+              start: params.start,
+              end: params.endExclusive - 1,
+              totalBytes: params.totalBytes,
+              response: parsed.data ?? parsed.responseText,
+            },
+          );
+        }
+
+        if (!parsed.data || typeof parsed.data !== "object") {
+          throw new ApiError(
+            response.status,
+            "Cloudinary returned an invalid chunk response",
+            {
+              stage: "chunked-upload-invalid-response",
+              status: response.status,
+              chunkIndex: params.chunkIndex,
+              totalChunks: params.totalChunks,
+              responseText: parsed.responseText,
+            },
+          );
+        }
+
+        return parsed.data;
+      } catch (error: any) {
+        lastError =
+          error instanceof ApiError
+            ? error
+            : new ApiError(
+                0,
+                error?.message || "Network failed while uploading a video chunk",
+                {
+                  stage: "chunked-upload-network",
+                  chunkIndex: params.chunkIndex,
+                  totalChunks: params.totalChunks,
+                  attempt,
+                  originalError: error,
+                },
+              );
+
+        const canRetry =
+          attempt < CLOUDINARY_CHUNK_MAX_ATTEMPTS &&
+          isRetryableCloudinaryStatus(lastError.status);
+
+        if (!canRetry) {
+          break;
+        }
+
+        const retryDelay =
+          CLOUDINARY_CHUNK_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
+
+        console.warn("[Cloudinary chunk retry]", {
+          chunk: params.chunkIndex + 1,
+          totalChunks: params.totalChunks,
+          attempt,
+          nextAttempt: attempt + 1,
+          retryDelay,
+          status: lastError.status,
+          message: lastError.message,
+        });
+
+        await delay(retryDelay);
+      }
+    }
+
+    const details = {
+      stage: "chunked-upload-failed",
+      status: lastError?.status ?? 0,
+      message: lastError?.message,
+      chunkIndex: params.chunkIndex,
+      totalChunks: params.totalChunks,
+      start: params.start,
+      end: params.endExclusive - 1,
+      totalBytes: params.totalBytes,
+      originalData: lastError?.data,
+    };
+
+    console.error("[Cloudinary chunk upload failed]", details);
+
+    throw new ApiError(
+      lastError?.status ?? 0,
+      lastError?.message || "Cloudinary chunk upload failed",
+      details,
+    );
+  } finally {
+    try {
+      if (temporaryChunk.exists) {
+        temporaryChunk.delete();
+      }
+    } catch (cleanupError: any) {
+      console.warn("[Cloudinary temporary chunk cleanup failed]", {
+        chunk: params.chunkIndex + 1,
+        totalChunks: params.totalChunks,
+        message: cleanupError?.message,
+      });
+    }
+  }
+}
+
+async function uploadLargeVideoToCloudinary(params: {
+  sourceFile: ExpoFile;
+  uploadUrl: string;
+  signData: CloudinarySignUploadResponse;
+  fileName: string;
+  mimeType: string;
+}): Promise<any> {
+  const totalBytes = params.sourceFile.size;
+  const totalChunks = Math.ceil(totalBytes / CLOUDINARY_CHUNK_SIZE_BYTES);
+  const uploadId = createCloudinaryUploadId();
+  let finalData: any = null;
+
+  console.log("[Cloudinary chunked upload started]", {
+    fileName: params.fileName,
+    sizeMB: Number((totalBytes / 1024 / 1024).toFixed(2)),
+    chunkSizeMB: CLOUDINARY_CHUNK_SIZE_BYTES / 1024 / 1024,
+    totalChunks,
+  });
+
+  for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+    const start = chunkIndex * CLOUDINARY_CHUNK_SIZE_BYTES;
+    const endExclusive = Math.min(
+      start + CLOUDINARY_CHUNK_SIZE_BYTES,
+      totalBytes,
+    );
+
+    finalData = await uploadCloudinaryChunk({
+      ...params,
+      uploadId,
+      start,
+      endExclusive,
+      totalBytes,
+      chunkIndex,
+      totalChunks,
+    });
+
+    console.log("[Cloudinary chunk uploaded]", {
+      chunk: chunkIndex + 1,
+      totalChunks,
+      progress: Math.round((endExclusive / totalBytes) * 100),
+    });
+  }
+
+  if (
+    !finalData ||
+    finalData.done === false ||
+    !finalData.secure_url ||
+    !finalData.public_id
+  ) {
+    const details = {
+      stage: "chunked-upload-incomplete",
+      totalBytes,
+      totalChunks,
+      response: finalData,
+    };
+
+    console.error("[Cloudinary chunked upload incomplete]", details);
+
+    throw new ApiError(
+      502,
+      "Cloudinary received all chunks but did not complete the video upload",
+      details,
+    );
+  }
+
+  console.log("[Cloudinary chunked upload completed]", {
+    fileName: params.fileName,
+    totalChunks,
+  });
+
+  return finalData;
+}
+
+async function uploadSmallFileToCloudinary(params: {
+  file: UploadFileInput;
+  uploadUrl: string;
+  signData: CloudinarySignUploadResponse;
+  fileName: string;
+  mimeType: string;
+  projectId: string;
+  mediaType: "image" | "voice" | "video";
+  target: CloudinaryUploadTarget;
+}): Promise<any> {
+  const form = new FormData();
+
+  form.append(
+    "file",
+    {
+      uri: params.file.uri,
+      name: params.fileName,
+      type: params.mimeType,
+    } as any,
+  );
+
+  appendCloudinarySigningFields(form, params.signData);
+
+  let response: Response;
+
+  try {
+    response = await fetch(params.uploadUrl, {
+      method: "POST",
+      body: form,
+    });
+  } catch (error: any) {
+    const message =
+      typeof error?.message === "string"
+        ? error.message
+        : "Unknown network error";
+
+    const details = {
+      stage: "network",
+      status: 0,
+      message,
+      errorName: error?.name,
+      projectId: params.projectId,
+      mediaType: params.mediaType,
+      target: params.target,
+      fileName: params.fileName,
+      mimeType: params.mimeType,
+    };
+
+    console.error("[Cloudinary network failure]", details);
+
+    throw new ApiError(
+      0,
+      `Cloudinary network failure: ${message}`,
+      details,
+    );
+  }
+
+  const parsed = await readCloudinaryResponse(response);
+
+  if (!response.ok) {
+    const message = getCloudinaryResponseMessage(response, parsed);
+
+    const details = {
+      stage: "cloudinary-response",
+      status: response.status,
+      statusText: response.statusText,
+      message,
+      requestId: parsed.requestId,
+      projectId: params.projectId,
+      mediaType: params.mediaType,
+      target: params.target,
+      fileName: params.fileName,
+      mimeType: params.mimeType,
+      response: parsed.data ?? parsed.responseText,
+    };
+
+    console.error("[Cloudinary upload failed]", details);
+
+    throw new ApiError(response.status, message, details);
+  }
+
+  return parsed.data;
+}
+
 function uploadSingleFileToCloudinary(params: {
   file: UploadFileInput;
   projectId: string;
@@ -573,75 +1118,250 @@ async function uploadSingleFileToCloudinary(params: {
   mediaType: "image" | "voice" | "video";
   target?: CloudinaryUploadTarget;
 }): Promise<UploadedVoiceMedia | UploadedAssetMedia> {
-  const signData = await mediaApi.signUpload({
-    projectId: params.projectId,
-    mediaType: params.mediaType,
-    target: params.target ?? "asset",
-  });
+  const target = params.target ?? "asset";
 
-  const form = new FormData();
+  const mimeType =
+    params.file.type ||
+    (params.mediaType === "voice"
+      ? "audio/m4a"
+      : params.mediaType === "video"
+        ? "video/mp4"
+        : "image/jpeg");
 
-  form.append("file", {
-    uri: params.file.uri,
-    name: params.file.name,
-    type:
-      params.file.type ||
-      (params.mediaType === "voice"
-        ? "audio/m4a"
-        : params.mediaType === "video"
-          ? "video/mp4"
-          : "image/jpeg"),
-  } as any);
+  const extension =
+    params.mediaType === "voice"
+      ? ".m4a"
+      : params.mediaType === "video"
+        ? ".mp4"
+        : ".jpg";
 
-  form.append("api_key", signData.apiKey);
-  form.append("timestamp", String(signData.timestamp));
-  form.append("signature", signData.signature);
-  form.append("folder", signData.folder);
-  form.append("public_id", signData.publicId);
+  const fileName =
+    params.file.name ||
+    `${params.mediaType}-${Date.now()}${extension}`;
 
+  /*
+   * 1. Get signed upload parameters from the backend.
+   */
+  let signData: Awaited<ReturnType<typeof mediaApi.signUpload>>;
+
+  try {
+    signData = await mediaApi.signUpload({
+      projectId: params.projectId,
+      mediaType: params.mediaType,
+      target,
+    });
+  } catch (error: any) {
+    const details = {
+      stage: "signing",
+      status: error?.status ?? 0,
+      message: error?.message,
+      projectId: params.projectId,
+      mediaType: params.mediaType,
+      target,
+      fileName,
+    };
+
+    console.error("[Cloudinary signing failed]", details);
+
+    if (error instanceof ApiError) {
+      throw error;
+    }
+
+    throw new ApiError(
+      error?.status ?? 0,
+      error?.message || "Could not prepare the Cloudinary upload",
+      details,
+    );
+  }
+
+  /*
+   * 2. Validate the signing response.
+   *
+   * Do not log signData because it contains the upload signature.
+   */
+  const missingSigningFields = [
+    !signData?.apiKey && "apiKey",
+    !signData?.timestamp && "timestamp",
+    !signData?.signature && "signature",
+    !signData?.folder && "folder",
+    !signData?.publicId && "publicId",
+    !signData?.cloudName && "cloudName",
+    !signData?.resourceType && "resourceType",
+  ].filter(Boolean);
+
+  if (missingSigningFields.length > 0) {
+    const details = {
+      stage: "signing-response",
+      missingFields: missingSigningFields,
+      projectId: params.projectId,
+      mediaType: params.mediaType,
+      target,
+      fileName,
+    };
+
+    console.error(
+      "[Invalid Cloudinary signing response]",
+      details,
+    );
+
+    throw new ApiError(
+      500,
+      `Missing Cloudinary upload information: ${missingSigningFields.join(", ")}`,
+      details,
+    );
+  }
+
+  /*
+   * 3. Select the upload strategy.
+   *
+   * Cloudinary rejects files larger than 100 MB when they are sent in one
+   * request. Start chunking at 90 MB so multipart overhead never gets close
+   * to that boundary. Images, voice notes and smaller videos keep using the
+   * existing single-request upload.
+   */
   const uploadUrl =
     `https://api.cloudinary.com/v1_1/${signData.cloudName}` +
     `/${signData.resourceType}/upload`;
 
-  const response = await fetch(uploadUrl, {
-    method: "POST",
-    body: form,
-  });
+  const sourceFile =
+    params.mediaType === "video"
+      ? getReadableLocalFile(params.file.uri)
+      : null;
 
-  const data = await response.json().catch(() => null);
+  const shouldUseChunkedUpload =
+    params.mediaType === "video" &&
+    !!sourceFile &&
+    sourceFile.size >= CLOUDINARY_CHUNK_THRESHOLD_BYTES;
 
-  if (!response.ok) {
+  let data: any;
+
+  if (shouldUseChunkedUpload && sourceFile) {
+    data = await uploadLargeVideoToCloudinary({
+      sourceFile,
+      uploadUrl,
+      signData,
+      fileName,
+      mimeType,
+    });
+  } else {
+    try {
+      data = await uploadSmallFileToCloudinary({
+        file: params.file,
+        uploadUrl,
+        signData,
+        fileName,
+        mimeType,
+        projectId: params.projectId,
+        mediaType: params.mediaType,
+        target,
+      });
+    } catch (error: any) {
+      /*
+       * If file-size inspection underestimated the request or a provider-side
+       * limit is lower than expected, transparently retry a readable video by
+       * switching to the chunked protocol after a 413 response.
+       */
+      if (
+        error instanceof ApiError &&
+        error.status === 413 &&
+        params.mediaType === "video" &&
+        sourceFile
+      ) {
+        console.warn(
+          "[Cloudinary switching to chunked upload after HTTP 413]",
+          {
+            fileName,
+            sizeMB: Number((sourceFile.size / 1024 / 1024).toFixed(2)),
+          },
+        );
+
+        data = await uploadLargeVideoToCloudinary({
+          sourceFile,
+          uploadUrl,
+          signData,
+          fileName,
+          mimeType,
+        });
+      } else if (
+        error instanceof ApiError &&
+        error.status === 413 &&
+        params.mediaType === "video"
+      ) {
+        throw new ApiError(
+          413,
+          "The video is too large and its local file could not be opened for chunked upload",
+          {
+            stage: "chunked-upload-file-unavailable",
+            fileName,
+            fileUri: params.file.uri,
+            originalError: error.data,
+          },
+        );
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  /*
+   * 4. Validate the successful response.
+   */
+  if (!data?.secure_url || !data?.public_id) {
+    const details = {
+      stage: "invalid-success-response",
+      fileName,
+      mediaType: params.mediaType,
+      response: data,
+    };
+
+    console.error(
+      "[Invalid Cloudinary success response]",
+      details,
+    );
+
     throw new ApiError(
-      response.status,
-      data?.error?.message || "Cloudinary upload failed",
-      data,
+      502,
+      "Cloudinary completed the upload but returned no media URL",
+      details,
     );
   }
 
+  /*
+   * 5. Return voice-note data.
+   */
   if (params.mediaType === "voice") {
     return {
       url: data.secure_url,
       publicId: data.public_id,
       duration:
-        typeof data.duration === "number" ? Math.round(data.duration) : null,
+        typeof data.duration === "number"
+          ? Math.round(data.duration)
+          : null,
     };
   }
 
-  const mediaType: "image" | "video" =
+  /*
+   * 6. Return image or video data.
+   */
+  const uploadedMediaType: "image" | "video" =
     params.mediaType === "video" ? "video" : "image";
 
   return {
     url: data.secure_url,
     publicId: data.public_id,
-    mediaType,
-    mimeType: params.file.type,
+    mediaType: uploadedMediaType,
+    mimeType,
     duration:
-      mediaType === "video" && typeof data.duration === "number"
+      uploadedMediaType === "video" &&
+      typeof data.duration === "number"
         ? Math.round(data.duration)
         : null,
     thumbnailUrl:
-      mediaType === "video"
-        ? data.secure_url.replace("/video/upload/", "/video/upload/so_1,f_jpg/")
+      uploadedMediaType === "video"
+        ? data.secure_url.replace(
+            "/video/upload/",
+            "/video/upload/so_1,f_jpg,q_auto/",
+          )
         : null,
     existing: true,
   };
