@@ -13,7 +13,9 @@ import {
   Linking,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from "react-native";
+import { VideoView, useVideoPlayer } from "expo-video";
 import { useRouter } from "expo-router";
 import { Ionicons, Entypo } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -94,6 +96,13 @@ function upsertInspectorFile(
   return [...(files || []).filter((file) => file.id !== nextFile.id), nextFile];
 }
 
+function removeInspectorFile(
+  files: InspectorFile[] | undefined,
+  fileId: string,
+) {
+  return (files || []).filter((file) => file.id !== fileId);
+}
+
 function getProjectStatusLabel(project: Project, t: (key: string) => string) {
   const raw = (project.workflowStatus ?? "").toLowerCase();
   if (raw === "new") return t("projectScreen.status.new");
@@ -101,6 +110,74 @@ function getProjectStatusLabel(project: Project, t: (key: string) => string) {
   return project.workflowStatus || t("projectScreen.status.new");
 }
 
+function isVideoFile(file: InspectorFile) {
+  return file.type === "video" || file.mimeType?.startsWith("video/");
+}
+
+function getVideoThumbnailUrl(file: InspectorFile) {
+  if (file.thumbnailUrl) return file.thumbnailUrl;
+
+  // Generate a thumbnail from a Cloudinary video if the backend
+  // did not return thumbnailUrl.
+  if (file.url?.includes("/video/upload/")) {
+    return file.url.replace(
+      "/video/upload/",
+      "/video/upload/so_1,f_jpg,q_auto/",
+    );
+  }
+
+  return null;
+}
+
+function VideoPreviewModal({
+  videoUrl,
+  title,
+  onClose,
+}: {
+  videoUrl: string;
+  title: string;
+  onClose: () => void;
+}) {
+  const player = useVideoPlayer(videoUrl, (videoPlayer) => {
+    videoPlayer.loop = false;
+    videoPlayer.play();
+  });
+
+  const handleClose = () => {
+    player.pause();
+    onClose();
+  };
+
+  return (
+    <Modal
+      visible
+      transparent
+      animationType="fade"
+      onRequestClose={handleClose}
+    >
+      <View style={styles.videoPlayerOverlay}>
+        <View style={styles.videoPlayerCard}>
+          <View style={styles.videoPlayerHeader}>
+            <Text style={styles.videoPlayerTitle} numberOfLines={1}>
+              {title}
+            </Text>
+
+            <Pressable style={styles.videoPlayerClose} onPress={handleClose}>
+              <Ionicons name="close" size={23} color="#ffffff" />
+            </Pressable>
+          </View>
+
+          <VideoView
+            style={styles.videoPlayer}
+            player={player}
+            nativeControls
+            contentFit="contain"
+          />
+        </View>
+      </View>
+    </Modal>
+  );
+}
 export default function ProjectScreen() {
   const { t } = useTranslation();
 
@@ -137,6 +214,12 @@ export default function ProjectScreen() {
   const [downloadedProjectIds, setDownloadedProjectIds] = useState<string[]>(
     [],
   );
+
+  const [previewVideo, setPreviewVideo] = useState<{
+    url: string;
+    name: string;
+  } | null>(null);
+
   const [projectPendingMap, setProjectPendingMap] = useState<
     Record<string, number>
   >({});
@@ -181,7 +264,10 @@ export default function ProjectScreen() {
 
   const [projectVideoCameraVisible, setProjectVideoCameraVisible] =
     useState(false);
-  const [uploadingProjectVideo, setUploadingProjectVideo] = useState(false);
+  const [uploadingProjectVideoId, setUploadingProjectVideoId] = useState<
+    string | null
+  >(null);
+  const uploadingProjectVideo = uploadingProjectVideoId !== null;
 
   const autoRefreshStartedRef = React.useRef(false);
   const autoRefreshRunningRef = React.useRef(false);
@@ -447,6 +533,26 @@ export default function ProjectScreen() {
     return [...offlineProjectEntries, ...projects];
   }, [offlineProjectEntries, projects]);
 
+  const [projectVideoListVisible, setProjectVideoListVisible] = useState(false);
+
+  const [selectedProjectVideoId, setSelectedProjectVideoId] = useState<
+    string | null
+  >(null);
+
+  const selectedProjectForVideoList = useMemo(() => {
+    if (!selectedProjectVideoId) return null;
+
+    return (
+      projects.find((project) => project.id === selectedProjectVideoId) ?? null
+    );
+  }, [projects, selectedProjectVideoId]);
+
+  const projectVideosForModal = useMemo(() => {
+    return (selectedProjectForVideoList?.inspectorFiles || []).filter(
+      isVideoFile,
+    );
+  }, [selectedProjectForVideoList]);
+
   const isRecentProject = (project?: Project | null) => {
     if (!project?.createdAt || !project?.updatedAt) return false;
 
@@ -549,6 +655,7 @@ export default function ProjectScreen() {
     setInspectionDateDraft(null);
     setInspectionDatePickerVisible(false);
     setProjectVideoCameraVisible(false);
+    setPreviewVideo(null);
   }
 
   function getFileIcon(type: InspectorFile["type"]) {
@@ -567,18 +674,42 @@ export default function ProjectScreen() {
     if (sizeBytes < 1024 * 1024) return `${Math.round(sizeBytes / 1024)} KB`;
     return `${(sizeBytes / 1024 / 1024).toFixed(1)} MB`;
   }
+  async function viewInspectorFile(
+    file: InspectorFile,
+    projectId = selectedProjectForFiles?.id,
+  ) {
+    if (!projectId) return;
 
-  async function viewInspectorFile(file: InspectorFile) {
     try {
-      if (!selectedProjectForFiles) return;
-
       setViewingFileId(file.id);
 
-      const result = await projectApi.downloadInspectorFile(
-        selectedProjectForFiles.id,
-        file.id,
-      );
+      if (isVideoFile(file)) {
+        // Project videos are stored in Cloudinary, so their saved URL can be
+        // played directly. This also avoids waiting for a download URL before
+        // mounting the player on the first tap.
+        let videoUrl = String(file.url || "").trim();
 
+        if (!videoUrl) {
+          const result = await projectApi.downloadInspectorFile(
+            projectId,
+            file.id,
+          );
+          videoUrl = String(result.url || "").trim();
+        }
+
+        if (!videoUrl) {
+          throw new Error("Video URL is unavailable");
+        }
+
+        setPreviewVideo({
+          url: videoUrl,
+          name: file.name || "Inspection video",
+        });
+
+        return;
+      }
+
+      const result = await projectApi.downloadInspectorFile(projectId, file.id);
       await Linking.openURL(result.url);
     } catch (error: any) {
       Alert.alert("View failed", error?.message || "Could not open file.");
@@ -806,70 +937,259 @@ export default function ProjectScreen() {
       ? rawUri
       : `file://${rawUri}`;
 
-    try {
-      setUploadingProjectVideo(true);
+    const uploadedAt = Date.now();
+    const videoName =
+      capturedVideo.name || `inspection-video-${uploadedAt}.mp4`;
+    const videoMimeType =
+      capturedVideo.mimeType || capturedVideo.type || "video/mp4";
+    const temporaryVideoId = `uploading-video-${project.id}-${uploadedAt}`;
 
-      const result = await projectApi.addProjectVideo({
-        projectId: project.id,
-        video: {
-          uri,
-          name: capturedVideo.name || `inspection-video-${Date.now()}.mp4`,
-          type: capturedVideo.mimeType || capturedVideo.type || "video/mp4",
-        },
-        locationIds: locationId ? [locationId] : [],
-      });
+    const optimisticVideo: InspectorFile = {
+      id: temporaryVideoId,
+      name: videoName,
+      type: "video",
+      url: uri,
+      uploadedBy: user?.id ?? "pending-upload",
+      createdAt: new Date(uploadedAt).toISOString(),
+      storage: "cloudinary",
+      publicId: null,
+      mimeType: videoMimeType,
+      duration:
+        typeof capturedVideo.duration === "number"
+          ? capturedVideo.duration
+          : null,
+      thumbnailUrl:
+        capturedVideo.thumbnailUrl || capturedVideo.thumbnailUri || null,
+      locationIds: locationId ? [locationId] : [],
+    };
 
-      setProjects((current) =>
-        current.map((item) =>
-          item.id === result.project.id ? result.project : item,
+    // Close the camera immediately and show the local video in the UI while
+    // Cloudinary and the project API continue in the background.
+    setProjectVideoCameraVisible(false);
+    setUploadingProjectVideoId(temporaryVideoId);
+
+    setProjects((current) =>
+      current.map((item) =>
+        item.id === project.id
+          ? {
+              ...item,
+              inspectorFiles: upsertInspectorFile(
+                item.inspectorFiles,
+                optimisticVideo,
+              ),
+            }
+          : item,
+      ),
+    );
+
+    setSelectedProjectForFiles((current) =>
+      current?.id === project.id
+        ? {
+            ...current,
+            inspectorFiles: upsertInspectorFile(
+              current.inspectorFiles,
+              optimisticVideo,
+            ),
+          }
+        : current,
+    );
+
+    setInspectorFiles((current) =>
+      upsertInspectorFile(current, optimisticVideo),
+    );
+
+    if (locationId) {
+      setSelectedLocation((current) =>
+        current?.id === locationId
+          ? {
+              ...current,
+              inspectorFiles: upsertInspectorFile(
+                current.inspectorFiles,
+                optimisticVideo,
+              ),
+            }
+          : current,
+      );
+
+      setProjectLocations((current) =>
+        current.map((location) =>
+          location.id === locationId
+            ? {
+                ...location,
+                inspectorFiles: upsertInspectorFile(
+                  location.inspectorFiles,
+                  optimisticVideo,
+                ),
+              }
+            : location,
         ),
       );
-      setSelectedProjectForFiles(result.project);
-      setInspectorFiles((current) =>
-        upsertInspectorFile(current, result.video),
-      );
+    }
 
-      if (locationId) {
-        setSelectedLocation((current) =>
-          current?.id === locationId
+    // Do not await this task. Returning now lets AssetCameraModal finish its
+    // Use Video action without waiting for the network upload.
+    void (async () => {
+      try {
+        const result = await projectApi.addProjectVideo({
+          projectId: project.id,
+          video: {
+            uri,
+            name: videoName,
+            type: videoMimeType,
+          },
+          locationIds: locationId ? [locationId] : [],
+        });
+
+        const savedProject: Project = {
+          ...result.project,
+          inspectorFiles: upsertInspectorFile(
+            removeInspectorFile(
+              result.project.inspectorFiles,
+              temporaryVideoId,
+            ),
+            result.video,
+          ),
+        };
+
+        setProjects((current) =>
+          current.map((item) =>
+            item.id === savedProject.id ? savedProject : item,
+          ),
+        );
+
+        setSelectedProjectForFiles((current) =>
+          current?.id === savedProject.id ? savedProject : current,
+        );
+
+        setInspectorFiles((current) =>
+          upsertInspectorFile(
+            removeInspectorFile(current, temporaryVideoId),
+            result.video,
+          ),
+        );
+
+        if (locationId) {
+          setSelectedLocation((current) =>
+            current?.id === locationId
+              ? {
+                  ...current,
+                  inspectorFiles: upsertInspectorFile(
+                    removeInspectorFile(
+                      current.inspectorFiles,
+                      temporaryVideoId,
+                    ),
+                    result.video,
+                  ),
+                }
+              : current,
+          );
+
+          setProjectLocations((current) =>
+            current.map((location) =>
+              location.id === locationId
+                ? {
+                    ...location,
+                    inspectorFiles: upsertInspectorFile(
+                      removeInspectorFile(
+                        location.inspectorFiles,
+                        temporaryVideoId,
+                      ),
+                      result.video,
+                    ),
+                  }
+                : location,
+            ),
+          );
+        }
+      } catch (error: any) {
+        // Roll back only the optimistic item; preserve every real file.
+        setProjects((current) =>
+          current.map((item) =>
+            item.id === project.id
+              ? {
+                  ...item,
+                  inspectorFiles: removeInspectorFile(
+                    item.inspectorFiles,
+                    temporaryVideoId,
+                  ),
+                }
+              : item,
+          ),
+        );
+
+        setSelectedProjectForFiles((current) =>
+          current?.id === project.id
             ? {
                 ...current,
-                inspectorFiles: upsertInspectorFile(
+                inspectorFiles: removeInspectorFile(
                   current.inspectorFiles,
-                  result.video,
+                  temporaryVideoId,
                 ),
               }
             : current,
         );
 
-        setProjectLocations((current) =>
-          current.map((location) =>
-            location.id === locationId
+        setInspectorFiles((current) =>
+          removeInspectorFile(current, temporaryVideoId),
+        );
+
+        if (locationId) {
+          setSelectedLocation((current) =>
+            current?.id === locationId
               ? {
-                  ...location,
-                  inspectorFiles: upsertInspectorFile(
-                    location.inspectorFiles,
-                    result.video,
+                  ...current,
+                  inspectorFiles: removeInspectorFile(
+                    current.inspectorFiles,
+                    temporaryVideoId,
                   ),
                 }
-              : location,
-          ),
+              : current,
+          );
+
+          setProjectLocations((current) =>
+            current.map((location) =>
+              location.id === locationId
+                ? {
+                    ...location,
+                    inspectorFiles: removeInspectorFile(
+                      location.inspectorFiles,
+                      temporaryVideoId,
+                    ),
+                  }
+                : location,
+            ),
+          );
+        }
+
+        Alert.alert(
+          "Upload failed",
+          error?.message || "Could not upload the inspection video.",
+        );
+      } finally {
+        setUploadingProjectVideoId((current) =>
+          current === temporaryVideoId ? null : current,
         );
       }
+    })();
+  }
 
-      Alert.alert(
-        "Video uploaded",
-        "The inspection video was added successfully.",
-      );
-    } catch (error: any) {
-      Alert.alert(
-        "Upload failed",
-        error?.message || "Could not upload the inspection video.",
-      );
-      throw error;
-    } finally {
-      setUploadingProjectVideo(false);
-    }
+  function openProjectVideosModal(project: Project) {
+    setSelectedProjectVideoId(project.id);
+    setProjectVideoListVisible(true);
+  }
+
+  function closeProjectVideosModal() {
+    setProjectVideoListVisible(false);
+    setSelectedProjectVideoId(null);
+  }
+
+  function addAnotherProjectVideo() {
+    if (!selectedProjectForVideoList || uploadingProjectVideo) return;
+
+    const project = selectedProjectForVideoList;
+
+    setProjectVideoListVisible(false);
+    openProjectVideoCamera(project);
   }
 
   function openProjectVideoCamera(project: Project) {
@@ -1086,6 +1406,14 @@ export default function ProjectScreen() {
               const isDownloading = downloadingProjectId === project.id;
               const isRemoving = removingProjectId === project.id;
               const pendingForProject = projectPendingMap[project.id] ?? 0;
+              const projectVideos = (project.inspectorFiles || []).filter(
+                isVideoFile,
+              );
+
+              const projectVideo =
+                projectVideos.length > 0
+                  ? projectVideos[projectVideos.length - 1]
+                  : null;
 
               const stats = project.stats ?? {
                 totalAssets: 0,
@@ -1290,32 +1618,73 @@ export default function ProjectScreen() {
                           </Pressable>
                         )}
 
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel="Record inspection video"
-                          style={[
-                            styles.iconBtn,
-                            styles.videoIconBtn,
-                            (!isOnline || uploadingProjectVideo) &&
-                              styles.iconBtnDisabled,
-                          ]}
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            openProjectVideoCamera(project);
-                          }}
-                          disabled={!isOnline || uploadingProjectVideo}
-                        >
-                          {uploadingProjectVideo &&
-                          selectedProjectForFiles?.id === project.id ? (
-                            <ActivityIndicator size="small" color="#ffffff" />
-                          ) : (
-                            <Ionicons
-                              name="videocam-outline"
-                              size={21}
-                              color="#ffffff"
-                            />
-                          )}
-                        </Pressable>
+                        {projectVideo ? (
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={`View ${projectVideos.length} inspection videos`}
+                            style={[
+                              styles.iconBtn,
+                              styles.projectVideoIconThumbnail,
+                            ]}
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              openProjectVideosModal(project);
+                            }}
+                          >
+                            {getVideoThumbnailUrl(projectVideo) ? (
+                              <Image
+                                source={{
+                                  uri: getVideoThumbnailUrl(projectVideo)!,
+                                }}
+                                style={styles.projectVideoIconImage}
+                                resizeMode="cover"
+                              />
+                            ) : (
+                              <View style={styles.projectVideoIconFallback} />
+                            )}
+
+                            <View style={styles.projectVideoIconOverlay}>
+                              <Ionicons
+                                name="albums-outline"
+                                size={18}
+                                color="#ffffff"
+                              />
+                            </View>
+
+                            <View style={styles.projectVideoCountBadge}>
+                              <Text style={styles.projectVideoCountText}>
+                                {projectVideos.length}
+                              </Text>
+                            </View>
+                          </Pressable>
+                        ) : (
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel="Record inspection video"
+                            style={[
+                              styles.iconBtn,
+                              styles.videoIconBtn,
+                              (!isOnline || uploadingProjectVideo) &&
+                                styles.iconBtnDisabled,
+                            ]}
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              openProjectVideoCamera(project);
+                            }}
+                            disabled={!isOnline || uploadingProjectVideo}
+                          >
+                            {uploadingProjectVideo &&
+                            selectedProjectForFiles?.id === project.id ? (
+                              <ActivityIndicator size="small" color="#ffffff" />
+                            ) : (
+                              <Ionicons
+                                name="videocam-outline"
+                                size={21}
+                                color="#ffffff"
+                              />
+                            )}
+                          </Pressable>
+                        )}
                       </View>
                     )}
                   </View>
@@ -1716,13 +2085,46 @@ export default function ProjectScreen() {
                     ) : (
                       (selectedLocation.inspectorFiles || []).map((file) => (
                         <View key={file.id} style={styles.fileRow}>
-                          <View style={styles.fileIconBox}>
-                            <Ionicons
-                              name={getFileIcon(file.type) as any}
-                              size={22}
-                              color={ACC}
-                            />
-                          </View>
+                          {isVideoFile(file) ? (
+                            <Pressable
+                              style={styles.fileVideoThumbnail}
+                              onPress={() => viewInspectorFile(file)}
+                              disabled={
+                                viewingFileId === file.id ||
+                                file.id === uploadingProjectVideoId
+                              }
+                            >
+                              {getVideoThumbnailUrl(file) ? (
+                                <Image
+                                  source={{ uri: getVideoThumbnailUrl(file)! }}
+                                  style={styles.fileVideoThumbnailImage}
+                                />
+                              ) : null}
+
+                              <View style={styles.fileVideoThumbnailOverlay}>
+                                {file.id === uploadingProjectVideoId ? (
+                                  <ActivityIndicator
+                                    size="small"
+                                    color="#ffffff"
+                                  />
+                                ) : (
+                                  <Ionicons
+                                    name="play"
+                                    size={19}
+                                    color="#ffffff"
+                                  />
+                                )}
+                              </View>
+                            </Pressable>
+                          ) : (
+                            <View style={styles.fileIconBox}>
+                              <Ionicons
+                                name={getFileIcon(file.type) as any}
+                                size={22}
+                                color={ACC}
+                              />
+                            </View>
+                          )}
 
                           <View style={styles.fileInfo}>
                             <Text style={styles.fileName} numberOfLines={2}>
@@ -1742,7 +2144,8 @@ export default function ProjectScreen() {
                               onPress={() => viewInspectorFile(file)}
                               disabled={
                                 viewingFileId === file.id ||
-                                downloadingFileId === file.id
+                                downloadingFileId === file.id ||
+                                file.id === uploadingProjectVideoId
                               }
                             >
                               {viewingFileId === file.id ? (
@@ -1761,7 +2164,8 @@ export default function ProjectScreen() {
                               onPress={() => downloadInspectorFile(file)}
                               disabled={
                                 viewingFileId === file.id ||
-                                downloadingFileId === file.id
+                                downloadingFileId === file.id ||
+                                file.id === uploadingProjectVideoId
                               }
                             >
                               {downloadingFileId === file.id ? (
@@ -1786,6 +2190,160 @@ export default function ProjectScreen() {
         </Modal>
       </ScrollView>
 
+      <Modal
+        visible={projectVideoListVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeProjectVideosModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.projectVideosModalCard}>
+            <View style={styles.filesModalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>Inspection videos</Text>
+
+                <Text style={styles.filesModalSubtitle} numberOfLines={1}>
+                  {selectedProjectForVideoList?.name}
+                </Text>
+              </View>
+
+              <Pressable
+                style={styles.filesCloseBtn}
+                onPress={closeProjectVideosModal}
+              >
+                <Ionicons name="close" size={20} color={TEXT} />
+              </Pressable>
+            </View>
+
+            <ScrollView
+              style={styles.projectVideosScroll}
+              showsVerticalScrollIndicator={false}
+            >
+              {projectVideosForModal.length === 0 ? (
+                <View style={styles.emptyWrap}>
+                  <Text style={styles.emptyText}>
+                    No inspection videos uploaded.
+                  </Text>
+                </View>
+              ) : (
+                projectVideosForModal.map((file, index) => {
+                  const isUploading = file.id === uploadingProjectVideoId;
+                  const thumbnailUrl = getVideoThumbnailUrl(file);
+
+                  return (
+                    <View key={file.id} style={styles.fileRow}>
+                      <Pressable
+                        style={styles.fileVideoThumbnail}
+                        onPress={() => {
+                          if (!isUploading && selectedProjectForVideoList) {
+                            viewInspectorFile(
+                              file,
+                              selectedProjectForVideoList.id,
+                            );
+                          }
+                        }}
+                        disabled={isUploading || viewingFileId === file.id}
+                      >
+                        {thumbnailUrl ? (
+                          <Image
+                            source={{ uri: thumbnailUrl }}
+                            style={styles.fileVideoThumbnailImage}
+                            resizeMode="cover"
+                          />
+                        ) : null}
+
+                        <View style={styles.fileVideoThumbnailOverlay}>
+                          {isUploading || viewingFileId === file.id ? (
+                            <ActivityIndicator size="small" color="#ffffff" />
+                          ) : (
+                            <Ionicons name="play" size={19} color="#ffffff" />
+                          )}
+                        </View>
+                      </Pressable>
+
+                      <View style={styles.fileInfo}>
+                        <Text style={styles.fileName} numberOfLines={2}>
+                          {file.name || `Inspection video ${index + 1}`}
+                        </Text>
+
+                        <Text style={styles.fileMeta}>
+                          {isUploading
+                            ? "Uploading..."
+                            : file.createdAt
+                              ? new Date(file.createdAt).toLocaleString()
+                              : "Video"}
+                        </Text>
+                      </View>
+
+                      <Pressable
+                        style={[
+                          styles.fileActionBtn,
+                          styles.viewBtn,
+                          (isUploading || viewingFileId === file.id) &&
+                            styles.iconBtnDisabled,
+                        ]}
+                        onPress={() => {
+                          if (selectedProjectForVideoList) {
+                            viewInspectorFile(
+                              file,
+                              selectedProjectForVideoList.id,
+                            );
+                          }
+                        }}
+                        disabled={isUploading || viewingFileId === file.id}
+                      >
+                        {viewingFileId === file.id ? (
+                          <ActivityIndicator size="small" color="#ffffff" />
+                        ) : (
+                          <Ionicons
+                            name="eye-outline"
+                            size={18}
+                            color="#ffffff"
+                          />
+                        )}
+                      </Pressable>
+                    </View>
+                  );
+                })
+              )}
+            </ScrollView>
+
+            <Pressable
+              style={[
+                styles.recordVideoBtn,
+                (!isOnline || uploadingProjectVideo) &&
+                  styles.actionBtnDisabled,
+              ]}
+              onPress={addAnotherProjectVideo}
+              disabled={!isOnline || uploadingProjectVideo}
+            >
+              {uploadingProjectVideo ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <Ionicons name="videocam-outline" size={19} color="#ffffff" />
+              )}
+
+              <Text style={styles.recordVideoText}>
+                {!isOnline
+                  ? "Video upload requires internet"
+                  : uploadingProjectVideo
+                    ? "Uploading video..."
+                    : "Record or upload another video"}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {previewVideo ? (
+        <VideoPreviewModal
+          key={previewVideo.url}
+          videoUrl={previewVideo.url}
+          title={previewVideo.name}
+          onClose={() => setPreviewVideo(null)}
+        />
+      ) : null}
+
       <AssetCameraModal
         visible={projectVideoCameraVisible}
         mode="video"
@@ -1802,12 +2360,6 @@ export default function ProjectScreen() {
     </View>
   );
 }
-// const ACC = "#2A324B";
-// const SURFACE = "#E1E5EE";
-// const BORDER = "#C7CCDB";
-// const TEXT = "#2A324B";
-// const MUTED = "#767B91";
-// const SOFT = "#F7C59F";
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: "#ffffff" },
@@ -2589,5 +3141,128 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 13,
     fontFamily: "Inter-SemiBold",
+  },
+
+  projectVideoIconThumbnail: {
+    overflow: "hidden",
+    backgroundColor: "#111827",
+    borderWidth: 1,
+    borderColor: ACC,
+  },
+
+  projectVideoIconImage: {
+    width: "100%",
+    height: "100%",
+  },
+
+  projectVideoIconFallback: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#111827",
+  },
+
+  projectVideoIconOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.25)",
+  },
+
+  fileVideoThumbnail: {
+    width: 54,
+    height: 46,
+    borderRadius: 9,
+    overflow: "hidden",
+    backgroundColor: "#111827",
+    marginRight: 10,
+  },
+
+  fileVideoThumbnailImage: {
+    width: "100%",
+    height: "100%",
+  },
+
+  fileVideoThumbnailOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.25)",
+  },
+
+  videoPlayerOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: 16,
+    backgroundColor: "rgba(0,0,0,0.92)",
+  },
+
+  videoPlayerCard: {
+    overflow: "hidden",
+    borderRadius: 16,
+    backgroundColor: "#000000",
+  },
+
+  videoPlayerHeader: {
+    minHeight: 52,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingLeft: 16,
+    backgroundColor: ACC,
+  },
+
+  videoPlayerTitle: {
+    flex: 1,
+    color: "#ffffff",
+    fontSize: 14,
+    fontFamily: "Inter-SemiBold",
+  },
+
+  videoPlayerClose: {
+    width: 52,
+    height: 52,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  videoPlayer: {
+    width: "100%",
+    aspectRatio: 16 / 9,
+    backgroundColor: "#000000",
+  },
+
+  projectVideosModalCard: {
+    width: "100%",
+    maxWidth: 520,
+    maxHeight: "65%",
+    alignSelf: "center",
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 18,
+    padding: 16,
+  },
+
+  projectVideosScroll: {
+    maxHeight: 330,
+  },
+
+  projectVideoCountBadge: {
+    position: "absolute",
+    top: -3,
+    right: -3,
+    minWidth: 15,
+    height: 15,
+    borderRadius: 10,
+    paddingHorizontal: 5,
+    backgroundColor: SOFT,
+    borderWidth: 1,
+    borderColor: "#ffffff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  projectVideoCountText: {
+    color: TEXT,
+    fontSize: 7,
+    fontFamily: fonts.inter.semiBold as unknown as string,
   },
 });
