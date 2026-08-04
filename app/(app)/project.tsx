@@ -2328,7 +2328,7 @@ export default function ProjectScreen() {
                   ? "Video upload requires internet"
                   : uploadingProjectVideo
                     ? "Uploading video..."
-                    : "Record or upload another video"}
+                    : "Record"}
               </Text>
             </Pressable>
           </View>
