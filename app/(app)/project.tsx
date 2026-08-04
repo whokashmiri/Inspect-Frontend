@@ -1802,11 +1802,13 @@ export default function ProjectScreen() {
                     ) : null}
                   </View>
 
-                  <Text style={styles.fieldLabel}>Inspection location</Text>
+                  <Text style={styles.fieldLabel}>
+                    {t("inspection.location")}
+                  </Text>
                   <TextInput
                     value={inspectionLocationDraft}
                     onChangeText={setInspectionLocationDraft}
-                    placeholder="Enter inspection location"
+                    placeholder={t("inspection.enterLocation")}
                     placeholderTextColor={MUTED}
                     style={styles.inspectionInput}
                     multiline
@@ -1825,16 +1827,18 @@ export default function ProjectScreen() {
                     )}
                     <Text style={styles.currentLocationText}>
                       {findingCurrentLocation
-                        ? "Getting current location..."
-                        : "Use current location"}
+                        ? t("inspection.gettingCurrentLocation")
+                        : t("inspection.useCurrentLocation")}
                     </Text>
                   </Pressable>
 
-                  <Text style={styles.fieldLabel}>Google Maps URL</Text>
+                  <Text style={styles.fieldLabel}>
+                    {t("inspection.googleMapsUrl")}
+                  </Text>
                   <TextInput
                     value={inspectionMapUrlDraft}
                     onChangeText={setInspectionMapUrlDraft}
-                    placeholder="Map URL (filled automatically from GPS)"
+                    placeholder={t("inspection.mapUrlPlaceholder")}
                     placeholderTextColor={MUTED}
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -1842,7 +1846,7 @@ export default function ProjectScreen() {
                     style={styles.inspectionInputSingle}
                   />
 
-                  <Text style={styles.fieldLabel}>Inspection date</Text>
+                  <Text style={styles.fieldLabel}> {t("inspection.date")}</Text>
                   <View style={styles.inspectionDateRow}>
                     <Pressable
                       style={styles.inspectionDateBtn}
@@ -1852,7 +1856,7 @@ export default function ProjectScreen() {
                       <Text style={styles.inspectionDateText}>
                         {inspectionDateDraft
                           ? inspectionDateDraft.toLocaleDateString()
-                          : "Select inspection date"}
+                          : t("inspection.selectDate")}
                       </Text>
                     </Pressable>
 
@@ -1897,8 +1901,8 @@ export default function ProjectScreen() {
                     )}
                     <Text style={styles.saveInspectionText}>
                       {isOnline
-                        ? "Save inspection details"
-                        : "Switch online to save"}
+                        ? t("inspection.saveDetails")
+                        : t("inspection.switchOnlineToSave")}
                     </Text>
                   </Pressable>
                 </View>
@@ -2200,7 +2204,9 @@ export default function ProjectScreen() {
           <View style={styles.projectVideosModalCard}>
             <View style={styles.filesModalHeader}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.modalTitle}>Inspection videos</Text>
+                <Text style={styles.modalTitle}>
+                  {t("inspection.inspectionVideos")}
+                </Text>
 
                 <Text style={styles.filesModalSubtitle} numberOfLines={1}>
                   {selectedProjectForVideoList?.name}
