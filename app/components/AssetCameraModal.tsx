@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { launchImageLibrary, Asset } from "react-native-image-picker";
+import * as FileSystem from "expo-file-system/legacy";
 import { useTranslation } from "react-i18next";
 import {
   Modal,
@@ -20,6 +21,7 @@ import {
 import {
   Camera,
   useCameraDevice,
+  useCameraFormat,
   useCameraPermission,
   useMicrophonePermission,
 } from "react-native-vision-camera";
@@ -44,6 +46,46 @@ const AnimatedCamera = Animated.createAnimatedComponent(Camera);
 const SLIDER_WIDTH = width * 0.5;
 const SLIDER_THUMB = 26;
 
+// Cloudinary currently accepts videos up to 100 MiB on this account.
+// Keep a little headroom for audio and container metadata.
+const TARGET_VIDEO_WIDTH = 1280;
+const TARGET_VIDEO_HEIGHT = 720;
+const TARGET_VIDEO_FPS = 30;
+const TARGET_VIDEO_BIT_RATE_MBPS = 3;
+const MAX_RECORDING_SECONDS = 4 * 60;
+const SAFE_VIDEO_LIMIT_BYTES = 95 * 1024 * 1024;
+
+const formatMegabytes = (bytes: number) =>
+  `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+
+const getLocalFileSizeBytes = async (
+  uri: string,
+  knownSize?: number | null,
+): Promise<number | null> => {
+  if (
+    typeof knownSize === "number" &&
+    Number.isFinite(knownSize) &&
+    knownSize >= 0
+  ) {
+    return knownSize;
+  }
+
+  try {
+    const info = await FileSystem.getInfoAsync(uri);
+
+    if (info.exists && "size" in info && typeof info.size === "number") {
+      return info.size;
+    }
+  } catch (error) {
+    console.log("[VIDEO] could not read file size", {
+      uri,
+      error,
+    });
+  }
+
+  return null;
+};
+
 type CameraMode = "photos" | "video" | "scan";
 
 type Props = {
@@ -64,6 +106,15 @@ export default function AssetCameraModal({
   singleCapture = false,
 }: Props) {
   const device = useCameraDevice("back");
+  const videoFormat = useCameraFormat(device, [
+    {
+      videoResolution: {
+        width: TARGET_VIDEO_WIDTH,
+        height: TARGET_VIDEO_HEIGHT,
+      },
+    },
+    { fps: TARGET_VIDEO_FPS },
+  ]);
   const insets = useSafeAreaInsets();
   const { hasPermission, requestPermission } = useCameraPermission();
 
@@ -73,6 +124,15 @@ export default function AssetCameraModal({
   } = useMicrophonePermission();
 
   const { t } = useTranslation();
+
+  const recordingFps = useMemo(() => {
+    if (!videoFormat) return TARGET_VIDEO_FPS;
+
+    return Math.max(
+      videoFormat.minFps,
+      Math.min(TARGET_VIDEO_FPS, videoFormat.maxFps),
+    );
+  }, [videoFormat]);
 
   const [hasLiveCodeResult, setHasLiveCodeResult] = useState(false);
 
@@ -191,6 +251,24 @@ export default function AssetCameraModal({
 
   const recordingStartedAtRef = useRef<number | null>(null);
   const stoppingRecordingRef = useRef(false);
+  const autoStoppedRecordingRef = useRef(false);
+  const autoStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearAutoStopTimer = () => {
+    if (autoStopTimerRef.current) {
+      clearTimeout(autoStopTimerRef.current);
+      autoStopTimerRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (autoStopTimerRef.current) {
+        clearTimeout(autoStopTimerRef.current);
+        autoStopTimerRef.current = null;
+      }
+    };
+  }, []);
 
   const sliderPanResponder = useRef(
     PanResponder.create({
@@ -252,6 +330,8 @@ export default function AssetCameraModal({
       setScanError("");
       recordingStartedAtRef.current = null;
       stoppingRecordingRef.current = false;
+      autoStoppedRecordingRef.current = false;
+      clearAutoStopTimer();
       setRecordingSeconds(0);
       setLastCapturedScanPath(null);
       setIsProcessingScan(false);
@@ -272,7 +352,12 @@ export default function AssetCameraModal({
       setRecordingSeconds(0);
 
       interval = setInterval(() => {
-        setRecordingSeconds((prev) => prev + 1);
+        const startedAt = recordingStartedAtRef.current;
+        const elapsedSeconds = startedAt
+          ? Math.floor((Date.now() - startedAt) / 1000)
+          : 0;
+
+        setRecordingSeconds(Math.min(elapsedSeconds, MAX_RECORDING_SECONDS));
       }, 1000);
     }
 
@@ -324,6 +409,9 @@ export default function AssetCameraModal({
   });
 
   const handleDismiss = async () => {
+    clearAutoStopTimer();
+    autoStoppedRecordingRef.current = false;
+
     if (isRecordingVideo) {
       try {
         const startedAt = recordingStartedAtRef.current;
@@ -509,12 +597,26 @@ export default function AssetCameraModal({
       const newPhotos: any[] = [];
       const newVideos: any[] = [];
 
-      result.assets.forEach((asset: Asset, idx: number) => {
+      const rejectedVideos: string[] = [];
+
+      for (const [idx, asset] of result.assets.entries()) {
         const isVideo = asset.type?.startsWith("video");
         const uri = asset.uri!;
         const path = uri.replace("file://", "");
 
         if (isVideo) {
+          const sizeBytes = await getLocalFileSizeBytes(uri, asset.fileSize);
+
+          if (
+            typeof sizeBytes === "number" &&
+            sizeBytes > SAFE_VIDEO_LIMIT_BYTES
+          ) {
+            rejectedVideos.push(
+              `${asset.fileName ?? "Selected video"} (${formatMegabytes(sizeBytes)})`,
+            );
+            continue;
+          }
+
           newVideos.push({
             uri,
             localUri: uri,
@@ -524,6 +626,7 @@ export default function AssetCameraModal({
             type: asset.type ?? "video/mp4",
             mimeType: asset.type ?? "video/mp4",
             name: asset.fileName ?? `gallery_video_${Date.now()}_${idx}.mp4`,
+            sizeBytes: sizeBytes ?? undefined,
             fromGallery: true,
           });
         } else {
@@ -537,12 +640,87 @@ export default function AssetCameraModal({
             fromGallery: true,
           });
         }
-      });
+      }
 
       if (newPhotos.length) setPhotos((prev) => [...prev, ...newPhotos]);
       if (newVideos.length) setVideos((prev) => [...prev, ...newVideos]);
+
+      if (rejectedVideos.length) {
+        Alert.alert(
+          "Video is too large",
+          `${rejectedVideos.join("\n")}\n\nPlease select a video under 95 MB so it stays below the 100 MB upload limit.`,
+        );
+      }
     } catch (error) {
       console.log("[GALLERY] pick failed:", error);
+    }
+  };
+
+  const handleRecordedVideoFinished = async (video: any) => {
+    console.log("[VIDEO] recording finished", video);
+
+    clearAutoStopTimer();
+
+    const wasAutoStopped = autoStoppedRecordingRef.current;
+    const rawPath = video?.path;
+    const uri = rawPath?.startsWith?.("file://")
+      ? rawPath
+      : rawPath
+        ? `file://${rawPath}`
+        : null;
+
+    try {
+      if (!uri) {
+        console.log("[VIDEO] finished but no video uri", video);
+        return;
+      }
+
+      const sizeBytes = await getLocalFileSizeBytes(uri);
+
+      console.log("[VIDEO] file size", {
+        bytes: sizeBytes,
+        megabytes:
+          typeof sizeBytes === "number"
+            ? Number((sizeBytes / 1024 / 1024).toFixed(2))
+            : null,
+      });
+
+      if (typeof sizeBytes === "number" && sizeBytes > SAFE_VIDEO_LIMIT_BYTES) {
+        Alert.alert(
+          "Video is too large",
+          `This video is ${formatMegabytes(sizeBytes)}. Please record a shorter video so it stays below the 100 MB upload limit.`,
+        );
+        return;
+      }
+
+      const capturedVideo = {
+        ...video,
+        uri,
+        localUri: uri,
+        originalUri: uri,
+        mediaType: "video",
+        type: "video/mp4",
+        mimeType: "video/mp4",
+        name: `video_${Date.now()}.mp4`,
+        sizeBytes: sizeBytes ?? undefined,
+      };
+
+      setVideos((prev) =>
+        mode === "video" ? [capturedVideo] : [...prev, capturedVideo],
+      );
+
+      if (wasAutoStopped) {
+        Alert.alert(
+          "Recording limit reached",
+          "Recording stopped automatically at 4 minutes to keep the video within the upload limit.",
+        );
+      }
+    } finally {
+      setIsRecordingVideo(false);
+      setRecordingSeconds(0);
+      recordingStartedAtRef.current = null;
+      stoppingRecordingRef.current = false;
+      autoStoppedRecordingRef.current = false;
     }
   };
 
@@ -581,67 +759,77 @@ export default function AssetCameraModal({
 
       recordingStartedAtRef.current = Date.now();
       stoppingRecordingRef.current = false;
+      autoStoppedRecordingRef.current = false;
+      clearAutoStopTimer();
       setRecordingSeconds(0);
       setIsRecordingVideo(true);
 
       camera.current.startRecording({
         fileType: "mp4",
+        videoCodec: "h264",
 
         onRecordingFinished: (video) => {
-          console.log("[VIDEO] recording finished", video);
-
-          const rawPath = video?.path;
-          const uri = rawPath?.startsWith?.("file://")
-            ? rawPath
-            : rawPath
-              ? `file://${rawPath}`
-              : null;
-
-          if (!uri) {
-            console.log("[VIDEO] finished but no video uri", video);
-            setIsRecordingVideo(false);
-            recordingStartedAtRef.current = null;
-            stoppingRecordingRef.current = false;
-            return;
-          }
-
-          const capturedVideo = {
-            ...video,
-            uri,
-            localUri: uri,
-            originalUri: uri,
-            mediaType: "video",
-            type: "video/mp4",
-            mimeType: "video/mp4",
-            name: `video_${Date.now()}.mp4`,
-          };
-
-          setVideos((prev) =>
-            mode === "video" ? [capturedVideo] : [...prev, capturedVideo],
-          );
-
-          setIsRecordingVideo(false);
-          recordingStartedAtRef.current = null;
-          stoppingRecordingRef.current = false;
+          void handleRecordedVideoFinished(video);
         },
 
         onRecordingError: (error: any) => {
           console.log("VIDEO RECORDING ERROR:", error);
+
+          clearAutoStopTimer();
 
           if (error?.code === "capture/no-data") {
             console.log("[VIDEO] ignored too-short recording");
           }
 
           setIsRecordingVideo(false);
+          setRecordingSeconds(0);
           recordingStartedAtRef.current = null;
           stoppingRecordingRef.current = false;
+          autoStoppedRecordingRef.current = false;
         },
       });
+
+      autoStopTimerRef.current = setTimeout(() => {
+        autoStopTimerRef.current = null;
+
+        if (
+          !camera.current ||
+          !recordingStartedAtRef.current ||
+          stoppingRecordingRef.current
+        ) {
+          return;
+        }
+
+        console.log("[VIDEO] maximum recording duration reached", {
+          maxSeconds: MAX_RECORDING_SECONDS,
+        });
+
+        autoStoppedRecordingRef.current = true;
+        stoppingRecordingRef.current = true;
+
+        void camera.current.stopRecording().catch((error) => {
+          console.log("[VIDEO] automatic stop failed:", error);
+
+          setIsRecordingVideo(false);
+          setRecordingSeconds(0);
+          recordingStartedAtRef.current = null;
+          stoppingRecordingRef.current = false;
+          autoStoppedRecordingRef.current = false;
+
+          Alert.alert(
+            "Could not stop recording",
+            "Please stop the recording manually and try again.",
+          );
+        });
+      }, MAX_RECORDING_SECONDS * 1000);
     } catch (error) {
       console.log("START VIDEO ERROR:", error);
+      clearAutoStopTimer();
       setIsRecordingVideo(false);
+      setRecordingSeconds(0);
       recordingStartedAtRef.current = null;
       stoppingRecordingRef.current = false;
+      autoStoppedRecordingRef.current = false;
     }
   };
 
@@ -662,14 +850,17 @@ export default function AssetCameraModal({
     try {
       console.log("[VIDEO] stopping recording", { elapsed });
 
+      clearAutoStopTimer();
       stoppingRecordingRef.current = true;
       await camera.current.stopRecording();
     } catch (error: any) {
       console.log("STOP VIDEO ERROR:", error);
 
       setIsRecordingVideo(false);
+      setRecordingSeconds(0);
       recordingStartedAtRef.current = null;
       stoppingRecordingRef.current = false;
+      autoStoppedRecordingRef.current = false;
     }
   };
   const handleCapturePress = async () => {
@@ -775,6 +966,13 @@ export default function AssetCameraModal({
             photo
             video
             audio={audioEnabled}
+            format={captureMode === "video" ? videoFormat : undefined}
+            fps={
+              captureMode === "video" && videoFormat ? recordingFps : undefined
+            }
+            videoBitRate={
+              captureMode === "video" ? TARGET_VIDEO_BIT_RATE_MBPS : undefined
+            }
             onInitialized={() => setIsCameraInitialized(true)}
             animatedProps={animatedProps}
             codeScanner={mode === "scan" ? codeScanner : undefined}
@@ -967,8 +1165,14 @@ export default function AssetCameraModal({
             <View style={styles.recordingTimerBadge}>
               <View style={styles.recordingDot} />
               <Text style={styles.recordingTimerText}>
-                {formatRecordingTime(recordingSeconds)}
+                {formatRecordingTime(recordingSeconds)} /{" "}
+                {formatRecordingTime(MAX_RECORDING_SECONDS)}
               </Text>
+              {recordingSeconds >= MAX_RECORDING_SECONDS - 30 && (
+                <Text style={styles.recordingLimitText}>
+                  {MAX_RECORDING_SECONDS - recordingSeconds}s left
+                </Text>
+              )}
             </View>
           )}
 
@@ -1111,6 +1315,12 @@ const styles = StyleSheet.create({
 
   recordingTimerText: {
     color: "#fff",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+
+  recordingLimitText: {
+    color: "#FFD166",
     fontSize: 11,
     fontWeight: "700",
   },
