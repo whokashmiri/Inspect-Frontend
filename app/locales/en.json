@@ -209,6 +209,20 @@
     "selectCompanyToShowProjects": "Select a company to show assigned projects"
   },
 
+  "inspection": {
+    "location": "Inspection location",
+    "enterLocation": "Enter inspection location",
+    "gettingCurrentLocation": "Getting current location...",
+    "useCurrentLocation": "Use current location",
+    "googleMapsUrl": "Google Maps URL",
+    "mapUrlPlaceholder": "Map URL (filled automatically from GPS)",
+    "date": "Inspection date",
+    "selectDate": "Select inspection date",
+    "saveDetails": "Save inspection details",
+    "switchOnlineToSave": "Switch online to save",
+     "inspectionVideos": "Inspection videos"
+  },
+
 
 
  "conditions": {
