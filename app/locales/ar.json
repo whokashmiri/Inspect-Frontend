@@ -210,6 +210,20 @@
     "selectCompanyToShowProjects": "اختر شركة لعرض المشاريع المخصصة لها",
     "allCompanies": "جميع الشركات"
   },
+  "inspection": {
+    "location": "موقع المعاينة",
+    "enterLocation": "أدخل موقع المعاينة",
+    "gettingCurrentLocation": "جارٍ تحديد الموقع الحالي...",
+    "useCurrentLocation": "استخدام الموقع الحالي",
+    "googleMapsUrl": "رابط خرائط Google",
+    "mapUrlPlaceholder": "رابط الخريطة (يُملأ تلقائيًا من GPS)",
+    "date": "تاريخ المعاينة",
+    "selectDate": "اختر تاريخ المعاينة",
+    "saveDetails": "حفظ تفاصيل المعاينة",
+    "switchOnlineToSave": "اتصل بالإنترنت للحفظ",
+    "inspectionVideos": "فيديوهات المعاينة"
+
+  },
 
   "conditions": {
     "condition": {
