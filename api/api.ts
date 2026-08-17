@@ -8,6 +8,8 @@ import { File as ExpoFile, Paths as ExpoPaths } from "expo-file-system";
 
 export const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
+// console.log("[API BASE URL]", BASE_URL);
+
 const TOKEN_KEY = "auth.accessToken";
 const REFRESH_KEY = "auth.refreshToken";
 
@@ -71,11 +73,18 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(
+export async function request<T>(
   path: string,
   { method = "GET", body, auth = true }: JsonRequestOptions = {},
   retry = true,
 ): Promise<T> {
+  // const url = `${BASE_URL}${path}`;
+
+  // console.log("[API REQUEST]", {
+  //   method,
+  //   path,
+  //   url,
+  // });
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
