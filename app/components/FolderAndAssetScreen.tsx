@@ -1,5 +1,6 @@
 //FolderAndAssetScreen.tsx
 import CreateAssetWizardModal from "./CreateAssetWizardModal";
+import AssetGalleryScreen, { PickedAssetCategory } from "./AssetGalleryScreen";
 import React, {
   useCallback,
   useEffect,
@@ -117,6 +118,12 @@ export default function FolderAndAssetScreen({ route }: Props) {
   const [createAssetInitialData, setCreateAssetInitialData] = useState<
     Partial<AssetDraft> | undefined
   >(undefined);
+
+  const [assetGalleryVisible, setAssetGalleryVisible] = useState(false);
+
+  const [assetGalleryMode, setAssetGalleryMode] = useState<"create" | "edit">(
+    "create",
+  );
 
   const { width, height } = useWindowDimensions();
   const isSmallScreen = width < 380 || height < 700;
@@ -845,7 +852,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
       }
 
       setEditingAsset(foundAsset);
-      setAssetModalVisible(true);
+      // setAssetModalVisible(true);
     } catch (error: any) {
       showSnackbar(
         error?.message || t("folderAssetScreen.codeScanner.notFoundMessage"),
@@ -1739,15 +1746,35 @@ export default function FolderAndAssetScreen({ route }: Props) {
     }
   };
   const openEditAsset = (asset: AssetItem, openCamera: boolean = false) => {
+    Keyboard.dismiss();
+
     setEditingAsset(asset);
     setAutoOpenCameraForEdit(openCamera);
-    setAssetModalVisible(true);
-  };
+    setCreateAssetInitialData(undefined);
 
+    /*
+     * Vehicles still use their dedicated wizard.
+     */
+    if (normalizeAssetType((asset as any).assetType) === "vehicle") {
+      setCreateAssetInitialData(mapAssetToDraft(asset));
+      setAssetModalVisible(true);
+      return;
+    }
+
+    /*
+     * Other assets first pass through taxonomy selection.
+     */
+    setAssetGalleryMode("edit");
+    setAssetGalleryVisible(true);
+  };
   const closeAssetModal = () => {
-    setEditingAsset(null);
     setAssetModalVisible(false);
-    setAutoOpenCameraForEdit(false); // reset so next edit doesn't inherit it
+    setAssetGalleryVisible(false);
+
+    setEditingAsset(null);
+    setCreateAssetInitialData(undefined);
+
+    setAutoOpenCameraForEdit(false);
   };
 
   const assetStats = useMemo(() => {
@@ -2120,6 +2147,31 @@ export default function FolderAndAssetScreen({ route }: Props) {
     return `${prefix} ${String(number).padStart(3, "0")}`;
   };
 
+  const buildAssetCategoryInitialData = (
+    selection: PickedAssetCategory,
+  ): Partial<AssetDraft> => {
+    return {
+      assetType: "other",
+
+      // Use the selected taxonomy name as the asset name.
+      name: selection.name,
+
+      // Keep compatibility with the current wizard until we update it.
+      subAssetType: selection.type,
+
+      // These fields will be wired properly into AssetDraft / Asset model next.
+      categoryId: selection.categoryId,
+      category: selection.category,
+
+      typeId: selection.typeId,
+      type: selection.type,
+
+      nameId: selection.nameId,
+
+      rawData: {},
+    } as Partial<AssetDraft>;
+  };
+
   const buildNewAssetInitialData = (
     category: "Vehicle" | "Other",
   ): Partial<AssetDraft> => {
@@ -2268,9 +2320,62 @@ export default function FolderAndAssetScreen({ route }: Props) {
     Keyboard.dismiss();
 
     setEditingAsset(null);
-    setCreateAssetInitialData(buildNewAssetInitialData(category));
-
+    setAutoOpenCameraForEdit(false);
     setAssetCategoryModalVisible(false);
+
+    /*
+     * Vehicle keeps the current wizard flow.
+     */
+    if (category === "Vehicle") {
+      setCreateAssetInitialData(buildNewAssetInitialData("Vehicle"));
+
+      setAssetModalVisible(true);
+      return;
+    }
+
+    /*
+     * Other assets must first go through:
+     *
+     * Category -> Type -> Name
+     */
+    setCreateAssetInitialData(undefined);
+    setAssetGalleryMode("create");
+    setAssetGalleryVisible(true);
+  };
+
+  const handleAssetGalleryPick = (selection: PickedAssetCategory) => {
+    const taxonomyData = buildAssetCategoryInitialData(selection);
+
+    if (assetGalleryMode === "edit" && editingAsset) {
+      /*
+       * Existing asset:
+       * retain its current values and replace the taxonomy selection.
+       */
+      setCreateAssetInitialData({
+        ...mapAssetToDraft(editingAsset),
+        ...taxonomyData,
+
+        // Keep existing raw data.
+        rawData:
+          (editingAsset as any).rawData &&
+          typeof (editingAsset as any).rawData === "object"
+            ? cleanAssetRawData((editingAsset as any).rawData)
+            : {},
+      });
+    } else {
+      /*
+       * New Other asset.
+       */
+      setCreateAssetInitialData({
+        ...buildNewAssetInitialData("Other"),
+        ...taxonomyData,
+
+        name: selection.name,
+        subAssetType: selection.type,
+      });
+    }
+
+    setAssetGalleryVisible(false);
     setAssetModalVisible(true);
   };
 
@@ -2974,6 +3079,8 @@ export default function FolderAndAssetScreen({ route }: Props) {
                       setEditingAsset(null);
                       setCreateAssetInitialData(undefined);
                       setAssetCategoryModalVisible(true);
+                      setAssetGalleryMode("create");
+                      setAssetGalleryVisible(false);
                     }}
                     activeOpacity={0.85}
                   >
@@ -3519,6 +3626,14 @@ export default function FolderAndAssetScreen({ route }: Props) {
             </TouchableWithoutFeedback>
           </Modal>
 
+          <AssetGalleryScreen
+            visible={assetGalleryVisible}
+            onClose={() => {
+              setAssetGalleryVisible(false);
+            }}
+            onPickAsset={handleAssetGalleryPick}
+          />
+
           {/* ── Asset wizard modal ── */}
           <CreateAssetWizardModal
             firstInputRef={assetWizardInputRef}
@@ -3531,7 +3646,10 @@ export default function FolderAndAssetScreen({ route }: Props) {
             mode={editingAsset ? "edit" : "create"}
             initialData={
               editingAsset
-                ? mapAssetToDraft(editingAsset)
+                ? {
+                    ...mapAssetToDraft(editingAsset),
+                    ...(createAssetInitialData ?? {}),
+                  }
                 : createAssetInitialData
             }
             subAssetTypes={projectSubAssetTypes}
