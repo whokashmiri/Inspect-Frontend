@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import {
   assetCategoryApi,
@@ -38,6 +39,10 @@ export type PickedAssetCategory = {
   name: string;
 };
 
+type RecentAssetItem = PickedAssetCategory & {
+  usedAt: number;
+};
+
 type AssetGalleryScreenProps = {
   visible: boolean;
   onClose: () => void;
@@ -46,8 +51,10 @@ type AssetGalleryScreenProps = {
 
 type PickerMode = "category" | "type" | null;
 
+type SelectionSource = "taxonomy" | "recent" | null;
+
 // ---------------------------------------------------------------------------
-// Colors
+// Constants
 // ---------------------------------------------------------------------------
 
 const ACC = "#2A324B";
@@ -56,6 +63,10 @@ const BORDER = "#D4D8E2";
 const TEXT = "#2A324B";
 const MUTED = "#767B91";
 const BACKGROUND = "#F6F7FA";
+
+const RECENT_ASSETS_STORAGE_KEY = "@inspect/asset-gallery/recent-assets";
+
+const MAX_RECENT_ASSETS = 8;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -120,27 +131,30 @@ const getAvatarColor = (name?: string | null) => {
   return AVATAR_COLORS[value % AVATAR_COLORS.length];
 };
 
+const getRecentKey = (item: PickedAssetCategory) =>
+  [item.categoryId, item.typeId, item.nameId].join("::");
+
 /*
  * Later connect this to the asset/image model.
- *
- * Example:
- *
- * return assetImageByNameId[item.id]?.url ?? null;
  */
-const getAssetImageUrl = (_item: AssetNameItem): string | null => {
+const getAssetImageUrl = (
+  _item: AssetNameItem | RecentAssetItem,
+): string | null => {
   return null;
 };
 
 // ---------------------------------------------------------------------------
-// Asset Avatar
+// Avatar
 // ---------------------------------------------------------------------------
 
 function AssetAvatar({
   name,
   imageUrl,
+  small = false,
 }: {
   name: string;
   imageUrl?: string | null;
+  small?: boolean;
 }) {
   if (imageUrl) {
     return (
@@ -148,7 +162,7 @@ function AssetAvatar({
         source={{
           uri: imageUrl,
         }}
-        style={styles.assetAvatar}
+        style={[styles.assetAvatar, small && styles.assetAvatarSmall]}
         resizeMode="cover"
       />
     );
@@ -159,12 +173,18 @@ function AssetAvatar({
       style={[
         styles.assetAvatar,
         styles.assetAvatarFallback,
+
+        small && styles.assetAvatarSmall,
+
         {
           backgroundColor: getAvatarColor(name),
         },
       ]}
     >
-      <Text style={styles.assetAvatarText} numberOfLines={1}>
+      <Text
+        style={[styles.assetAvatarText, small && styles.assetAvatarTextSmall]}
+        numberOfLines={1}
+      >
         {getInitials(name)}
       </Text>
     </View>
@@ -209,15 +229,7 @@ function AssetGallerySkeleton() {
       </View>
 
       <View style={styles.skeletonListContent}>
-        <View style={styles.assetListHeader}>
-          <View style={styles.assetListHeaderText}>
-            <View style={[styles.skeletonBlock, styles.skeletonListTitle]} />
-
-            <View style={[styles.skeletonBlock, styles.skeletonListSubtitle]} />
-          </View>
-        </View>
-
-        {[0, 1, 2, 3, 4, 5].map((item) => (
+        {[0, 1, 2, 3, 4].map((item) => (
           <View key={item} style={styles.assetRow}>
             <View style={styles.skeletonStar} />
 
@@ -260,7 +272,7 @@ export default function AssetGalleryScreen({
   const insets = useSafeAreaInsets();
 
   // -------------------------------------------------------------------------
-  // Taxonomy data
+  // Taxonomy
   // -------------------------------------------------------------------------
 
   const [categories, setCategories] = useState<AssetCategoryItem[]>([]);
@@ -278,6 +290,16 @@ export default function AssetGalleryScreen({
   const [error, setError] = useState<string | null>(null);
 
   // -------------------------------------------------------------------------
+  // Recent history
+  // -------------------------------------------------------------------------
+
+  const [recentAssets, setRecentAssets] = useState<RecentAssetItem[]>([]);
+
+  const [editingRecentKey, setEditingRecentKey] = useState<string | null>(null);
+
+  const [editingRecentText, setEditingRecentText] = useState("");
+
+  // -------------------------------------------------------------------------
   // Selection
   // -------------------------------------------------------------------------
 
@@ -289,8 +311,14 @@ export default function AssetGalleryScreen({
 
   const [selectedNameId, setSelectedNameId] = useState<string | null>(null);
 
+  const [selectionSource, setSelectionSource] = useState<SelectionSource>(null);
+
+  const [selectedRecentKey, setSelectedRecentKey] = useState<string | null>(
+    null,
+  );
+
   // -------------------------------------------------------------------------
-  // Asset search / favorites
+  // Search / favorites
   // -------------------------------------------------------------------------
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -310,7 +338,7 @@ export default function AssetGalleryScreen({
   const [pickerSearch, setPickerSearch] = useState("");
 
   // -------------------------------------------------------------------------
-  // Category local UI
+  // Category UI
   // -------------------------------------------------------------------------
 
   const [showAddCategory, setShowAddCategory] = useState(false);
@@ -328,7 +356,7 @@ export default function AssetGalleryScreen({
   );
 
   // -------------------------------------------------------------------------
-  // Type local UI
+  // Type UI
   // -------------------------------------------------------------------------
 
   const [showAddType, setShowAddType] = useState(false);
@@ -344,7 +372,7 @@ export default function AssetGalleryScreen({
   );
 
   // -------------------------------------------------------------------------
-  // Asset local add/edit
+  // Asset UI
   // -------------------------------------------------------------------------
 
   const [showAddName, setShowAddName] = useState(false);
@@ -356,7 +384,156 @@ export default function AssetGalleryScreen({
   const [editingNameText, setEditingNameText] = useState("");
 
   // -------------------------------------------------------------------------
-  // Reset transient UI
+  // Recent storage
+  // -------------------------------------------------------------------------
+
+  const loadRecentAssets = async () => {
+    try {
+      const value = await AsyncStorage.getItem(RECENT_ASSETS_STORAGE_KEY);
+
+      if (!value) {
+        setRecentAssets([]);
+        return;
+      }
+
+      const parsed = JSON.parse(value);
+
+      if (!Array.isArray(parsed)) {
+        setRecentAssets([]);
+        return;
+      }
+
+      setRecentAssets(
+        parsed
+          .filter(
+            (item) =>
+              item &&
+              typeof item.nameId === "string" &&
+              typeof item.name === "string" &&
+              typeof item.typeId === "string" &&
+              typeof item.categoryId === "string",
+          )
+          .sort((a, b) => Number(b.usedAt || 0) - Number(a.usedAt || 0))
+          .slice(0, MAX_RECENT_ASSETS),
+      );
+    } catch (err) {
+      console.warn("[AssetGallery] Could not load recent assets", err);
+
+      setRecentAssets([]);
+    }
+  };
+
+  const saveRecentAssets = async (items: RecentAssetItem[]) => {
+    try {
+      await AsyncStorage.setItem(
+        RECENT_ASSETS_STORAGE_KEY,
+        JSON.stringify(items),
+      );
+    } catch (err) {
+      console.warn("[AssetGallery] Could not save recent assets", err);
+    }
+  };
+
+  const addRecentAsset = async (asset: PickedAssetCategory) => {
+    const item: RecentAssetItem = {
+      ...asset,
+      usedAt: Date.now(),
+    };
+
+    const key = getRecentKey(asset);
+
+    const next = [
+      item,
+
+      ...recentAssets.filter((recent) => getRecentKey(recent) !== key),
+    ].slice(0, MAX_RECENT_ASSETS);
+
+    setRecentAssets(next);
+
+    await saveRecentAssets(next);
+  };
+
+  const removeRecentAsset = async (item: RecentAssetItem) => {
+    const key = getRecentKey(item);
+
+    const next = recentAssets.filter((recent) => getRecentKey(recent) !== key);
+
+    setRecentAssets(next);
+
+    /*
+     * If deleted history is currently
+     * selected, clear that selection.
+     */
+    if (selectedRecentKey === key) {
+      clearSelection();
+    }
+
+    await saveRecentAssets(next);
+  };
+
+  const clearRecentAssets = async () => {
+    setRecentAssets([]);
+
+    setEditingRecentKey(null);
+
+    setEditingRecentText("");
+
+    if (selectionSource === "recent") {
+      clearSelection();
+    }
+
+    try {
+      await AsyncStorage.removeItem(RECENT_ASSETS_STORAGE_KEY);
+    } catch (err) {
+      console.warn("[AssetGallery] Could not clear recent assets", err);
+    }
+  };
+
+  // -------------------------------------------------------------------------
+  // Recent edit
+  // -------------------------------------------------------------------------
+
+  const beginEditRecent = (item: RecentAssetItem) => {
+    setEditingRecentKey(getRecentKey(item));
+
+    setEditingRecentText(item.name);
+  };
+
+  const cancelEditRecent = () => {
+    setEditingRecentKey(null);
+
+    setEditingRecentText("");
+  };
+
+  const saveEditedRecent = async (item: RecentAssetItem) => {
+    const name = editingRecentText.trim();
+
+    if (!name) {
+      return;
+    }
+
+    const key = getRecentKey(item);
+
+    const next = recentAssets.map((recent) =>
+      getRecentKey(recent) === key
+        ? {
+            ...recent,
+            name,
+          }
+        : recent,
+    );
+
+    setRecentAssets(next);
+
+    setEditingRecentKey(null);
+
+    setEditingRecentText("");
+
+    await saveRecentAssets(next);
+  };
+
+  // -------------------------------------------------------------------------
+  // Reset UI
   // -------------------------------------------------------------------------
 
   const resetTransientState = () => {
@@ -378,15 +555,21 @@ export default function AssetGalleryScreen({
     setEditingNameId(null);
     setEditingNameText("");
 
+    setEditingRecentKey(null);
+    setEditingRecentText("");
+
     setShowAddName(false);
     setNewNameText("");
 
     setSearchQuery("");
     setFavoritesOnly(false);
+
+    setSelectionSource(null);
+    setSelectedRecentKey(null);
   };
 
   // -------------------------------------------------------------------------
-  // Load
+  // Load taxonomy
   // -------------------------------------------------------------------------
 
   const loadData = async (isRefresh = false) => {
@@ -410,8 +593,12 @@ export default function AssetGalleryScreen({
       setCategories(loadedCategories);
 
       setTypes(loadedTypes);
+
       setNames(loadedNames);
 
+      /*
+       * New suggested selection every load.
+       */
       setFeaturedNameIds(createRandomFeaturedIds(loadedNames, 10));
 
       setSelectedCategoryId((current) =>
@@ -450,7 +637,7 @@ export default function AssetGalleryScreen({
 
     resetTransientState();
 
-    void loadData();
+    void Promise.all([loadData(), loadRecentAssets()]);
   }, [visible]);
 
   // -------------------------------------------------------------------------
@@ -472,6 +659,17 @@ export default function AssetGalleryScreen({
     [names, selectedNameId],
   );
 
+  const selectedRecentAsset = useMemo(() => {
+    if (!selectedRecentKey) {
+      return null;
+    }
+
+    return (
+      recentAssets.find((item) => getRecentKey(item) === selectedRecentKey) ??
+      null
+    );
+  }, [recentAssets, selectedRecentKey]);
+
   // -------------------------------------------------------------------------
   // Relationships
   // -------------------------------------------------------------------------
@@ -492,13 +690,8 @@ export default function AssetGalleryScreen({
     return names.filter((item) => item.typeId === selectedTypeId);
   }, [names, selectedTypeId]);
 
-  // -------------------------------------------------------------------------
-  // Name relationship helpers
-  // -------------------------------------------------------------------------
-
-  const getTypeForName = (name: AssetNameItem) => {
-    return types.find((item) => item.id === name.typeId) ?? null;
-  };
+  const getTypeForName = (name: AssetNameItem) =>
+    types.find((item) => item.id === name.typeId) ?? null;
 
   const getCategoryForName = (name: AssetNameItem) => {
     const type = getTypeForName(name);
@@ -511,21 +704,49 @@ export default function AssetGalleryScreen({
   };
 
   // -------------------------------------------------------------------------
-  // Displayed assets
+  // Recent search
+  // -------------------------------------------------------------------------
+
+  const filteredRecentAssets = useMemo(() => {
+    const query = normalizeText(searchQuery);
+
+    if (!query) {
+      return recentAssets;
+    }
+
+    return recentAssets.filter(
+      (item) =>
+        normalizeText(item.name).includes(query) ||
+        normalizeText(item.type).includes(query) ||
+        normalizeText(item.category).includes(query),
+    );
+  }, [recentAssets, searchQuery]);
+
+  // -------------------------------------------------------------------------
+  // Suggested / assets
   // -------------------------------------------------------------------------
 
   const displayedNames = useMemo(() => {
     const query = normalizeText(searchQuery);
 
-    let source = selectedTypeId
+    /*
+     * IMPORTANT:
+     *
+     * Recent is history. Selecting history should
+     * not constrain Suggested Assets by its Type.
+     */
+    const shouldFilterByType =
+      selectionSource === "taxonomy" && !!selectedTypeId;
+
+    let source = shouldFilterByType
       ? names.filter((item) => item.typeId === selectedTypeId)
       : names;
 
     /*
-     * Default screen:
-     * show only a small random sample.
+     * Default / recent-selected screen:
+     * always show the random Suggested list.
      */
-    if (!selectedTypeId && !query && !favoritesOnly) {
+    if (!query && !favoritesOnly && !shouldFilterByType) {
       const featured = new Set(featuredNameIds);
 
       source = source.filter((item) => featured.has(item.id));
@@ -569,6 +790,7 @@ export default function AssetGalleryScreen({
     types,
     categories,
     selectedTypeId,
+    selectionSource,
     searchQuery,
     favoritesOnly,
     favoriteNameIds,
@@ -576,13 +798,18 @@ export default function AssetGalleryScreen({
   ]);
 
   // -------------------------------------------------------------------------
-  // Pick category
+  // Select Category
   // -------------------------------------------------------------------------
 
   const selectCategory = (category: AssetCategoryItem) => {
+    setSelectionSource("taxonomy");
+
+    setSelectedRecentKey(null);
+
     setSelectedCategoryId(category.id);
 
     setSelectedTypeId(null);
+
     setSelectedNameId(null);
 
     setEditingNameId(null);
@@ -591,19 +818,20 @@ export default function AssetGalleryScreen({
     setShowAddName(false);
     setNewNameText("");
 
-    setShowAddCategory(false);
-    setShowAddType(false);
-
     setSearchQuery("");
 
     closePicker();
   };
 
   // -------------------------------------------------------------------------
-  // Pick type
+  // Select Type
   // -------------------------------------------------------------------------
 
   const selectType = (type: AssetTypeItem) => {
+    setSelectionSource("taxonomy");
+
+    setSelectedRecentKey(null);
+
     setSelectedTypeId(type.id);
 
     setSelectedNameId(null);
@@ -614,15 +842,13 @@ export default function AssetGalleryScreen({
     setShowAddName(false);
     setNewNameText("");
 
-    setShowAddType(false);
-
     setSearchQuery("");
 
     closePicker();
   };
 
   // -------------------------------------------------------------------------
-  // Pick asset
+  // Select taxonomy asset
   // -------------------------------------------------------------------------
 
   const handleSelectName = (item: AssetNameItem) => {
@@ -640,6 +866,10 @@ export default function AssetGalleryScreen({
       return;
     }
 
+    setSelectionSource("taxonomy");
+
+    setSelectedRecentKey(null);
+
     setSelectedCategoryId(category.id);
 
     setSelectedTypeId(type.id);
@@ -651,6 +881,36 @@ export default function AssetGalleryScreen({
 
     setShowAddName(false);
     setNewNameText("");
+  };
+
+  // -------------------------------------------------------------------------
+  // Select recent history
+  // -------------------------------------------------------------------------
+
+  const handleSelectRecentAsset = (recent: RecentAssetItem) => {
+    /*
+     * Recent is history, not a taxonomy filter.
+     */
+    setSelectionSource("recent");
+
+    setSelectedRecentKey(getRecentKey(recent));
+
+    setSelectedCategoryId(recent.categoryId);
+
+    setSelectedTypeId(recent.typeId);
+
+    setSelectedNameId(recent.nameId);
+
+    setEditingNameId(null);
+    setEditingNameText("");
+
+    setShowAddName(false);
+    setNewNameText("");
+
+    /*
+     * Reset Suggested Assets to a fresh random set.
+     */
+    setFeaturedNameIds(createRandomFeaturedIds(names, 10));
   };
 
   // -------------------------------------------------------------------------
@@ -667,7 +927,6 @@ export default function AssetGalleryScreen({
     }
 
     setPickerMode(mode);
-
     setPickerSearch("");
 
     setEditingCategoryId(null);
@@ -699,10 +958,6 @@ export default function AssetGalleryScreen({
     setShowAddType(false);
     setNewTypeText("");
   };
-
-  // -------------------------------------------------------------------------
-  // Picker rows
-  // -------------------------------------------------------------------------
 
   const pickerItems = useMemo(() => {
     const source =
@@ -742,7 +997,7 @@ export default function AssetGalleryScreen({
   ]);
 
   // -------------------------------------------------------------------------
-  // Category favorite
+  // Favorites
   // -------------------------------------------------------------------------
 
   const toggleFavoriteCategory = (categoryId: string) => {
@@ -759,10 +1014,6 @@ export default function AssetGalleryScreen({
     });
   };
 
-  // -------------------------------------------------------------------------
-  // Type favorite
-  // -------------------------------------------------------------------------
-
   const toggleFavoriteType = (typeId: string) => {
     setFavoriteTypeIds((prev) => {
       const next = new Set(prev);
@@ -771,6 +1022,20 @@ export default function AssetGalleryScreen({
         next.delete(typeId);
       } else {
         next.add(typeId);
+      }
+
+      return next;
+    });
+  };
+
+  const toggleFavorite = (nameId: string) => {
+    setFavoriteNameIds((prev) => {
+      const next = new Set(prev);
+
+      if (next.has(nameId)) {
+        next.delete(nameId);
+      } else {
+        next.add(nameId);
       }
 
       return next;
@@ -793,12 +1058,10 @@ export default function AssetGalleryScreen({
     );
 
     if (existing) {
-      setSelectedCategoryId(existing.id);
-
-      setSelectedTypeId(null);
-      setSelectedNameId(null);
+      selectCategory(existing);
 
       setNewCategoryText("");
+
       setShowAddCategory(false);
 
       return;
@@ -811,9 +1074,14 @@ export default function AssetGalleryScreen({
 
     setCategories((prev) => [category, ...prev]);
 
+    setSelectionSource("taxonomy");
+
+    setSelectedRecentKey(null);
+
     setSelectedCategoryId(category.id);
 
     setSelectedTypeId(null);
+
     setSelectedNameId(null);
 
     setNewCategoryText("");
@@ -840,9 +1108,7 @@ export default function AssetGalleryScreen({
     );
 
     if (existing) {
-      setSelectedTypeId(existing.id);
-
-      setSelectedNameId(null);
+      selectType(existing);
 
       setNewTypeText("");
       setShowAddType(false);
@@ -852,11 +1118,17 @@ export default function AssetGalleryScreen({
 
     const type: AssetTypeItem = {
       id: createLocalId("type"),
+
       categoryId: selectedCategoryId,
+
       label,
     };
 
     setTypes((prev) => [type, ...prev]);
+
+    setSelectionSource("taxonomy");
+
+    setSelectedRecentKey(null);
 
     setSelectedTypeId(type.id);
 
@@ -867,11 +1139,12 @@ export default function AssetGalleryScreen({
   };
 
   // -------------------------------------------------------------------------
-  // Edit Category
+  // Category edit
   // -------------------------------------------------------------------------
 
   const beginEditCategory = (category: AssetCategoryItem) => {
     setShowAddCategory(false);
+
     setNewCategoryText("");
 
     setEditingCategoryId(category.id);
@@ -881,6 +1154,7 @@ export default function AssetGalleryScreen({
 
   const cancelEditCategory = () => {
     setEditingCategoryId(null);
+
     setEditingCategoryText("");
   };
 
@@ -903,11 +1177,12 @@ export default function AssetGalleryScreen({
     );
 
     setEditingCategoryId(null);
+
     setEditingCategoryText("");
   };
 
   // -------------------------------------------------------------------------
-  // Edit Type
+  // Type edit
   // -------------------------------------------------------------------------
 
   const beginEditType = (type: AssetTypeItem) => {
@@ -947,7 +1222,7 @@ export default function AssetGalleryScreen({
   };
 
   // -------------------------------------------------------------------------
-  // Add asset name
+  // Add Name
   // -------------------------------------------------------------------------
 
   const handleAddName = () => {
@@ -982,6 +1257,10 @@ export default function AssetGalleryScreen({
 
     setNames((prev) => [item, ...prev]);
 
+    setSelectionSource("taxonomy");
+
+    setSelectedRecentKey(null);
+
     setSelectedNameId(item.id);
 
     setEditingNameId(null);
@@ -992,7 +1271,7 @@ export default function AssetGalleryScreen({
   };
 
   // -------------------------------------------------------------------------
-  // Edit asset name
+  // Edit Name
   // -------------------------------------------------------------------------
 
   const beginEditName = (item: AssetNameItem) => {
@@ -1034,78 +1313,99 @@ export default function AssetGalleryScreen({
   };
 
   // -------------------------------------------------------------------------
-  // Asset favorite
-  // -------------------------------------------------------------------------
-
-  const toggleFavorite = (nameId: string) => {
-    setFavoriteNameIds((prev) => {
-      const next = new Set(prev);
-
-      if (next.has(nameId)) {
-        next.delete(nameId);
-      } else {
-        next.add(nameId);
-      }
-
-      return next;
-    });
-  };
-
-  // -------------------------------------------------------------------------
   // Clear
   // -------------------------------------------------------------------------
 
-  const clearSelection = () => {
+  function clearSelection() {
     setSelectedCategoryId(null);
+
     setSelectedTypeId(null);
     setSelectedNameId(null);
 
+    setSelectionSource(null);
+
+    setSelectedRecentKey(null);
+
     setEditingNameId(null);
     setEditingNameText("");
+
+    setEditingRecentKey(null);
+
+    setEditingRecentText("");
 
     setShowAddName(false);
     setNewNameText("");
 
     setSearchQuery("");
-  };
+
+    /*
+     * Return to fresh suggested assets.
+     */
+    setFeaturedNameIds(createRandomFeaturedIds(names, 10));
+  }
 
   // -------------------------------------------------------------------------
   // Continue
   // -------------------------------------------------------------------------
 
-  const canContinue = !!selectedCategory && !!selectedType && !!selectedName;
+  const canContinue =
+    selectionSource === "recent"
+      ? !!selectedRecentAsset
+      : !!selectedCategory && !!selectedType && !!selectedName;
 
-  const handleContinue = () => {
-    if (!selectedCategory || !selectedType || !selectedName) {
+  const handleContinue = async () => {
+    let picked: PickedAssetCategory | null = null;
+
+    /*
+     * If selected from history, use the
+     * history label — including local edits.
+     */
+    if (selectionSource === "recent" && selectedRecentAsset) {
+      picked = {
+        categoryId: selectedRecentAsset.categoryId,
+
+        category: selectedRecentAsset.category,
+
+        typeId: selectedRecentAsset.typeId,
+
+        type: selectedRecentAsset.type,
+
+        nameId: selectedRecentAsset.nameId,
+
+        name: selectedRecentAsset.name,
+      };
+    } else if (selectedCategory && selectedType && selectedName) {
+      picked = {
+        categoryId: selectedCategory.id,
+
+        category: selectedCategory.label,
+
+        typeId: selectedType.id,
+
+        type: selectedType.label,
+
+        nameId: selectedName.id,
+
+        name: selectedName.label,
+      };
+    }
+
+    if (!picked) {
       return;
     }
 
-    onPickAsset?.({
-      categoryId: selectedCategory.id,
+    await addRecentAsset(picked);
 
-      category: selectedCategory.label,
-
-      typeId: selectedType.id,
-
-      type: selectedType.label,
-
-      nameId: selectedName.id,
-
-      name: selectedName.label,
-    });
+    onPickAsset?.(picked);
 
     onClose();
   };
 
   // -------------------------------------------------------------------------
-  // Asset list heading
+  // List titles
   // -------------------------------------------------------------------------
 
   const assetListTitle = useMemo(() => {
-    if (selectedType) {
-      return "Assets";
-    }
-
     if (searchQuery.trim()) {
       return "Search Results";
     }
@@ -1114,16 +1414,167 @@ export default function AssetGalleryScreen({
       return "Favorites";
     }
 
-    return "Suggested Assets";
-  }, [selectedType, searchQuery, favoritesOnly]);
+    /*
+     * Recent history never changes this.
+     */
+    if (selectionSource === "taxonomy" && selectedType) {
+      return "Assets";
+    }
 
-  const assetListSubtitle = selectedType
-    ? `${selectedType.label} • ${selectedCategory?.label || ""}`
-    : searchQuery.trim()
-      ? "Matching assets from all categories"
-      : favoritesOnly
-        ? "Your favorite assets"
+    return "Suggested Assets";
+  }, [selectedType, selectionSource, searchQuery, favoritesOnly]);
+
+  const assetListSubtitle = searchQuery.trim()
+    ? "Matching assets from all categories"
+    : favoritesOnly
+      ? "Your favorite assets"
+      : selectionSource === "taxonomy" && selectedType
+        ? `${selectedType.label} • ${selectedCategory?.label || ""}`
         : "Select one or search all available assets";
+
+  // -------------------------------------------------------------------------
+  // Selected label
+  // -------------------------------------------------------------------------
+
+  const selectedDisplayName =
+    selectionSource === "recent"
+      ? selectedRecentAsset?.name
+      : selectedName?.label;
+
+  const selectedDisplayType =
+    selectionSource === "recent"
+      ? selectedRecentAsset?.type
+      : selectedType?.label;
+
+  const selectedDisplayCategory =
+    selectionSource === "recent"
+      ? selectedRecentAsset?.category
+      : selectedCategory?.label;
+
+  // -------------------------------------------------------------------------
+  // Render Recent
+  // -------------------------------------------------------------------------
+
+  const renderRecentAsset = (item: RecentAssetItem) => {
+    const key = getRecentKey(item);
+
+    const selected = selectionSource === "recent" && selectedRecentKey === key;
+
+    const editing = editingRecentKey === key;
+
+    return (
+      <TouchableOpacity
+        key={key}
+        style={[
+          styles.recentRow,
+
+          selected && styles.recentRowSelected,
+
+          editing && styles.recentRowEditing,
+        ]}
+        onPress={() => {
+          if (editing) {
+            return;
+          }
+
+          handleSelectRecentAsset(item);
+        }}
+        activeOpacity={0.82}
+      >
+        <AssetAvatar name={item.name} imageUrl={getAssetImageUrl(item)} small />
+
+        <View style={styles.recentBody}>
+          {editing ? (
+            <TextInput
+              value={editingRecentText}
+              onChangeText={setEditingRecentText}
+              style={styles.recentEditInput}
+              autoFocus
+              selectTextOnFocus
+              returnKeyType="done"
+              onSubmitEditing={() => void saveEditedRecent(item)}
+            />
+          ) : (
+            <>
+              <Text
+                style={[
+                  styles.recentName,
+
+                  selected && styles.recentNameSelected,
+                ]}
+                numberOfLines={1}
+              >
+                {item.name}
+              </Text>
+
+              <Text style={styles.recentMeta} numberOfLines={1}>
+                {item.type} • {item.category}
+              </Text>
+            </>
+          )}
+        </View>
+
+        {editing ? (
+          <View style={styles.recentEditActions}>
+            <TouchableOpacity
+              style={styles.recentSmallButton}
+              onPress={(event) => {
+                event.stopPropagation();
+
+                cancelEditRecent();
+              }}
+            >
+              <Ionicons name="close" size={13} color={MUTED} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.recentSaveButton,
+
+                !editingRecentText.trim() && styles.buttonDisabled,
+              ]}
+              disabled={!editingRecentText.trim()}
+              onPress={(event) => {
+                event.stopPropagation();
+
+                void saveEditedRecent(item);
+              }}
+            >
+              <Ionicons name="checkmark" size={13} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            {selected && (
+              <Ionicons name="checkmark-circle" size={16} color={ACC} />
+            )}
+
+            <TouchableOpacity
+              style={styles.recentEditButton}
+              onPress={(event) => {
+                event.stopPropagation();
+
+                beginEditRecent(item);
+              }}
+            >
+              <Ionicons name="pencil-outline" size={12} color={ACC} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.recentDeleteButton}
+              onPress={(event) => {
+                event.stopPropagation();
+
+                void removeRecentAsset(item);
+              }}
+            >
+              <Ionicons name="trash-outline" size={13} color={MUTED} />
+            </TouchableOpacity>
+          </>
+        )}
+      </TouchableOpacity>
+    );
+  };
 
   // -------------------------------------------------------------------------
   // Render
@@ -1137,21 +1588,11 @@ export default function AssetGalleryScreen({
       onRequestClose={onClose}
     >
       <View style={styles.screen}>
-        {/* --------------------------------------------------------------- */}
-        {/* Global App Header */}
-        {/* --------------------------------------------------------------- */}
-
-        {/* --------------------------------------------------------------- */}
-        {/* Loading */}
-        {/* --------------------------------------------------------------- */}
-
         {loading ? (
           <AssetGallerySkeleton />
         ) : (
           <>
-            {/* ----------------------------------------------------------- */}
-            {/* Asset Gallery Header */}
-            {/* ----------------------------------------------------------- */}
+            {/* Header */}
 
             <View style={styles.header}>
               <TouchableOpacity
@@ -1174,16 +1615,11 @@ export default function AssetGalleryScreen({
                 <TouchableOpacity
                   style={styles.clearButton}
                   onPress={clearSelection}
-                  activeOpacity={0.8}
                 >
                   <Text style={styles.clearButtonText}>Clear</Text>
                 </TouchableOpacity>
               )}
             </View>
-
-            {/* ----------------------------------------------------------- */}
-            {/* Error */}
-            {/* ----------------------------------------------------------- */}
 
             {error ? (
               <View style={styles.errorBox}>
@@ -1201,32 +1637,25 @@ export default function AssetGalleryScreen({
               </View>
             ) : (
               <>
-                {/* ------------------------------------------------------- */}
                 {/* Category + Type */}
-                {/* ------------------------------------------------------- */}
 
                 <View style={styles.filterRow}>
-                  {/* Category */}
-
                   <View style={styles.filterColumn}>
                     <Text style={styles.filterLabel}>Category</Text>
 
                     <TouchableOpacity
                       style={styles.dropdown}
                       onPress={() => openPicker("category")}
-                      activeOpacity={0.85}
                     >
                       <Ionicons name="grid-outline" size={14} color={ACC} />
 
                       <Text style={styles.dropdownText} numberOfLines={1}>
-                        {selectedCategory?.label || "Select"}
+                        {selectedDisplayCategory || "Select"}
                       </Text>
 
                       <Ionicons name="chevron-down" size={13} color={MUTED} />
                     </TouchableOpacity>
                   </View>
-
-                  {/* Type */}
 
                   <View style={styles.filterColumn}>
                     <Text style={styles.filterLabel}>Type</Text>
@@ -1235,41 +1664,38 @@ export default function AssetGalleryScreen({
                       style={[
                         styles.dropdown,
 
-                        !selectedCategory && styles.dropdownDisabled,
+                        !selectedCategoryId && styles.dropdownDisabled,
                       ]}
                       onPress={() => openPicker("type")}
-                      disabled={!selectedCategory}
-                      activeOpacity={0.85}
+                      disabled={!selectedCategoryId}
                     >
                       <Ionicons
                         name="layers-outline"
                         size={14}
-                        color={selectedCategory ? ACC : "#B8BCC8"}
+                        color={selectedCategoryId ? ACC : "#B8BCC8"}
                       />
 
                       <Text
                         style={[
                           styles.dropdownText,
 
-                          !selectedCategory && styles.disabledText,
+                          !selectedCategoryId && styles.disabledText,
                         ]}
                         numberOfLines={1}
                       >
-                        {selectedType?.label || "Select"}
+                        {selectedDisplayType || "Select"}
                       </Text>
 
                       <Ionicons
                         name="chevron-down"
                         size={13}
-                        color={selectedCategory ? MUTED : "#B8BCC8"}
+                        color={selectedCategoryId ? MUTED : "#B8BCC8"}
                       />
                     </TouchableOpacity>
                   </View>
                 </View>
 
-                {/* ------------------------------------------------------- */}
                 {/* Search */}
-                {/* ------------------------------------------------------- */}
 
                 <View style={styles.searchRow}>
                   <View style={styles.searchBox}>
@@ -1278,17 +1704,14 @@ export default function AssetGalleryScreen({
                     <TextInput
                       value={searchQuery}
                       onChangeText={setSearchQuery}
-                      placeholder="Search assets..."
+                      placeholder="Search assets or recent..."
                       placeholderTextColor="#999EAE"
                       style={styles.searchInput}
                       returnKeyType="search"
                     />
 
                     {!!searchQuery && (
-                      <TouchableOpacity
-                        onPress={() => setSearchQuery("")}
-                        hitSlop={8}
-                      >
+                      <TouchableOpacity onPress={() => setSearchQuery("")}>
                         <Ionicons name="close-circle" size={17} color={MUTED} />
                       </TouchableOpacity>
                     )}
@@ -1301,7 +1724,6 @@ export default function AssetGalleryScreen({
                       favoritesOnly && styles.favoriteFilterActive,
                     ]}
                     onPress={() => setFavoritesOnly((prev) => !prev)}
-                    activeOpacity={0.85}
                   >
                     <Ionicons
                       name={favoritesOnly ? "star" : "star-outline"}
@@ -1311,9 +1733,7 @@ export default function AssetGalleryScreen({
                   </TouchableOpacity>
                 </View>
 
-                {/* ------------------------------------------------------- */}
-                {/* Asset List */}
-                {/* ------------------------------------------------------- */}
+                {/* Main List */}
 
                 <FlatList
                   data={displayedNames}
@@ -1335,6 +1755,38 @@ export default function AssetGalleryScreen({
                   ]}
                   ListHeaderComponent={
                     <>
+                      {/* Recent */}
+
+                      {filteredRecentAssets.length > 0 && (
+                        <View style={styles.recentSection}>
+                          <View style={styles.recentHeader}>
+                            <View style={styles.recentHeaderLeft}>
+                              <Ionicons
+                                name="time-outline"
+                                size={13}
+                                color={MUTED}
+                              />
+
+                              <Text style={styles.recentTitle}>Recent</Text>
+                            </View>
+
+                            <TouchableOpacity
+                              onPress={() => void clearRecentAssets()}
+                            >
+                              <Text style={styles.clearRecentText}>
+                                Clear all
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+
+                          <View style={styles.recentList}>
+                            {filteredRecentAssets.map(renderRecentAsset)}
+                          </View>
+                        </View>
+                      )}
+
+                      {/* Suggested */}
+
                       <View style={styles.assetListHeader}>
                         <View style={styles.assetListHeaderText}>
                           <Text style={styles.assetListTitle}>
@@ -1349,7 +1801,7 @@ export default function AssetGalleryScreen({
                           </Text>
                         </View>
 
-                        {selectedType && (
+                        {selectionSource === "taxonomy" && selectedType && (
                           <TouchableOpacity
                             style={styles.addNameButton}
                             onPress={() => {
@@ -1361,7 +1813,6 @@ export default function AssetGalleryScreen({
 
                               setNewNameText("");
                             }}
-                            activeOpacity={0.8}
                           >
                             <Ionicons
                               name={showAddName ? "close" : "add"}
@@ -1378,37 +1829,42 @@ export default function AssetGalleryScreen({
 
                       {/* Add Asset */}
 
-                      {showAddName && selectedType && (
-                        <View style={styles.addAssetRow}>
-                          <View style={styles.addAssetIcon}>
-                            <Ionicons name="add" size={17} color={ACC} />
+                      {showAddName &&
+                        selectionSource === "taxonomy" &&
+                        selectedType && (
+                          <View style={styles.addAssetRow}>
+                            <View style={styles.addAssetIcon}>
+                              <Ionicons name="add" size={17} color={ACC} />
+                            </View>
+
+                            <TextInput
+                              value={newNameText}
+                              onChangeText={setNewNameText}
+                              placeholder="Enter new asset name"
+                              placeholderTextColor={MUTED}
+                              style={styles.addAssetRowInput}
+                              autoFocus
+                              returnKeyType="done"
+                              onSubmitEditing={handleAddName}
+                            />
+
+                            <TouchableOpacity
+                              style={[
+                                styles.rowActionButton,
+
+                                !newNameText.trim() && styles.buttonDisabled,
+                              ]}
+                              disabled={!newNameText.trim()}
+                              onPress={handleAddName}
+                            >
+                              <Ionicons
+                                name="checkmark"
+                                size={17}
+                                color="#fff"
+                              />
+                            </TouchableOpacity>
                           </View>
-
-                          <TextInput
-                            value={newNameText}
-                            onChangeText={setNewNameText}
-                            placeholder="Enter new asset name"
-                            placeholderTextColor={MUTED}
-                            style={styles.addAssetRowInput}
-                            autoFocus
-                            returnKeyType="done"
-                            onSubmitEditing={handleAddName}
-                          />
-
-                          <TouchableOpacity
-                            style={[
-                              styles.rowActionButton,
-
-                              !newNameText.trim() && styles.buttonDisabled,
-                            ]}
-                            disabled={!newNameText.trim()}
-                            onPress={handleAddName}
-                            activeOpacity={0.8}
-                          >
-                            <Ionicons name="checkmark" size={17} color="#fff" />
-                          </TouchableOpacity>
-                        </View>
-                      )}
+                        )}
                     </>
                   }
                   ListEmptyComponent={
@@ -1424,22 +1880,18 @@ export default function AssetGalleryScreen({
                       <Text style={styles.emptyTitle}>
                         {favoritesOnly
                           ? "No favorite assets"
-                          : selectedType
-                            ? "No assets found"
-                            : "No matching assets"}
+                          : "No matching assets"}
                       </Text>
 
                       <Text style={styles.emptyText}>
-                        {favoritesOnly
-                          ? "Tap a star beside an asset to add it to your favorites."
-                          : selectedType
-                            ? "Add a new asset name or search another category."
-                            : "Try another search or choose a category and type."}
+                        Try another search or choose a category and type.
                       </Text>
                     </View>
                   }
                   renderItem={({ item }) => {
-                    const selected = item.id === selectedNameId;
+                    const selected =
+                      selectionSource === "taxonomy" &&
+                      item.id === selectedNameId;
 
                     const favorite = favoriteNameIds.has(item.id);
 
@@ -1465,10 +1917,7 @@ export default function AssetGalleryScreen({
 
                           handleSelectName(item);
                         }}
-                        activeOpacity={0.82}
                       >
-                        {/* Favorite */}
-
                         <TouchableOpacity
                           style={styles.starButton}
                           onPress={(event) => {
@@ -1476,7 +1925,6 @@ export default function AssetGalleryScreen({
 
                             toggleFavorite(item.id);
                           }}
-                          activeOpacity={0.8}
                         >
                           <Ionicons
                             name={favorite ? "star" : "star-outline"}
@@ -1485,14 +1933,10 @@ export default function AssetGalleryScreen({
                           />
                         </TouchableOpacity>
 
-                        {/* Image / Initials */}
-
                         <AssetAvatar
                           name={item.label}
                           imageUrl={getAssetImageUrl(item)}
                         />
-
-                        {/* Name / editor */}
 
                         <View style={styles.assetRowBody}>
                           {isEditing ? (
@@ -1526,8 +1970,6 @@ export default function AssetGalleryScreen({
                             </>
                           )}
                         </View>
-
-                        {/* Actions */}
 
                         {isEditing ? (
                           <View style={styles.editActions}>
@@ -1598,9 +2040,7 @@ export default function AssetGalleryScreen({
                   }}
                 />
 
-                {/* ------------------------------------------------------- */}
                 {/* Bottom */}
-                {/* ------------------------------------------------------- */}
 
                 <View
                   style={[
@@ -1617,20 +2057,19 @@ export default function AssetGalleryScreen({
 
                       !canContinue && styles.continueButtonDisabled,
                     ]}
-                    onPress={handleContinue}
+                    onPress={() => void handleContinue()}
                     disabled={!canContinue}
-                    activeOpacity={0.85}
                   >
                     <View style={styles.continueTextWrap}>
                       <Text style={styles.continueButtonText} numberOfLines={1}>
-                        {canContinue ? selectedName?.label : "Select an asset"}
+                        {canContinue ? selectedDisplayName : "Select an asset"}
                       </Text>
 
                       {canContinue && (
                         <Text style={styles.continueSubText} numberOfLines={1}>
-                          {selectedType?.label}
+                          {selectedDisplayType}
                           {" • "}
-                          {selectedCategory?.label}
+                          {selectedDisplayCategory}
                         </Text>
                       )}
                     </View>
@@ -1647,9 +2086,7 @@ export default function AssetGalleryScreen({
           </>
         )}
 
-        {/* --------------------------------------------------------------- */}
-        {/* Category / Type Picker */}
-        {/* --------------------------------------------------------------- */}
+        {/* Category / Type picker */}
 
         <Modal
           visible={pickerMode !== null}
@@ -1673,10 +2110,12 @@ export default function AssetGalleryScreen({
                 },
               ]}
             >
-              {/* Header */}
-
               <View style={styles.pickerHeader}>
-                <View style={{ flex: 1 }}>
+                <View
+                  style={{
+                    flex: 1,
+                  }}
+                >
                   <Text style={styles.pickerTitle}>
                     {pickerMode === "category" ? "Category" : "Type"}
                   </Text>
@@ -1684,7 +2123,7 @@ export default function AssetGalleryScreen({
                   <Text style={styles.pickerSubtitle} numberOfLines={1}>
                     {pickerMode === "category"
                       ? "Choose, favorite, edit or add a category"
-                      : selectedCategory?.label || ""}
+                      : selectedDisplayCategory || ""}
                   </Text>
                 </View>
 
@@ -1695,8 +2134,6 @@ export default function AssetGalleryScreen({
                   <Ionicons name="close" size={18} color={TEXT} />
                 </TouchableOpacity>
               </View>
-
-              {/* Search */}
 
               <View style={styles.pickerSearchBox}>
                 <Ionicons name="search-outline" size={16} color={MUTED} />
@@ -1719,8 +2156,6 @@ export default function AssetGalleryScreen({
                   </TouchableOpacity>
                 )}
               </View>
-
-              {/* Inline Add Toggle */}
 
               <TouchableOpacity
                 style={styles.inlineAddToggle}
@@ -1767,8 +2202,6 @@ export default function AssetGalleryScreen({
                 </Text>
               </TouchableOpacity>
 
-              {/* Inline Category Add */}
-
               {pickerMode === "category" && showAddCategory && (
                 <View style={styles.inlinePickerAddRow}>
                   <View style={styles.inlineAddIcon}>
@@ -1800,8 +2233,6 @@ export default function AssetGalleryScreen({
                 </View>
               )}
 
-              {/* Inline Type Add */}
-
               {pickerMode === "type" && showAddType && (
                 <View style={styles.inlinePickerAddRow}>
                   <View style={styles.inlineAddIcon}>
@@ -1832,8 +2263,6 @@ export default function AssetGalleryScreen({
                   </TouchableOpacity>
                 </View>
               )}
-
-              {/* Picker Rows */}
 
               <FlatList
                 data={pickerItems}
@@ -1884,10 +2313,7 @@ export default function AssetGalleryScreen({
                           selectType(item as AssetTypeItem);
                         }
                       }}
-                      activeOpacity={0.82}
                     >
-                      {/* Favorite */}
-
                       <TouchableOpacity
                         style={styles.pickerStarButton}
                         onPress={(event) => {
@@ -1906,8 +2332,6 @@ export default function AssetGalleryScreen({
                           color={favorite ? "#F59E0B" : "#A5A9B5"}
                         />
                       </TouchableOpacity>
-
-                      {/* Label / editor */}
 
                       <View style={styles.pickerRowBody}>
                         {editing ? (
@@ -1945,8 +2369,6 @@ export default function AssetGalleryScreen({
                           </Text>
                         )}
                       </View>
-
-                      {/* Actions */}
 
                       {editing ? (
                         <View style={styles.editActions}>
@@ -2041,9 +2463,7 @@ const styles = StyleSheet.create({
     backgroundColor: BACKGROUND,
   },
 
-  // -------------------------------------------------------------------------
   // Header
-  // -------------------------------------------------------------------------
 
   header: {
     minHeight: 52,
@@ -2097,9 +2517,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
 
-  // -------------------------------------------------------------------------
-  // Category / Type
-  // -------------------------------------------------------------------------
+  // Filters
 
   filterRow: {
     flexDirection: "row",
@@ -2147,9 +2565,7 @@ const styles = StyleSheet.create({
     color: "#B4B7C1",
   },
 
-  // -------------------------------------------------------------------------
   // Search
-  // -------------------------------------------------------------------------
 
   searchRow: {
     flexDirection: "row",
@@ -2194,14 +2610,12 @@ const styles = StyleSheet.create({
     borderColor: "#F4C76A",
   },
 
-  // -------------------------------------------------------------------------
-  // Asset list
-  // -------------------------------------------------------------------------
+  // Main list
 
   listContent: {
     flexGrow: 1,
     paddingHorizontal: 12,
-    paddingTop: 11,
+    paddingTop: 10,
   },
 
   assetListHeader: {
@@ -2248,9 +2662,142 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
 
-  // -------------------------------------------------------------------------
-  // Asset row
-  // -------------------------------------------------------------------------
+  // Recent history
+
+  recentSection: {
+    marginBottom: 11,
+  },
+
+  recentHeader: {
+    height: 23,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 4,
+  },
+
+  recentHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+
+  recentTitle: {
+    color: TEXT,
+    fontSize: 9.5,
+    fontWeight: "800",
+  },
+
+  clearRecentText: {
+    color: MUTED,
+    fontSize: 8,
+    fontWeight: "700",
+  },
+
+  recentList: {
+    gap: 4,
+  },
+
+  recentRow: {
+    minHeight: 39,
+    borderRadius: 9,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#E2E5EC",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
+
+  recentRowSelected: {
+    borderColor: ACC,
+    backgroundColor: "#F2F3F7",
+  },
+
+  recentRowEditing: {
+    borderColor: ACC,
+  },
+
+  recentBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  recentName: {
+    color: TEXT,
+    fontSize: 9.5,
+    lineHeight: 12,
+    fontWeight: "700",
+  },
+
+  recentNameSelected: {
+    fontWeight: "900",
+  },
+
+  recentMeta: {
+    color: MUTED,
+    fontSize: 7.5,
+    lineHeight: 10,
+    marginTop: 1,
+  },
+
+  recentEditInput: {
+    height: 29,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: ACC,
+    paddingHorizontal: 7,
+    paddingVertical: 0,
+    fontSize: 9,
+    color: TEXT,
+    backgroundColor: "#F8F9FB",
+  },
+
+  recentEditButton: {
+    width: 25,
+    height: 25,
+    borderRadius: 7,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EEF0F5",
+    marginLeft: 4,
+  },
+
+  recentDeleteButton: {
+    width: 25,
+    height: 25,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 1,
+  },
+
+  recentEditActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    marginLeft: 5,
+  },
+
+  recentSmallButton: {
+    width: 25,
+    height: 25,
+    borderRadius: 7,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F0F1F4",
+  },
+
+  recentSaveButton: {
+    width: 25,
+    height: 25,
+    borderRadius: 7,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: ACC,
+  },
+
+  // Assets
 
   assetRow: {
     minHeight: 56,
@@ -2290,6 +2837,13 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
 
+  assetAvatarSmall: {
+    width: 29,
+    height: 29,
+    borderRadius: 8,
+    marginRight: 7,
+  },
+
   assetAvatarFallback: {
     alignItems: "center",
     justifyContent: "center",
@@ -2300,6 +2854,10 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "900",
     letterSpacing: 0.3,
+  },
+
+  assetAvatarTextSmall: {
+    fontSize: 8,
   },
 
   assetRowBody: {
@@ -2333,9 +2891,7 @@ const styles = StyleSheet.create({
     marginLeft: 2,
   },
 
-  // -------------------------------------------------------------------------
-  // Edit row
-  // -------------------------------------------------------------------------
+  // Edit
 
   rowEditInput: {
     height: 35,
@@ -2385,9 +2941,7 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
 
-  // -------------------------------------------------------------------------
   // Add asset
-  // -------------------------------------------------------------------------
 
   addAssetRow: {
     minHeight: 52,
@@ -2424,9 +2978,11 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  // -------------------------------------------------------------------------
+  buttonDisabled: {
+    opacity: 0.4,
+  },
+
   // Bottom
-  // -------------------------------------------------------------------------
 
   bottomBar: {
     position: "absolute",
@@ -2484,13 +3040,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
 
-  buttonDisabled: {
-    opacity: 0.4,
-  },
-
-  // -------------------------------------------------------------------------
-  // Picker Modal
-  // -------------------------------------------------------------------------
+  // Picker
 
   modalFlex: {
     flex: 1,
@@ -2499,6 +3049,7 @@ const styles = StyleSheet.create({
 
   backdrop: {
     ...StyleSheet.absoluteFillObject,
+
     backgroundColor: "rgba(30,35,52,0.28)",
   },
 
@@ -2681,9 +3232,65 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  // -------------------------------------------------------------------------
+  // Error / empty
+
+  errorBox: {
+    margin: 12,
+    minHeight: 46,
+    borderRadius: 11,
+    paddingHorizontal: 10,
+    backgroundColor: "#FFF7ED",
+    borderWidth: 1,
+    borderColor: "#FED7AA",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
+
+  errorText: {
+    flex: 1,
+    color: "#92400E",
+    fontSize: 9.5,
+    fontWeight: "600",
+  },
+
+  retryText: {
+    color: ACC,
+    fontSize: 10,
+    fontWeight: "800",
+  },
+
+  emptyState: {
+    paddingTop: 50,
+    alignItems: "center",
+    paddingHorizontal: 30,
+  },
+
+  emptyIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 15,
+    backgroundColor: SURFACE,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 9,
+  },
+
+  emptyTitle: {
+    color: TEXT,
+    fontSize: 11,
+    fontWeight: "800",
+  },
+
+  emptyText: {
+    color: MUTED,
+    fontSize: 9,
+    lineHeight: 14,
+    textAlign: "center",
+    marginTop: 4,
+  },
+
   // Skeleton
-  // -------------------------------------------------------------------------
 
   skeletonBlock: {
     backgroundColor: "#E7E9EF",
@@ -2742,17 +3349,6 @@ const styles = StyleSheet.create({
     paddingTop: 11,
   },
 
-  skeletonListTitle: {
-    width: 92,
-    height: 10,
-  },
-
-  skeletonListSubtitle: {
-    width: 180,
-    height: 7,
-    marginTop: 5,
-  },
-
   skeletonStar: {
     width: 20,
     height: 20,
@@ -2796,69 +3392,5 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: 12,
     backgroundColor: "#E7E9EF",
-  },
-
-  // -------------------------------------------------------------------------
-  // Error
-  // -------------------------------------------------------------------------
-
-  errorBox: {
-    margin: 12,
-    minHeight: 46,
-    borderRadius: 11,
-    paddingHorizontal: 10,
-    backgroundColor: "#FFF7ED",
-    borderWidth: 1,
-    borderColor: "#FED7AA",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-  },
-
-  errorText: {
-    flex: 1,
-    color: "#92400E",
-    fontSize: 9.5,
-    fontWeight: "600",
-  },
-
-  retryText: {
-    color: ACC,
-    fontSize: 10,
-    fontWeight: "800",
-  },
-
-  // -------------------------------------------------------------------------
-  // Empty
-  // -------------------------------------------------------------------------
-
-  emptyState: {
-    paddingTop: 50,
-    alignItems: "center",
-    paddingHorizontal: 30,
-  },
-
-  emptyIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 15,
-    backgroundColor: SURFACE,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 9,
-  },
-
-  emptyTitle: {
-    color: TEXT,
-    fontSize: 11,
-    fontWeight: "800",
-  },
-
-  emptyText: {
-    color: MUTED,
-    fontSize: 9,
-    lineHeight: 14,
-    textAlign: "center",
-    marginTop: 4,
   },
 });
