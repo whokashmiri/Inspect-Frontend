@@ -1,6 +1,7 @@
 import * as ImageManipulator from "expo-image-manipulator";
 
 type ImageSlot =
+  | "main"
   | "plate"
   | "details"
   | "odometer"
@@ -14,6 +15,10 @@ const IMAGE_CONFIG: Record<
     quality: number;
   }
 > = {
+    main: {
+    maxWidth: 1800,
+    quality: 0.85,
+  },
   plate: {
     maxWidth: 1800,
     quality: 0.85,
