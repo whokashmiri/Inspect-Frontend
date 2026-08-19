@@ -8,7 +8,7 @@ const cleanAssetRawData = (rawData?: Record<string, any> | null) => {
       : {};
 
   delete source.quantity;
-  delete source.subAssetType;
+  delete source.asset_location;
   delete source.customAssetType;
 
   return source;
@@ -122,6 +122,7 @@ const mapExistingMediaToDraft = (
 };
 
 const createEmptyAssetImages = () => ({
+  main:null,
   plate: null,
   details: null,
   odometer: null,
@@ -176,6 +177,11 @@ const mapAssetImagesToDraft = (images: any) => {
       3,
       "image"
     ),
+     main: mapExistingMediaItemToDraft(
+      images.main,
+      4,
+      "image"
+    ),
 
     other: mapExistingMediaToDraft(
       images.other,
@@ -191,11 +197,10 @@ export function mapAssetToDraft(
   hasNotes?: boolean;
   notes?: string;
   quantity?: number;
-  subAssetType?: string | null;
   rawData?: Record<string, any>;
 } {
   const quantityValue = Number(
-    (asset as any).quantity ?? 1
+    asset.quantity ?? 1
   );
 
   const quantity =
@@ -203,12 +208,6 @@ export function mapAssetToDraft(
     quantityValue > 0
       ? Math.floor(quantityValue)
       : 1;
-
-  const subAssetType = String(
-    (asset as any).subAssetType || ""
-  )
-    .trim()
-    .toLowerCase();
 
   const normalizedAssetType =
     String(asset.assetType || "").toLowerCase() ===
@@ -223,38 +222,69 @@ export function mapAssetToDraft(
       (asset as any).writtenDescription || "",
 
     condition: asset.condition || "Good",
+
     assetType: normalizedAssetType,
 
-    subAssetType: subAssetType || undefined,
+    normalizedData:
+  asset.normalizedData &&
+  typeof asset.normalizedData === "object"
+    ? { ...asset.normalizedData }
+    : {},
+
+newAssetLocation:
+  asset.newAssetLocation ?? null,
+
+    categoryId: asset.categoryId ?? null,
+    category: asset.category ?? null,
+
+    typeId: asset.typeId ?? null,
+    type: asset.type ?? null,
+
+    nameId: asset.nameId ?? null,
+
+  
+
     quantity,
 
     rawData: cleanAssetRawData(
-      (asset as any).rawData
+      asset.rawData
     ),
 
     brand: asset.brand || "",
     model: asset.model || "",
+
+    code: asset.code || "",
+
     manufactureYear:
       asset.manufactureYear || "",
+
     kilometersDriven:
       asset.kilometersDriven || "",
 
-    isPresent: asset.isPresent ?? true,
-    isDone: asset.isDone ?? false,
+    isPresent:
+      asset.isPresent ?? true,
+
+    isDone:
+      asset.isDone ?? false,
 
     hasNotes:
       asset.hasNotes ??
-      Boolean(String(asset.notes || "").trim()),
+      Boolean(
+        String(asset.notes || "").trim()
+      ),
 
-    notes: asset.notes || "",
+    notes:
+      asset.notes || "",
 
-    images: mapAssetImagesToDraft(
-      (asset as any).images
-    ),
+    images:
+      mapAssetImagesToDraft(
+        asset.images
+      ),
 
-    voiceNotes: mapExistingMediaToDraft(
-      asset.voiceNotes,
-      "voice"
-    ),
+    voiceNotes:
+      mapExistingMediaToDraft(
+        asset.voiceNotes,
+        "voice"
+      ),
   };
 }
