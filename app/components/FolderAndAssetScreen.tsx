@@ -58,8 +58,6 @@ import {
   getOfflineRawDataKeys,
   advancedSearchOfflineAssets,
   getOfflineConditions,
-  getOfflineSubAssetTypes,
-  renameOfflineSubAssetType,
   deleteOfflineAssetsByIds,
   deletePendingCreateAssetByLocalId,
 } from "../offline";
@@ -157,9 +155,12 @@ export default function FolderAndAssetScreen({ route }: Props) {
   const [viewerMedia, setViewerMedia] = useState<any[]>([]);
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
 
-  const [projectSubAssetTypes, setProjectSubAssetTypes] = useState<string[]>(
-    [],
-  );
+  const [projectAssetLocations, setProjectAssetLocations] = useState<
+    {
+      value: string;
+      source: "normalizedData" | "newAssetLocation";
+    }[]
+  >([]);
   const [projectConditions, setProjectConditions] = useState<string[]>([]);
 
   const [workModeSnackbarVisible, setWorkModeSnackbarVisible] = useState(false);
@@ -218,6 +219,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
   };
 
   type StructuredAssetImages = {
+    main: any | null;
     plate: any | null;
     details: any | null;
     odometer: any | null;
@@ -226,6 +228,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
   };
 
   const createEmptyAssetImages = (): StructuredAssetImages => ({
+    main: null,
     plate: null,
     details: null,
     odometer: null,
@@ -244,6 +247,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
     if (typeof images !== "object") return [];
 
     return [
+      images.main,
       images.plate,
       images.details,
       images.odometer,
@@ -581,33 +585,83 @@ export default function FolderAndAssetScreen({ route }: Props) {
     );
   };
 
-  const loadProjectSubAssetTypes = useCallback(async () => {
-    if (projectId.startsWith("offline_")) return;
+  const loadProjectAssetLocations = useCallback(async () => {
+    if (projectId.startsWith("offline_")) {
+      setProjectAssetLocations([]);
+      return;
+    }
 
     try {
       const shouldUseOfflineCache =
         downloadedOffline && (isOnline === false || isOnline === null);
 
-      const values = shouldUseOfflineCache
-        ? await getOfflineSubAssetTypes(projectId)
-        : (await projectContentApi.getProjectSubAssetTypes(projectId))
-            .subAssetTypes || [];
+      /*
+       * For now, if fully offline, collect locations
+       * from locally cached assets.
+       */
+      if (shouldUseOfflineCache) {
+        const locations = new Map<
+          string,
+          {
+            value: string;
+            source: "normalizedData" | "newAssetLocation";
+          }
+        >();
 
-      const unique = Array.from(
-        new Set(
-          values
-            .map((item) =>
-              String(item || "")
-                .trim()
-                .toLowerCase(),
-            )
-            .filter(Boolean),
-        ),
-      ).sort((a, b) => a.localeCompare(b));
+        const addLocation = (
+          value: unknown,
+          source: "normalizedData" | "newAssetLocation",
+        ) => {
+          const text = typeof value === "string" ? value.trim() : "";
 
-      setProjectSubAssetTypes(unique);
+          if (!text) return;
+
+          const key = text.toLocaleLowerCase();
+
+          if (!locations.has(key)) {
+            locations.set(key, {
+              value: text,
+              source,
+            });
+          }
+        };
+
+        const scanFolder = async (parentId: string | null) => {
+          const data = await getOfflineContents(projectId, parentId);
+
+          for (const asset of data.assets || []) {
+            addLocation(
+              (asset as any).normalizedData?.asset_location,
+              "normalizedData",
+            );
+
+            addLocation((asset as any).newAssetLocation, "newAssetLocation");
+          }
+
+          for (const folder of data.folders || []) {
+            await scanFolder(folder.id);
+          }
+        };
+
+        await scanFolder(null);
+
+        setProjectAssetLocations(
+          Array.from(locations.values()).sort((a, b) =>
+            a.value.localeCompare(b.value),
+          ),
+        );
+
+        return;
+      }
+
+      const result =
+        await projectContentApi.getProjectAssetLocations(projectId);
+
+      setProjectAssetLocations(result.locations || []);
     } catch (error) {
-      console.warn("SUB ASSET TYPES ERROR:", error);
+      console.warn("ASSET LOCATIONS ERROR:", error);
+
+      setProjectAssetLocations([]);
     }
   }, [projectId, downloadedOffline, isOnline]);
 
@@ -634,9 +688,9 @@ export default function FolderAndAssetScreen({ route }: Props) {
   }, [projectId, downloadedOffline, isOnline]);
 
   useEffect(() => {
-    loadProjectSubAssetTypes();
+    loadProjectAssetLocations();
     loadProjectConditions();
-  }, [loadProjectSubAssetTypes, loadProjectConditions]);
+  }, [loadProjectAssetLocations, loadProjectConditions]);
 
   const collectRawDataValuesForKey = useCallback(
     async (key: string) => {
@@ -1253,6 +1307,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
     "quantity",
     "subAssetType",
     "customAssetType",
+    "asset_location",
   ]);
 
   const cleanAssetRawData = (rawData?: Record<string, any> | null) => {
@@ -1332,6 +1387,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
     if (typeof images !== "object") return empty;
 
     return {
+      main: normalizeLocalMediaItem(images.main, 4),
       plate: normalizeLocalMediaItem(images.plate, 0),
       details: normalizeLocalMediaItem(images.details, 1),
       odometer: normalizeLocalMediaItem(images.odometer, 2),
@@ -1350,38 +1406,68 @@ export default function FolderAndAssetScreen({ route }: Props) {
       ? 1
       : normalizeAssetQuantity((draft as any).quantity ?? 1);
 
-    const subAssetType = isVehicle
-      ? null
-      : normalizeSubAssetTypeValue(
-          (draft as any).subAssetType ??
-            rawData.subAssetType ??
-            rawData.customAssetType,
-        );
-
     const notesText = String(draft.notes || "").trim();
+
     return {
       id: `offline_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+
       name: draft.name,
+
+      // NEW taxonomy fields
+      categoryId: isVehicle ? null : ((draft as any).categoryId ?? null),
+      category: isVehicle ? null : ((draft as any).category ?? null),
+
+      typeId: isVehicle ? null : ((draft as any).typeId ?? null),
+      type: isVehicle ? null : ((draft as any).type ?? null),
+
+      nameId: isVehicle ? null : ((draft as any).nameId ?? null),
+
       parent: currentFolderId ?? null,
+
       quantity,
-      subAssetType,
+      normalizedData:
+        !isVehicle &&
+        draft.normalizedData &&
+        typeof draft.normalizedData === "object"
+          ? { ...draft.normalizedData }
+          : {},
+
+      newAssetLocation: isVehicle
+        ? null
+        : draft.newAssetLocation?.trim() || null,
       rawData,
+
       projectId,
+
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+
       condition: normalizeConditionValue(draft.condition),
+
       assetType: normalizedAssetType,
+
       brand: isVehicle ? draft.brand || null : null,
       model: isVehicle ? draft.model || null : null,
       code: draft.code || null,
+
       manufactureYear: isVehicle ? draft.manufactureYear || null : null,
       kilometersDriven: isVehicle ? draft.kilometersDriven || null : null,
+
       isDone: draft.isDone ?? false,
+
       hasNotes: notesText.length > 0,
       notes: notesText || null,
+
       isPresent: draft.isPresent ?? true,
-      createdBy: { id: "offline-user", fullName: "You", email: "" },
+
+      createdBy: {
+        id: "offline-user",
+        fullName: "You",
+        email: "",
+      },
+
       images: normalizeAssetImages(draft.images),
+
       voiceNotes: normalizeLocalMedia(draft.voiceNotes || []),
     };
   };
@@ -1395,6 +1481,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
     const text = String(value || "")
       .trim()
       .toLowerCase();
+
     return text || null;
   };
 
@@ -1435,9 +1522,16 @@ export default function FolderAndAssetScreen({ route }: Props) {
         ? 1
         : normalizeAssetQuantity((draft as any).quantity ?? 1);
 
-      const subAssetType = isVehicle
+      const normalizedData =
+        !isVehicle &&
+        draft.normalizedData &&
+        typeof draft.normalizedData === "object"
+          ? { ...draft.normalizedData }
+          : {};
+
+      const newAssetLocation = isVehicle
         ? null
-        : normalizeSubAssetTypeValue((draft as any).subAssetType);
+        : draft.newAssetLocation?.trim() || null;
 
       const finalRawData = rawData;
 
@@ -1456,7 +1550,18 @@ export default function FolderAndAssetScreen({ route }: Props) {
         code: draft.code || null,
         assetType: normalizedAssetType,
 
-        subAssetType,
+        categoryId: isVehicle ? null : (draft.categoryId ?? null),
+
+        category: isVehicle ? null : (draft.category ?? null),
+
+        typeId: isVehicle ? null : (draft.typeId ?? null),
+
+        type: isVehicle ? null : (draft.type ?? null),
+
+        nameId: isVehicle ? null : (draft.nameId ?? null),
+
+        normalizedData,
+        newAssetLocation,
         quantity: safeQuantity,
         rawData: finalRawData,
 
@@ -1480,7 +1585,18 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
         condition,
         assetType: normalizedAssetType,
-        subAssetType,
+        categoryId: isVehicle ? null : (draft.categoryId ?? null),
+
+        category: isVehicle ? null : (draft.category ?? null),
+
+        typeId: isVehicle ? null : (draft.typeId ?? null),
+
+        type: isVehicle ? null : (draft.type ?? null),
+
+        nameId: isVehicle ? null : (draft.nameId ?? null),
+
+        normalizedData,
+        newAssetLocation,
         quantity: safeQuantity,
         rawData: finalRawData,
 
@@ -1534,7 +1650,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
             id: localId,
           });
         }
-        await loadProjectSubAssetTypes();
+        await await loadProjectAssetLocations();
         await loadProjectConditions();
         showSnackbar(result.message, "info");
         return;
@@ -1557,7 +1673,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
       if (downloadedOffline) {
         await upsertOfflineAsset(result.asset);
       }
-      await loadProjectSubAssetTypes();
+      await loadProjectAssetLocations();
       await loadProjectConditions();
 
       showSnackbar(t("folderAssetScreen.snackbar.assetCreated"), "success");
@@ -1636,9 +1752,16 @@ export default function FolderAndAssetScreen({ route }: Props) {
       ? 1
       : normalizeAssetQuantity((draft as any).quantity ?? 1);
 
-    const subAssetType = isVehicle
+    const normalizedData =
+      !isVehicle &&
+      draft.normalizedData &&
+      typeof draft.normalizedData === "object"
+        ? { ...draft.normalizedData }
+        : {};
+
+    const newAssetLocation = isVehicle
       ? null
-      : normalizeSubAssetTypeValue((draft as any).subAssetType);
+      : draft.newAssetLocation?.trim() || null;
 
     const finalRawData = rawData;
 
@@ -1656,7 +1779,18 @@ export default function FolderAndAssetScreen({ route }: Props) {
       code: draft.code || null,
       assetType: normalizedAssetType,
 
-      subAssetType,
+      categoryId: isVehicle ? null : (draft.categoryId ?? null),
+
+      category: isVehicle ? null : (draft.category ?? null),
+
+      typeId: isVehicle ? null : (draft.typeId ?? null),
+
+      type: isVehicle ? null : (draft.type ?? null),
+
+      nameId: isVehicle ? null : (draft.nameId ?? null),
+
+      normalizedData,
+      newAssetLocation,
       quantity: safeQuantity,
       rawData: finalRawData,
 
@@ -1684,7 +1818,18 @@ export default function FolderAndAssetScreen({ route }: Props) {
           ...existingOfflineAsset,
           name: draft.name,
           quantity: safeQuantity,
-          subAssetType,
+          categoryId: isVehicle ? null : (draft.categoryId ?? null),
+
+          category: isVehicle ? null : (draft.category ?? null),
+
+          typeId: isVehicle ? null : (draft.typeId ?? null),
+
+          type: isVehicle ? null : (draft.type ?? null),
+
+          nameId: isVehicle ? null : (draft.nameId ?? null),
+
+          normalizedData,
+          newAssetLocation,
           rawData: finalRawData,
           hasNotes: notesText.length > 0,
           notes: notesText || null,
@@ -1708,7 +1853,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
       showSnackbar(result.message, "info");
     } else {
       if (downloadedOffline) await upsertOfflineAsset(result.asset);
-      await loadProjectSubAssetTypes();
+      await loadProjectAssetLocations();
       await loadProjectConditions();
       showSnackbar(t("folderAssetScreen.snackbar.assetUpdated"), "success");
     }
@@ -2127,15 +2272,11 @@ export default function FolderAndAssetScreen({ route }: Props) {
     const safeQuantity = Math.max(1, Math.floor(quantity || 1));
     const rawData = cleanAssetRawData((asset as any).rawData);
 
-    const subAssetType = String((asset as any).subAssetType || "")
-      .trim()
-      .toLowerCase();
-
     return {
       assetId: asset.id,
       projectId,
       quantity: safeQuantity,
-      subAssetType: subAssetType || null,
+
       rawData,
     };
   };
@@ -2157,7 +2298,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
       name: selection.name,
 
       // Keep compatibility with the current wizard until we update it.
-      subAssetType: selection.type,
+      // subAssetType: selection.type,
 
       // These fields will be wired properly into AssetDraft / Asset model next.
       categoryId: selection.categoryId,
@@ -2184,7 +2325,15 @@ export default function FolderAndAssetScreen({ route }: Props) {
       isPresent: true,
       isDone: true,
       quantity: 1,
-      subAssetType: "",
+      normalizedData: {},
+      newAssetLocation: null,
+      categoryId: null,
+      category: null,
+
+      typeId: null,
+      type: null,
+
+      nameId: null,
       rawData: {},
       images: createEmptyAssetImages(),
       voiceNotes: [],
@@ -2371,74 +2520,12 @@ export default function FolderAndAssetScreen({ route }: Props) {
         ...taxonomyData,
 
         name: selection.name,
-        subAssetType: selection.type,
+        // subAssetType: selection.type,
       });
     }
 
     setAssetGalleryVisible(false);
     setAssetModalVisible(true);
-  };
-
-  const handleRenameSubAssetType = async (
-    oldSubAssetType: string,
-    newSubAssetType: string,
-  ) => {
-    const oldValue = String(oldSubAssetType || "")
-      .trim()
-      .toLowerCase();
-    const newValue = String(newSubAssetType || "")
-      .trim()
-      .toLowerCase();
-
-    if (!oldValue || !newValue || oldValue === newValue) return;
-
-    const shouldUseOfflineCache =
-      downloadedOffline && (isOnline === false || isOnline === null);
-
-    if (shouldUseOfflineCache) {
-      await renameOfflineSubAssetType({
-        projectId,
-        oldSubAssetType: oldValue,
-        newSubAssetType: newValue,
-        parent: currentFolderId ?? null,
-      });
-
-      await safeApiCall(
-        () =>
-          projectContentApi.renameProjectSubAssetType({
-            projectId,
-            oldSubAssetType: oldValue,
-            newSubAssetType: newValue,
-            parent: currentFolderId ?? null,
-          }),
-        {
-          projectId,
-          oldSubAssetType: oldValue,
-          newSubAssetType: newValue,
-          parent: currentFolderId ?? null,
-        },
-        { type: "renameSubAssetType", projectId },
-      );
-
-      await refreshPendingCount();
-      await loadContents(currentFolderId, { showSkeleton: true });
-      await loadProjectSubAssetTypes();
-
-      showSnackbar("Asset type updated offline. It will sync later.", "info");
-      return;
-    }
-
-    await projectContentApi.renameProjectSubAssetType({
-      projectId,
-      oldSubAssetType: oldValue,
-      newSubAssetType: newValue,
-      parent: currentFolderId ?? null,
-    });
-
-    await loadContents(currentFolderId, { showSkeleton: true });
-    await loadProjectSubAssetTypes();
-
-    showSnackbar("Asset type updated", "success");
   };
 
   return (
@@ -3635,29 +3722,31 @@ export default function FolderAndAssetScreen({ route }: Props) {
           />
 
           {/* ── Asset wizard modal ── */}
-          <CreateAssetWizardModal
-            firstInputRef={assetWizardInputRef}
-            disableAssetName={!!editingAsset && !canEditAssetName}
-            visible={assetModalVisible}
-            onClose={closeAssetModal}
-            onSubmit={(draft) => submitAssetInBackground(draft, !!editingAsset)}
-            onSaveAndCreate={saveAndCreateNextAsset}
-            onSaveAndNext={saveAndEditNextAsset}
-            mode={editingAsset ? "edit" : "create"}
-            initialData={
-              editingAsset
-                ? {
-                    ...mapAssetToDraft(editingAsset),
-                    ...(createAssetInitialData ?? {}),
-                  }
-                : createAssetInitialData
-            }
-            subAssetTypes={projectSubAssetTypes}
-            conditionOptions={projectConditions}
-            onRenameSubAssetType={handleRenameSubAssetType}
-            autoOpenCamera={autoOpenCameraForEdit}
-          />
-
+          {assetModalVisible && (
+            <CreateAssetWizardModal
+              firstInputRef={assetWizardInputRef}
+              disableAssetName={!!editingAsset && !canEditAssetName}
+              visible={assetModalVisible}
+              onClose={closeAssetModal}
+              onSubmit={(draft) =>
+                submitAssetInBackground(draft, !!editingAsset)
+              }
+              onSaveAndCreate={saveAndCreateNextAsset}
+              onSaveAndNext={saveAndEditNextAsset}
+              mode={editingAsset ? "edit" : "create"}
+              initialData={
+                editingAsset
+                  ? {
+                      ...mapAssetToDraft(editingAsset),
+                      ...(createAssetInitialData ?? {}),
+                    }
+                  : createAssetInitialData
+              }
+              assetLocations={projectAssetLocations}
+              conditionOptions={projectConditions}
+              autoOpenCamera={autoOpenCameraForEdit}
+            />
+          )}
           {assetFlowLoading && (
             <View style={styles.assetFlowLoadingOverlay}>
               <View style={styles.assetFlowLoadingCard}>

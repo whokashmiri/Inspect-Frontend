@@ -24,10 +24,11 @@ import { Audio } from "expo-av";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import AssetCameraModal from "./AssetCameraModal";
+import AssetGalleryScreen, { PickedAssetCategory } from "./AssetGalleryScreen";
 
 import OtherAssetForm, {
   cleanOtherAssetDraft,
-  getOtherSubAssetType,
+  getEffectiveAssetLocation,
 } from "./forms/OtherAssetForm";
 import VehicleAssetForm from "./forms/VehicleAssetForm";
 
@@ -36,7 +37,14 @@ import { AudioModule, RecordingPresets, useAudioRecorder } from "expo-audio";
 
 type CameraMode = "photos" | "scan";
 
-type PhotoSlot = "plate" | "details" | "odometer" | "brand" | "other" | null;
+type PhotoSlot =
+  | "main"
+  | "plate"
+  | "details"
+  | "odometer"
+  | "brand"
+  | "other"
+  | null;
 
 const DEFAULT_CONDITIONS = [
   "New",
@@ -70,14 +78,13 @@ type Props = {
   initialData?: Partial<AssetDraft>;
   disableAssetName?: boolean;
   firstInputRef?: RefObject<TextInput | null>;
-  subAssetTypes?: string[];
+
   conditionOptions?: string[];
   autoOpenCamera?: boolean;
-
-  onRenameSubAssetType?: (
-    oldSubAssetType: string,
-    newSubAssetType: string,
-  ) => Promise<void> | void;
+  assetLocations?: {
+    value: string;
+    source: "normalizedData" | "newAssetLocation";
+  }[];
 
   onSaveAndNext?: (draft: AssetDraft) => Promise<void> | void;
   onSaveAndCreate?: (draft: AssetDraft) => Promise<void> | void;
@@ -91,12 +98,14 @@ const cleanAssetRawData = (rawData?: Record<string, any> | null) => {
 
   delete source.quantity;
   delete source.subAssetType;
+  delete source.asset_location;
   delete source.customAssetType;
 
   return source;
 };
 
 const createEmptyImages = () => ({
+  main: null,
   plate: null,
   details: null,
   odometer: null,
@@ -115,6 +124,7 @@ const normalizeInitialImages = (
   // Current API format
   if (!Array.isArray(images) && typeof images === "object") {
     return {
+      main: images.main || null,
       plate: images.plate || null,
       details: images.details || null,
       odometer: images.odometer || null,
@@ -154,11 +164,27 @@ const getInitialDraft = (initialData?: Partial<AssetDraft>): AssetDraft => {
 
   const quantity = (initialData as any)?.quantity ?? 1;
 
-  const subAssetType = String((initialData as any)?.subAssetType || "").trim();
-
   return {
     images: normalizeInitialImages(initialData?.images, initialData?.assetType),
     name: initialData?.name || "",
+    normalizedData:
+      (initialData as any)?.normalizedData &&
+      typeof (initialData as any).normalizedData === "object" &&
+      !Array.isArray((initialData as any).normalizedData)
+        ? { ...(initialData as any).normalizedData }
+        : {},
+
+    newAssetLocation: (initialData as any)?.newAssetLocation ?? null,
+
+    categoryId: (initialData as any)?.categoryId ?? null,
+
+    category: (initialData as any)?.category ?? null,
+
+    typeId: (initialData as any)?.typeId ?? null,
+
+    type: (initialData as any)?.type ?? null,
+
+    nameId: (initialData as any)?.nameId ?? null,
     writtenDescription: "",
     voiceNotes: initialData?.voiceNotes?.slice(0, 1) || [],
     condition: initialData?.condition || "Good",
@@ -179,10 +205,25 @@ const getInitialDraft = (initialData?: Partial<AssetDraft>): AssetDraft => {
     hasNotes: !!initialData?.notes?.trim(),
 
     quantity,
-    subAssetType,
 
     rawData,
   } as any;
+};
+const getAssetInitials = (name?: string | null) => {
+  const parts = String(name || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (!parts.length) {
+    return "?";
+  }
+
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+
+  return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
 };
 
 export default function CreateAssetWizardModal({
@@ -193,10 +234,10 @@ export default function CreateAssetWizardModal({
   initialData,
   disableAssetName = false,
   firstInputRef,
-  subAssetTypes = [],
+  assetLocations = [],
   conditionOptions = [],
   autoOpenCamera = false,
-  onRenameSubAssetType,
+
   onSaveAndNext,
   onSaveAndCreate,
 }: Props) {
@@ -206,6 +247,8 @@ export default function CreateAssetWizardModal({
   const [step, setStep] = useState(1);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
+
+  const [assetGalleryOpen, setAssetGalleryOpen] = useState(false);
 
   const [photoSlot, setPhotoSlot] = useState<PhotoSlot>(null);
 
@@ -408,12 +451,11 @@ export default function CreateAssetWizardModal({
     ? vehicleModalMinHeight
     : otherModalMinHeight;
 
-  const subAssetType = getOtherSubAssetType(draft);
+  const effectiveAssetLocation = getEffectiveAssetLocation(draft);
 
-  const displayCategory =
-    subAssetType && subAssetType !== currentCategory
-      ? `${currentCategory} • ${subAssetType}`
-      : currentCategory;
+  const displayCategory = isVehicle
+    ? "vehicle"
+    : effectiveAssetLocation || "other";
 
   const getShortVoiceName = () => {
     if (isRecording) return t("asset.recording");
@@ -444,7 +486,9 @@ export default function CreateAssetWizardModal({
     setCameraOpen(true);
   };
 
-  const openOtherPhotoCamera = (slot: "details" | "brand" | "other") => {
+  const openOtherPhotoCamera = (
+    slot: "main" | "details" | "brand" | "other",
+  ) => {
     setPhotoSlot(slot);
     setCameraMode("photos");
     setCameraOpen(true);
@@ -629,11 +673,6 @@ export default function CreateAssetWizardModal({
     if (!isVehicleDraft) {
       const otherDraft = cleanOtherAssetDraft(draft);
 
-      if (!otherDraft) {
-        showSnackbar("Asset type is required", "error");
-        return null;
-      }
-
       return {
         ...otherDraft,
         notes: cleanedNotes || undefined,
@@ -648,7 +687,6 @@ export default function CreateAssetWizardModal({
       hasNotes: cleanedNotes.length > 0,
 
       quantity: undefined,
-      subAssetType: undefined,
 
       brand: draft.brand || undefined,
       model: draft.model || undefined,
@@ -860,6 +898,8 @@ export default function CreateAssetWizardModal({
     return processedMedia;
   };
 
+  const mainAssetImageUri =
+    draft.images?.main?.uri || draft.images?.main?.url || null;
   return (
     <>
       <Modal
@@ -951,53 +991,120 @@ export default function CreateAssetWizardModal({
                             {t("asset.assetName")}
                           </Text>
 
-                          <View style={styles.assetNameInputWrap}>
-                            <TextInput
-                              ref={firstInputRef}
-                              placeholder={t("asset.assetName")}
-                              placeholderTextColor="#767B91"
-                              value={draft.name}
-                              onChangeText={(text) => {
-                                setDraft((prev) => ({
-                                  ...prev,
-                                  name: text,
-                                }));
-                              }}
-                              editable
-                              selectTextOnFocus
-                              style={[
-                                styles.input,
-                                styles.compactInput,
-                                styles.assetNameInputWithClear,
-                                disableAssetName && styles.inputDisabled,
-                              ]}
-                              returnKeyType="done"
-                              onFocus={() => scrollToField("name")}
-                            />
-
-                            {!!draft.name?.trim() && !disableAssetName && (
-                              <TouchableOpacity
-                                style={styles.assetNameClearBtn}
-                                onPress={() => {
+                          {isVehicleAsset ? (
+                            <View style={styles.assetNameInputWrap}>
+                              <TextInput
+                                ref={firstInputRef}
+                                placeholder={t("asset.assetName")}
+                                placeholderTextColor="#767B91"
+                                value={draft.name}
+                                onChangeText={(text) => {
                                   setDraft((prev) => ({
                                     ...prev,
-                                    name: "",
+                                    name: text,
                                   }));
-
-                                  setTimeout(() => {
-                                    firstInputRef?.current?.focus?.();
-                                  }, 50);
                                 }}
-                                activeOpacity={0.8}
+                                editable
+                                selectTextOnFocus
+                                style={[
+                                  styles.input,
+                                  styles.compactInput,
+                                  styles.assetNameInputWithClear,
+                                  disableAssetName && styles.inputDisabled,
+                                ]}
+                                returnKeyType="done"
+                                onFocus={() => scrollToField("name")}
+                              />
+
+                              {!!draft.name?.trim() && !disableAssetName && (
+                                <TouchableOpacity
+                                  style={styles.assetNameClearBtn}
+                                  onPress={() => {
+                                    setDraft((prev) => ({
+                                      ...prev,
+                                      name: "",
+                                    }));
+                                  }}
+                                >
+                                  <Ionicons
+                                    name="close-circle"
+                                    size={25}
+                                    color={MUTED}
+                                  />
+                                </TouchableOpacity>
+                              )}
+                            </View>
+                          ) : (
+                            <View style={styles.assetSelectedRow}>
+                              {/* Main image / initials */}
+
+                              {mainAssetImageUri ? (
+                                <Image
+                                  source={{ uri: mainAssetImageUri }}
+                                  style={styles.assetSelectedAvatar}
+                                  resizeMode="cover"
+                                />
+                              ) : (
+                                <View
+                                  style={[
+                                    styles.assetSelectedAvatar,
+                                    styles.assetSelectedAvatarFallback,
+                                  ]}
+                                >
+                                  <Text style={styles.assetSelectedInitials}>
+                                    {getAssetInitials(draft.name)}
+                                  </Text>
+                                </View>
+                              )}
+
+                              {/* Editable Name */}
+
+                              <View style={styles.assetSelectedBody}>
+                                <TextInput
+                                  ref={firstInputRef}
+                                  value={draft.name}
+                                  onChangeText={(text) =>
+                                    setDraft((prev) => ({
+                                      ...prev,
+                                      name: text,
+                                    }))
+                                  }
+                                  style={styles.assetSelectedNameInput}
+                                  placeholder="Asset name"
+                                  placeholderTextColor={MUTED}
+                                  returnKeyType="done"
+                                />
+
+                                <Text
+                                  style={styles.assetSelectedMeta}
+                                  numberOfLines={1}
+                                >
+                                  {(draft as any).type || "Type"}
+
+                                  {(draft as any).category
+                                    ? ` • ${(draft as any).category}`
+                                    : ""}
+                                </Text>
+                              </View>
+
+                              {/* Re-open Asset Gallery */}
+
+                              <TouchableOpacity
+                                style={styles.assetGalleryDropdownBtn}
+                                onPress={() => {
+                                  Keyboard.dismiss();
+                                  setAssetGalleryOpen(true);
+                                }}
+                                activeOpacity={0.85}
                               >
                                 <Ionicons
-                                  name="close-circle"
-                                  size={25}
-                                  color={MUTED}
+                                  name="chevron-down"
+                                  size={18}
+                                  color={ACC}
                                 />
                               </TouchableOpacity>
-                            )}
-                          </View>
+                            </View>
+                          )}
                         </View>
                       </View>
 
@@ -1007,8 +1114,7 @@ export default function CreateAssetWizardModal({
                           setDraft={setDraft}
                           detailsExpanded={detailsExpanded}
                           setDetailsExpanded={setDetailsExpanded}
-                          subAssetTypes={subAssetTypes}
-                          onRenameSubAssetType={onRenameSubAssetType}
+                          assetLocations={assetLocations}
                           showSnackbar={showSnackbar}
                           previewSize={otherPreviewSize}
                           imageLoadingMap={imageLoadingMap}
@@ -1514,6 +1620,47 @@ export default function CreateAssetWizardModal({
         </TouchableWithoutFeedback>
       </Modal>
 
+      <AssetGalleryScreen
+        visible={assetGalleryOpen}
+        onClose={() => setAssetGalleryOpen(false)}
+        onPickAsset={(selection: PickedAssetCategory) => {
+          setDraft(
+            (prev) =>
+              ({
+                ...prev,
+
+                assetType: "other",
+
+                categoryId: selection.categoryId,
+                category: selection.category,
+
+                typeId: selection.typeId,
+                type: selection.type,
+
+                nameId: selection.nameId,
+
+                /*
+                 * Start the editable asset name from the selected taxonomy name.
+                 * User can change this in CreateAssetWizard.
+                 */
+                name: selection.name,
+
+                /*
+                 * IMPORTANT:
+                 * Do NOT touch subAssetType here.
+                 *
+                 * subAssetType is a separate user-entered field/location.
+                 */
+                // subAssetType: (prev as any).subAssetType || "",
+
+                rawData: cleanAssetRawData((prev as any).rawData),
+              }) as AssetDraft,
+          );
+
+          setAssetGalleryOpen(false);
+        }}
+      />
+
       <AssetCameraModal
         visible={cameraOpen}
         mode={cameraMode}
@@ -1639,6 +1786,71 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
     width: "100%",
+  },
+
+  assetSelectedRow: {
+    minHeight: 60,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    marginBottom: 8,
+  },
+
+  assetSelectedAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 11,
+    marginRight: 9,
+    backgroundColor: SURFACE,
+  },
+
+  assetSelectedAvatarFallback: {
+    backgroundColor: ACC,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  assetSelectedInitials: {
+    color: "#ffffff",
+    fontSize: 10,
+    fontWeight: "900",
+  },
+
+  assetSelectedBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  assetSelectedNameInput: {
+    height: 25,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    color: TEXT,
+    fontSize: 11,
+    fontWeight: "800",
+  },
+
+  assetSelectedMeta: {
+    color: MUTED,
+    fontSize: 8,
+    lineHeight: 11,
+    fontWeight: "600",
+    marginTop: 1,
+  },
+
+  assetGalleryDropdownBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: SURFACE,
+    marginLeft: 6,
   },
 
   scrollContent: {

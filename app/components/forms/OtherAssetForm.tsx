@@ -18,7 +18,7 @@ import { formStyles as styles, ACC, TEXT } from "./formStyles";
 import { useTranslation } from "react-i18next";
 import ImageViewer from "react-native-image-zoom-viewer";
 
-type OtherPhotoSlot = "details" | "brand" | "other";
+type OtherPhotoSlot = "main" | "details" | "brand" | "other";
 
 function getImageKey(slot: string, uri: string, index = 0) {
   return `${slot}-${index}-${uri}`;
@@ -31,12 +31,10 @@ type OtherAssetFormProps = {
   detailsExpanded: boolean;
   setDetailsExpanded: React.Dispatch<React.SetStateAction<boolean>>;
 
-  subAssetTypes?: string[];
-
-  onRenameSubAssetType?: (
-    oldSubAssetType: string,
-    newSubAssetType: string,
-  ) => Promise<void> | void;
+  assetLocations?: {
+    value: string;
+    source: "normalizedData" | "newAssetLocation";
+  }[];
 
   showSnackbar?: (message: string, type?: "success" | "error" | "info") => void;
 
@@ -56,21 +54,10 @@ const cleanAssetRawData = (rawData?: Record<string, any> | null) => {
       : {};
 
   delete source.quantity;
-  delete source.subAssetType;
+  delete source.asset_location;
   delete source.customAssetType;
 
   return source;
-};
-
-const formatSubAssetTypeLabel = (value: string) => {
-  const text = String(value || "").trim();
-
-  if (!text) return "";
-
-  return text
-    .split(" ")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
 };
 
 export function getOtherAssetQuantity(draft: AssetDraft) {
@@ -86,45 +73,68 @@ export function getOtherAssetQuantity(draft: AssetDraft) {
   return String(Math.floor(quantity));
 }
 
-export function getOtherSubAssetType(draft: AssetDraft) {
-  return String((draft as any).subAssetType || "")
-    .trim()
-    .toLowerCase();
-}
+export function getNormalizedAssetLocation(draft: AssetDraft): string | null {
+  const value = (draft as any).normalizedData?.asset_location;
 
-export function cleanOtherAssetDraft(draft: AssetDraft): AssetDraft | null {
-  const finalQuantity = Number(getOtherAssetQuantity(draft));
-  const finalSubAssetType = getOtherSubAssetType(draft);
-
-  if (!finalSubAssetType) {
+  if (typeof value !== "string") {
     return null;
   }
 
+  const text = value.trim();
+
+  return text || null;
+}
+
+export function getNewAssetLocation(draft: AssetDraft): string | null {
+  const value = (draft as any).newAssetLocation;
+
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const text = value.trim();
+
+  return text || null;
+}
+
+export function getEffectiveAssetLocation(draft: AssetDraft): string | null {
+  return getNewAssetLocation(draft) || getNormalizedAssetLocation(draft);
+}
+
+export function cleanOtherAssetDraft(draft: AssetDraft): AssetDraft {
+  const finalQuantity = Number(getOtherAssetQuantity(draft));
+
+  const newAssetLocation = getNewAssetLocation(draft);
+
   return {
     ...draft,
+
     assetType: "other",
+
     quantity: Math.max(1, finalQuantity),
-    subAssetType: finalSubAssetType,
+
+    newAssetLocation: newAssetLocation || null,
+
     brand: undefined,
     model: undefined,
     manufactureYear: undefined,
     kilometersDriven: undefined,
+
     images: {
       ...draft.images,
       plate: null,
       odometer: null,
     },
+
     rawData: cleanAssetRawData((draft as any).rawData),
   } as any;
 }
-
 export default function OtherAssetForm({
   draft,
   setDraft,
   detailsExpanded,
   setDetailsExpanded,
-  subAssetTypes = [],
-  onRenameSubAssetType,
+  assetLocations = [],
   showSnackbar,
   previewSize,
   imageLoadingMap,
@@ -134,42 +144,80 @@ export default function OtherAssetForm({
   onPreviewImage,
 }: OtherAssetFormProps) {
   const { t, i18n } = useTranslation();
-  const [assetTypeDropdownOpen, setAssetTypeDropdownOpen] = useState(false);
-  const [addTypeModalOpen, setAddTypeModalOpen] = useState(false);
-  const [newSubAssetTypeText, setNewSubAssetTypeText] = useState("");
+  const [locationDropdownOpen, setLocationDropdownOpen] = useState(false);
+
+  const [addLocationModalOpen, setAddLocationModalOpen] = useState(false);
+
+  const [newLocationText, setNewLocationText] = useState("");
   const [otherPhotosOpen, setOtherPhotosOpen] = useState(false);
 
   const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
 
-  const [editingSubAssetType, setEditingSubAssetType] = useState<string | null>(
-    null,
-  );
-  const [editingSubAssetTypeText, setEditingSubAssetTypeText] = useState("");
+  const [editingLocation, setEditingLocation] = useState<string | null>(null);
 
-  const subAssetType = getOtherSubAssetType(draft);
+  const [editingLocationText, setEditingLocationText] = useState("");
+
+  const normalizedAssetLocation = getNormalizedAssetLocation(draft);
+
+  const newAssetLocation = getNewAssetLocation(draft);
+
+  const selectedLocation = getEffectiveAssetLocation(draft);
   const otherPreviewSlots = [
+    { key: "main", label: "asset.mainPhoto", icon: "document-text-outline" },
     { key: "details", label: "asset.details", icon: "document-text-outline" },
     { key: "brand", label: "asset.brand", icon: "pricetag-outline" },
     { key: "other", label: "asset.typeOther", icon: "images-outline" },
   ] as const;
 
-  const projectAssetTypes = useMemo(() => {
-    const unique = new Map<string, string>();
+  const projectAssetLocations = useMemo(() => {
+    const unique = new Map<
+      string,
+      {
+        value: string;
+        source: "normalizedData" | "newAssetLocation";
+      }
+    >();
 
-    subAssetTypes.forEach((item) => {
-      const value = String(item || "")
-        .trim()
-        .toLowerCase();
-      if (value) unique.set(value, value);
+    const addLocation = (
+      value?: string | null,
+      source: "normalizedData" | "newAssetLocation" = "normalizedData",
+    ) => {
+      const text = String(value || "").trim();
+
+      if (!text) {
+        return;
+      }
+
+      const key = text.toLocaleLowerCase();
+
+      if (!unique.has(key)) {
+        unique.set(key, {
+          value: text,
+          source,
+        });
+      }
+    };
+
+    assetLocations.forEach((item) => {
+      addLocation(item.value, item.source);
     });
 
-    if (subAssetType) {
-      unique.set(subAssetType, subAssetType);
-    }
+    /*
+     * Ensure this asset's imported location
+     * is available even if the project endpoint
+     * didn't include it.
+     */
+    addLocation(normalizedAssetLocation, "normalizedData");
 
-    return Array.from(unique.values()).sort((a, b) => a.localeCompare(b));
-  }, [subAssetTypes, subAssetType]);
+    /*
+     * Also include the current user-created value.
+     */
+    addLocation(newAssetLocation, "newAssetLocation");
 
+    return Array.from(unique.values()).sort((a, b) =>
+      a.value.localeCompare(b.value),
+    );
+  }, [assetLocations, normalizedAssetLocation, newAssetLocation]);
   const getQuantity = () => getOtherAssetQuantity(draft);
 
   const updateQuantity = (nextValue: number | string) => {
@@ -191,11 +239,11 @@ export default function OtherAssetForm({
     );
   };
 
-  const saveNewSubAssetType = () => {
-    const value = newSubAssetTypeText.trim().toLowerCase();
+  const saveNewLocation = () => {
+    const value = newLocationText.trim();
 
     if (!value) {
-      showSnackbar?.(t("asset.enterAssetType"), "error");
+      showSnackbar?.("Enter a location", "error");
       return;
     }
 
@@ -203,68 +251,69 @@ export default function OtherAssetForm({
       (prev) =>
         ({
           ...prev,
+
           assetType: "other",
-          subAssetType: value,
+
+          /*
+           * User-added location always lives
+           * outside normalizedData.
+           */
+          newAssetLocation: value,
+
           rawData: cleanAssetRawData((prev as any).rawData),
         }) as any,
     );
 
-    setNewSubAssetTypeText("");
-    setAddTypeModalOpen(false);
-    setAssetTypeDropdownOpen(false);
+    setNewLocationText("");
+    setAddLocationModalOpen(false);
+    setLocationDropdownOpen(false);
   };
 
-  const saveEditedSubAssetType = async () => {
-    const oldValue = String(editingSubAssetType || "")
-      .trim()
-      .toLowerCase();
-    const newValue = editingSubAssetTypeText.trim().toLowerCase();
+  const saveEditedLocation = () => {
+    const value = editingLocationText.trim();
 
-    if (!oldValue) return;
-
-    if (!newValue) {
-      showSnackbar?.(t("asset.enterAssetType"), "error");
+    if (!value) {
+      showSnackbar?.("Enter a location", "error");
       return;
     }
 
-    try {
-      if (oldValue !== newValue && onRenameSubAssetType) {
-        await onRenameSubAssetType(oldValue, newValue);
-      }
+    /*
+     * Editing NEVER modifies normalizedData.
+     *
+     * Even when the user edits an imported
+     * normalizedData.asset_location, the edited
+     * value becomes newAssetLocation.
+     */
+    setDraft(
+      (prev) =>
+        ({
+          ...prev,
 
-      setDraft(
-        (prev) =>
-          ({
-            ...prev,
-            assetType: "other",
-            subAssetType:
-              String((prev as any).subAssetType || "")
-                .trim()
-                .toLowerCase() === oldValue
-                ? newValue
-                : (prev as any).subAssetType,
-            rawData: cleanAssetRawData((prev as any).rawData),
-          }) as any,
-      );
+          assetType: "other",
 
-      setEditingSubAssetType(null);
-      setEditingSubAssetTypeText("");
-      setAssetTypeDropdownOpen(false);
+          newAssetLocation: value,
 
-      showSnackbar?.(t("asset.assetTypeUpdated"), "success");
-    } catch (error: any) {
-      (error?.message || t("asset.failedToUpdateAssetType"), "error");
-    }
+          rawData: cleanAssetRawData((prev as any).rawData),
+        }) as any,
+    );
+
+    setEditingLocation(null);
+    setEditingLocationText("");
+
+    setLocationDropdownOpen(false);
+
+    showSnackbar?.("Location updated", "success");
   };
 
   const otherPhotos = draft.images.other || [];
 
   const imageCount =
+    Number(Boolean(draft.images.main)) +
     Number(Boolean(draft.images.details)) +
     Number(Boolean(draft.images.brand)) +
     otherPhotos.length;
 
-  const removeSingleSlotImage = (slot: "details" | "brand") => {
+  const removeSingleSlotImage = (slot: "main" | "details" | "brand") => {
     setDraft((prev) => ({
       ...prev,
       images: {
@@ -289,25 +338,24 @@ export default function OtherAssetForm({
       <View style={styles.otherAssetControls}>
         <View style={styles.assetTypeQuantityRow}>
           <View style={styles.assetTypeFieldWrap}>
-            <Text style={styles.fieldLabel}> {t("asset.assetType")}</Text>
+            <Text style={styles.fieldLabel}>Location</Text>
 
             <View style={styles.assetTypeInputLikeWrap}>
               <TouchableOpacity
                 style={styles.assetTypeInputChoose}
                 onPress={() => {
-                  setAssetTypeDropdownOpen((prev) => !prev);
-                  setAddTypeModalOpen(false);
+                  setLocationDropdownOpen((prev) => !prev);
+
+                  setAddLocationModalOpen(false);
                 }}
                 activeOpacity={0.85}
               >
                 <Text style={styles.assetTypeInputText} numberOfLines={1}>
-                  {subAssetType
-                    ? formatSubAssetTypeLabel(subAssetType)
-                    : t("common.choose")}
+                  {selectedLocation || t("common.choose")}
                 </Text>
 
                 <Ionicons
-                  name={assetTypeDropdownOpen ? "chevron-up" : "chevron-down"}
+                  name={locationDropdownOpen ? "chevron-up" : "chevron-down"}
                   size={16}
                   color={TEXT}
                 />
@@ -318,9 +366,9 @@ export default function OtherAssetForm({
               <TouchableOpacity
                 style={styles.assetTypeInputPlus}
                 onPress={() => {
-                  setNewSubAssetTypeText("");
-                  setAddTypeModalOpen(true);
-                  setAssetTypeDropdownOpen(false);
+                  setNewLocationText("");
+                  setAddLocationModalOpen(true);
+                  setLocationDropdownOpen(false);
                 }}
                 activeOpacity={0.85}
               >
@@ -443,7 +491,7 @@ export default function OtherAssetForm({
                           onPress={(event) => {
                             event.stopPropagation();
                             removeSingleSlotImage(
-                              slot.key as "details" | "brand",
+                              slot.key as "main" | "details" | "brand",
                             );
                           }}
                           activeOpacity={0.85}
@@ -471,7 +519,11 @@ export default function OtherAssetForm({
                 </View>
 
                 <Text style={styles.vehiclePreviewLabel} numberOfLines={1}>
-                  {t(slot.label)}
+                  {slot.key === "main"
+                    ? t("asset.mainPhoto", {
+                        defaultValue: "Main",
+                      })
+                    : t(slot.label)}
                 </Text>
               </TouchableOpacity>
             );
@@ -498,42 +550,46 @@ export default function OtherAssetForm({
           </Text>
         </TouchableOpacity>
 
-        {assetTypeDropdownOpen && (
+        {locationDropdownOpen && (
           <View style={styles.assetTypeDropdownMenuFull}>
-            {projectAssetTypes.length === 0 ? (
+            {projectAssetLocations.length === 0 ? (
               <View style={styles.addTypeDropdownOption}>
                 <Text style={styles.addTypeDropdownOptionText}>
-                  {t("asset.noSubAssetTypes")}
+                  No locations available
                 </Text>
               </View>
             ) : (
-              projectAssetTypes.map((type) => {
-                const isEditing = editingSubAssetType === type;
-                const isSelected = subAssetType === type;
+              projectAssetLocations.map((location) => {
+                const isEditing = editingLocation === location.value;
+
+                const isSelected = selectedLocation === location.value;
 
                 return (
                   <View
-                    key={type}
+                    key={`${location.source}-${location.value}`}
                     style={[
                       styles.addTypeDropdownOption,
+
                       isEditing && styles.addTypeDropdownOptionEditing,
                     ]}
                   >
                     {isEditing ? (
                       <>
                         <TextInput
-                          value={editingSubAssetTypeText}
-                          onChangeText={setEditingSubAssetTypeText}
+                          value={editingLocationText}
+                          onChangeText={setEditingLocationText}
                           style={styles.assetTypeEditInput}
                           autoFocus
                           selectTextOnFocus
-                          placeholder={t("asset.editAssetType")}
+                          placeholder="Edit location"
                           placeholderTextColor="#767B91"
+                          returnKeyType="done"
+                          onSubmitEditing={saveEditedLocation}
                         />
 
                         <TouchableOpacity
                           style={styles.assetTypeMiniAction}
-                          onPress={saveEditedSubAssetType}
+                          onPress={saveEditedLocation}
                           activeOpacity={0.85}
                         >
                           <Ionicons name="checkmark" size={18} color={ACC} />
@@ -542,8 +598,8 @@ export default function OtherAssetForm({
                         <TouchableOpacity
                           style={styles.assetTypeMiniAction}
                           onPress={() => {
-                            setEditingSubAssetType(null);
-                            setEditingSubAssetTypeText("");
+                            setEditingLocation(null);
+                            setEditingLocationText("");
                           }}
                           activeOpacity={0.85}
                         >
@@ -559,29 +615,56 @@ export default function OtherAssetForm({
                               (prev) =>
                                 ({
                                   ...prev,
+
                                   assetType: "other",
-                                  subAssetType: type,
+
+                                  /*
+                                   * Selecting the asset's ORIGINAL
+                                   * imported location means there
+                                   * is no user override.
+                                   */
+                                  newAssetLocation:
+                                    location.source === "normalizedData" &&
+                                    location.value === normalizedAssetLocation
+                                      ? null
+                                      : location.value,
+
                                   rawData: cleanAssetRawData(
                                     (prev as any).rawData,
                                   ),
                                 }) as any,
                             );
 
-                            setAssetTypeDropdownOpen(false);
-                            setAddTypeModalOpen(false);
+                            setLocationDropdownOpen(false);
+                            setAddLocationModalOpen(false);
                           }}
                           activeOpacity={0.85}
                         >
-                          <Text
-                            style={[
-                              styles.addTypeDropdownOptionText,
-                              isSelected &&
-                                styles.addTypeDropdownOptionTextSelected,
-                            ]}
-                            numberOfLines={1}
-                          >
-                            {formatSubAssetTypeLabel(type)}
-                          </Text>
+                          <View style={{ flex: 1 }}>
+                            <Text
+                              style={[
+                                styles.addTypeDropdownOptionText,
+
+                                isSelected &&
+                                  styles.addTypeDropdownOptionTextSelected,
+                              ]}
+                              numberOfLines={2}
+                            >
+                              {location.value}
+                            </Text>
+
+                            <Text
+                              style={{
+                                fontSize: 10,
+                                opacity: 0.55,
+                                marginTop: 2,
+                              }}
+                            >
+                              {location.source === "normalizedData"
+                                ? "Imported location"
+                                : "Custom location"}
+                            </Text>
+                          </View>
 
                           {isSelected && (
                             <Ionicons name="checkmark" size={16} color={ACC} />
@@ -591,8 +674,9 @@ export default function OtherAssetForm({
                         <TouchableOpacity
                           style={styles.assetTypeMiniAction}
                           onPress={() => {
-                            setEditingSubAssetType(type);
-                            setEditingSubAssetTypeText(type);
+                            setEditingLocation(location.value);
+
+                            setEditingLocationText(location.value);
                           }}
                           activeOpacity={0.85}
                         >
@@ -816,19 +900,19 @@ export default function OtherAssetForm({
       </Modal>
 
       <Modal
-        visible={addTypeModalOpen}
+        visible={addLocationModalOpen}
         transparent
         animationType="fade"
         statusBarTranslucent
         onRequestClose={() => {
-          setAddTypeModalOpen(false);
-          setNewSubAssetTypeText("");
+          setAddLocationModalOpen(false);
+          setNewLocationText("");
         }}
       >
         <TouchableWithoutFeedback
           onPress={() => {
-            setAddTypeModalOpen(false);
-            setNewSubAssetTypeText("");
+            setAddLocationModalOpen(false);
+            setNewLocationText("");
           }}
         >
           <View style={styles.vehicleSelectOverlay}>
@@ -841,8 +925,8 @@ export default function OtherAssetForm({
 
                   <TouchableOpacity
                     onPress={() => {
-                      setAddTypeModalOpen(false);
-                      setNewSubAssetTypeText("");
+                      setAddLocationModalOpen(false);
+                      setNewLocationText("");
                     }}
                     style={styles.vehicleSelectCloseBtn}
                     activeOpacity={0.85}
@@ -852,22 +936,21 @@ export default function OtherAssetForm({
                 </View>
 
                 <View style={{ padding: 14 }}>
-                  <Text style={styles.fieldLabel}>{t("asset.assetType")}</Text>
+                  <Text style={styles.fieldLabel}>Location</Text>
 
                   <TextInput
-                    placeholder={t("asset.assetTypeExample")}
+                    placeholder="e.g. Main Building / Floor 3 / HR"
                     placeholderTextColor="#767B91"
-                    value={newSubAssetTypeText}
-                    onChangeText={setNewSubAssetTypeText}
+                    value={newLocationText}
+                    onChangeText={setNewLocationText}
                     style={[
                       styles.input,
                       styles.compactInput,
                       { marginBottom: 16 },
                     ]}
                     autoFocus
-                    autoCapitalize="words"
                     returnKeyType="done"
-                    onSubmitEditing={saveNewSubAssetType}
+                    onSubmitEditing={saveNewLocation}
                   />
 
                   <View
@@ -880,8 +963,8 @@ export default function OtherAssetForm({
                     <TouchableOpacity
                       style={styles.secondaryBtn}
                       onPress={() => {
-                        setAddTypeModalOpen(false);
-                        setNewSubAssetTypeText("");
+                        setAddLocationModalOpen(false);
+                        setNewLocationText("");
                       }}
                       activeOpacity={0.85}
                     >
@@ -892,7 +975,7 @@ export default function OtherAssetForm({
 
                     <TouchableOpacity
                       style={styles.primaryBtn}
-                      onPress={saveNewSubAssetType}
+                      onPress={saveNewLocation}
                       activeOpacity={0.85}
                     >
                       <Text style={styles.primaryText}> {t("common.add")}</Text>
