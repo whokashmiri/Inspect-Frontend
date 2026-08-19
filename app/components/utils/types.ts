@@ -33,6 +33,7 @@ export type AssetImagesInput = {
   odometer: AssetMediaInput | null;
 
   // Shared by vehicle and other assets
+  main: AssetMediaInput | null;
   details: AssetMediaInput | null;
   other: AssetMediaInput[];
 
@@ -55,7 +56,17 @@ export type AssetDraft = {
 
   assetType?: AssetType;
   quantity?: number;
-  subAssetType?: string;
+  categoryId?: string | null;
+category?: string | null;
+
+typeId?: string | null;
+type?: string | null;
+
+nameId?: string | null;
+
+normalizedData?: Record<string, any> | null;
+
+newAssetLocation?: string | null;
 
   brand?: string;
   model?: string;
