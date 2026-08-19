@@ -43,6 +43,7 @@ export interface AssetMediaInput {
 }
 
 export interface AssetImagesInput {
+  main: AssetMediaInput | null;
   plate: AssetMediaInput | null;
   details: AssetMediaInput | null;
   odometer: AssetMediaInput | null;
@@ -1533,6 +1534,7 @@ export interface AssetImageItem {
 }
 
 export interface StructuredAssetImages {
+   main: AssetImageItem | null;
   plate: AssetImageItem | null;
   details: AssetImageItem | null;
   odometer: AssetImageItem | null;
@@ -1565,6 +1567,14 @@ export interface AssetItem {
   id: string;
   name: string;
 
+  categoryId: string | null;
+  category: string | null;
+
+  typeId: string | null;
+  type: string | null;
+
+  nameId: string | null;
+
   // old: folderId
   parent: string | null;
 
@@ -1580,8 +1590,9 @@ export interface AssetItem {
   // Main category
   assetType: "vehicle" | "other";
 
-  // Sofa, Chair, TV, AC, etc.
-  subAssetType: string | null;
+ normalizedData: Record<string, any>;
+
+newAssetLocation: string | null;
 
   quantity: number;
 
@@ -1647,21 +1658,19 @@ export interface GetAssetByCodeResponse {
 export interface UpdateAssetResponse {
   asset: AssetItem;
 }
-export interface SubAssetTypesResponse {
-  subAssetTypes: string[];
-}
+
 
 export interface ConditionsResponse {
   conditions: string[];
 }
 
-export interface RenameSubAssetTypeResponse {
-  success: boolean;
-  matchedCount: number;
-  modifiedCount: number;
-  unchanged?: boolean;
-  oldSubAssetType: string;
-  newSubAssetType: string;
+export interface AssetLocationOption {
+  value: string;
+  source: "normalizedData" | "newAssetLocation";
+}
+
+export interface AssetLocationsResponse {
+  locations: AssetLocationOption[];
 }
 
 export interface UploadFileInput {
@@ -1727,10 +1736,7 @@ const normalizeQuantity = (
   return Math.floor(numberValue);
 };
 
-const normalizeSubAssetType = (value?: string | null): string | undefined => {
-  const text = String(value || "").trim();
-  return text || undefined;
-};
+
 
 const normalizeCondition = (value?: string | null): string | undefined => {
   const text = String(value || "").trim();
@@ -1743,6 +1749,27 @@ const normalizeRawData = (rawData?: Record<string, any> | null) => {
     : {};
 };
 
+const normalizeNormalizedData = (
+  normalizedData?: Record<string, any> | null,
+) => {
+  return normalizedData &&
+    typeof normalizedData === "object" &&
+    !Array.isArray(normalizedData)
+    ? normalizedData
+    : {};
+};
+
+const normalizeAssetLocation = (
+  value?: string | null,
+): string | null | undefined => {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+
+  const text = String(value).trim();
+
+  return text || null;
+};
+
 const getPayloadQuantity = (payload: {
   quantity?: number | string | null;
   rawData?: Record<string, any> | null;
@@ -1752,20 +1779,12 @@ const getPayloadQuantity = (payload: {
   return normalizeQuantity(payload.quantity ?? rawData.quantity);
 };
 
-const getPayloadSubAssetType = (payload: {
-  subAssetType?: string | null;
-  rawData?: Record<string, any> | null;
-}) => {
-  const rawData = normalizeRawData(payload.rawData);
 
-  return normalizeSubAssetType(
-    payload.subAssetType ?? rawData.subAssetType ?? rawData.customAssetType,
-  );
-};
 
-type FixedAssetImageSlot = "plate" | "details" | "odometer" | "brand";
+type FixedAssetImageSlot ="main" | "plate" | "details" | "odometer" | "brand";
 
 const createEmptyAssetImages = (): AssetImagesInput => ({
+   main: null,
   plate: null,
   details: null,
   odometer: null,
@@ -1786,6 +1805,7 @@ const normalizeAssetImagesInput = (
   }
 
   return {
+    main: images.main || null,
     plate: images.plate || null,
     details: images.details || null,
     odometer: images.odometer || null,
@@ -1852,6 +1872,7 @@ const resolveStructuredAssetImages = async (
 ): Promise<AssetImagesInput> => {
   const normalized = normalizeAssetImagesInput(images);
   const slots: FixedAssetImageSlot[] = [
+    "main",
     "plate",
     "details",
     "odometer",
@@ -1903,45 +1924,51 @@ export const projectContentApi = {
       },
     }),
 
-  getProjectSubAssetTypes: (projectId: string) =>
-    request<SubAssetTypesResponse>(
-      `/projects/${projectId}/assets/sub-asset-types`,
-      {
-        method: "GET",
-      },
-    ),
+
 
   getProjectConditions: (projectId: string) =>
     request<ConditionsResponse>(`/projects/${projectId}/assets/conditions`, {
       method: "GET",
     }),
 
-  renameProjectSubAssetType: (payload: {
-    projectId: string;
-    oldSubAssetType: string;
-    newSubAssetType: string;
-    parent?: string | null;
-  }) =>
-    request<RenameSubAssetTypeResponse>(
-      `/projects/${payload.projectId}/assets/sub-asset-types/rename`,
-      {
-        method: "PATCH",
-        body: {
-          oldSubAssetType: payload.oldSubAssetType,
-          newSubAssetType: payload.newSubAssetType,
-          parent: payload.parent ?? undefined,
-        },
-      },
-    ),
+getProjectAssetLocations: (
+  projectId: string,
+  parent?: string | null,
+) => {
+  const params = new URLSearchParams();
+
+  if (parent !== undefined) {
+    params.set("parent", parent ?? "");
+  }
+
+  const qs = params.toString();
+
+  return request<AssetLocationsResponse>(
+    `/projects/${projectId}/assets/locations${qs ? `?${qs}` : ""}`,
+    {
+      method: "GET",
+    },
+  );
+},
 
   createAsset: async (payload: {
     projectId: string;
     name: string;
+
+    categoryId?: string | null;
+category?: string | null;
+
+typeId?: string | null;
+type?: string | null;
+
+nameId?: string | null;
     parent?: string | null;
     folderId?: string | null;
 
     rawData?: Record<string, any> | null;
-    subAssetType?: string | null;
+   normalizedData?: Record<string, any> | null;
+
+newAssetLocation?: string | null;
     quantity?: number | string | null;
 
     images?: AssetImagesInput;
@@ -1984,13 +2011,22 @@ export const projectContentApi = {
     const rawData = normalizeRawData(payload.rawData);
 
     const quantity = getPayloadQuantity(payload);
-    const subAssetType = getPayloadSubAssetType(payload);
+   const finalRawData = {
+  ...rawData,
+  ...(quantity !== undefined
+    ? { quantity }
+    : {}),
+};
 
-    const finalRawData = {
-      ...rawData,
-      ...(quantity !== undefined ? { quantity } : {}),
-      ...(subAssetType !== undefined ? { subAssetType } : {}),
-    };
+const normalizedData =
+  normalizeNormalizedData(
+    payload.normalizedData,
+  );
+
+const newAssetLocation =
+  normalizeAssetLocation(
+    payload.newAssetLocation,
+  );
 
     return request<CreateAssetResponse>(
       `/projects/${payload.projectId}/assets`,
@@ -2000,11 +2036,21 @@ export const projectContentApi = {
         body: {
           name: payload.name,
           parent: resolvedParentSubProjectId,
+          categoryId: payload.categoryId?.trim() || null,
+category: payload.category?.trim() || null,
+
+typeId: payload.typeId?.trim() || null,
+type: payload.type?.trim() || null,
+
+nameId: payload.nameId?.trim() || null,
 
           condition: normalizeCondition(payload.condition),
           assetType: normalizeAssetType(payload.assetType) ?? "other",
 
-          subAssetType,
+          normalizedData,
+
+newAssetLocation:
+  newAssetLocation ?? null,
           quantity,
           rawData: finalRawData,
 
@@ -2077,8 +2123,18 @@ export const projectContentApi = {
     projectId: string;
     name?: string | null;
 
+     categoryId?: string | null;
+  category?: string | null;
+
+  typeId?: string | null;
+  type?: string | null;
+
+  nameId?: string | null;
+
     rawData?: Record<string, any> | null;
-    subAssetType?: string | null;
+    normalizedData?: Record<string, any> | null;
+
+newAssetLocation?: string | null;
     quantity?: number | string | null;
 
     images?: AssetImagesInput;
@@ -2098,10 +2154,13 @@ export const projectContentApi = {
     isDone?: boolean;
     isPresent?: boolean;
   }) => {
-    const resolvedImages = await resolveStructuredAssetImages(
-      payload.images,
-      payload.projectId,
-    );
+    const resolvedImages =
+  payload.images === undefined
+    ? undefined
+    : await resolveStructuredAssetImages(
+        payload.images,
+        payload.projectId,
+      );
 
     const localVoiceNotes = getLocalUploadFiles(payload.voiceNotes);
     const uploadedVoiceNotes = await uploadFilesInBatches(
@@ -2115,26 +2174,57 @@ export const projectContentApi = {
       2,
     );
 
-    const rawData = normalizeRawData(payload.rawData);
+   
 
     const quantity = getPayloadQuantity(payload);
-    const subAssetType = getPayloadSubAssetType(payload);
+const rawData =
+  payload.rawData === undefined
+    ? undefined
+    : normalizeRawData(
+        payload.rawData,
+      );
 
-    const finalRawData = {
-      ...rawData,
-      ...(quantity !== undefined ? { quantity } : {}),
-      ...(subAssetType !== undefined ? { subAssetType } : {}),
-    };
+const finalRawData =
+  rawData === undefined
+    ? undefined
+    : {
+        ...rawData,
+        ...(quantity !== undefined
+          ? { quantity }
+          : {}),
+      };
+
+const normalizedData =
+  payload.normalizedData === undefined
+    ? undefined
+    : normalizeNormalizedData(
+        payload.normalizedData,
+      );
+
+const newAssetLocation =
+  normalizeAssetLocation(
+    payload.newAssetLocation,
+  );
 
     return request<UpdateAssetResponse>(`/projects/assets/${payload.assetId}`, {
       method: "PATCH",
       body: {
         name: payload.name,
 
+        categoryId: payload.categoryId,
+category: payload.category,
+
+typeId: payload.typeId,
+type: payload.type,
+
+nameId: payload.nameId,
+
         condition: normalizeCondition(payload.condition),
         assetType: normalizeAssetType(payload.assetType),
 
-        subAssetType,
+        normalizedData,
+
+newAssetLocation,
         quantity,
         rawData: finalRawData,
 

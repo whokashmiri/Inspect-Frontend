@@ -66,7 +66,18 @@ const BACKGROUND = "#F6F7FA";
 
 const RECENT_ASSETS_STORAGE_KEY = "@inspect/asset-gallery/recent-assets";
 
-const MAX_RECENT_ASSETS = 8;
+const MAX_RECENT_ASSETS = 20;
+
+const UNKNOWN_ASSET: PickedAssetCategory = {
+  categoryId: "unknown",
+  category: "Unknown",
+
+  typeId: "unknown",
+  type: "Unknown",
+
+  nameId: "unknown",
+  name: "Unknown",
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -440,12 +451,28 @@ export default function AssetGalleryScreen({
       usedAt: Date.now(),
     };
 
-    const key = getRecentKey(asset);
-
     const next = [
       item,
 
-      ...recentAssets.filter((recent) => getRecentKey(recent) !== key),
+      ...recentAssets.filter((recent) => {
+        /*
+         * Same exact history record.
+         */
+        if (getRecentKey(recent) === getRecentKey(asset)) {
+          return false;
+        }
+
+        /*
+         * Also avoid exact duplicate custom names
+         * under the same category/type.
+         */
+        const sameNamedHistory =
+          recent.categoryId === asset.categoryId &&
+          recent.typeId === asset.typeId &&
+          normalizeText(recent.name) === normalizeText(asset.name);
+
+        return !sameNamedHistory;
+      }),
     ].slice(0, MAX_RECENT_ASSETS);
 
     setRecentAssets(next);
@@ -512,22 +539,51 @@ export default function AssetGalleryScreen({
       return;
     }
 
-    const key = getRecentKey(item);
+    /*
+     * Nothing changed.
+     */
+    if (normalizeText(name) === normalizeText(item.name)) {
+      cancelEditRecent();
+      return;
+    }
 
-    const next = recentAssets.map((recent) =>
-      getRecentKey(recent) === key
-        ? {
-            ...recent,
-            name,
-          }
-        : recent,
-    );
+    /*
+     * A history edit creates a NEW history item.
+     * Original history remains unchanged.
+     */
+    const newItem: RecentAssetItem = {
+      ...item,
+
+      /*
+       * Give the edited history item its own nameId.
+       * Otherwise getRecentKey() would treat it as
+       * the same row as the original.
+       */
+      nameId: createLocalId("recent-name"),
+
+      name,
+
+      usedAt: Date.now(),
+    };
+
+    const next = [newItem, ...recentAssets].slice(0, MAX_RECENT_ASSETS);
 
     setRecentAssets(next);
 
     setEditingRecentKey(null);
-
     setEditingRecentText("");
+
+    /*
+     * Select the newly-created history row.
+     */
+    setSelectionSource("recent");
+    setSelectedRecentKey(getRecentKey(newItem));
+
+    setSelectedCategoryId(newItem.categoryId);
+
+    setSelectedTypeId(newItem.typeId);
+
+    setSelectedNameId(newItem.nameId);
 
     await saveRecentAssets(next);
   };
@@ -1348,53 +1404,47 @@ export default function AssetGalleryScreen({
   // Continue
   // -------------------------------------------------------------------------
 
-  const canContinue =
-    selectionSource === "recent"
-      ? !!selectedRecentAsset
-      : !!selectedCategory && !!selectedType && !!selectedName;
+  const canContinue = true;
+  // selectionSource === "recent"
+  //   ? !!selectedRecentAsset
+  //   : !!selectedCategory && !!selectedType && !!selectedName;
 
   const handleContinue = async () => {
-    let picked: PickedAssetCategory | null = null;
+    let picked: PickedAssetCategory;
 
-    /*
-     * If selected from history, use the
-     * history label — including local edits.
-     */
     if (selectionSource === "recent" && selectedRecentAsset) {
       picked = {
         categoryId: selectedRecentAsset.categoryId,
-
         category: selectedRecentAsset.category,
 
         typeId: selectedRecentAsset.typeId,
-
         type: selectedRecentAsset.type,
 
         nameId: selectedRecentAsset.nameId,
-
         name: selectedRecentAsset.name,
       };
     } else if (selectedCategory && selectedType && selectedName) {
       picked = {
         categoryId: selectedCategory.id,
-
         category: selectedCategory.label,
 
         typeId: selectedType.id,
-
         type: selectedType.label,
 
         nameId: selectedName.id,
-
         name: selectedName.label,
       };
+    } else {
+      picked = UNKNOWN_ASSET;
     }
 
-    if (!picked) {
-      return;
+    /*
+     * Only real selections should become Recent history.
+     * Do not create "Unknown" history rows.
+     */
+    if (picked.nameId !== "unknown") {
+      await addRecentAsset(picked);
     }
-
-    await addRecentAsset(picked);
 
     onPickAsset?.(picked);
 
@@ -2062,14 +2112,14 @@ export default function AssetGalleryScreen({
                   >
                     <View style={styles.continueTextWrap}>
                       <Text style={styles.continueButtonText} numberOfLines={1}>
-                        {canContinue ? selectedDisplayName : "Select an asset"}
+                        {selectedDisplayName || "Unknown Asset"}
                       </Text>
 
                       {canContinue && (
                         <Text style={styles.continueSubText} numberOfLines={1}>
-                          {selectedDisplayType}
+                          {selectedDisplayType || "Unknown"}
                           {" • "}
-                          {selectedDisplayCategory}
+                          {selectedDisplayCategory || "Unknown"}
                         </Text>
                       )}
                     </View>
