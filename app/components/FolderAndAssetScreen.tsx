@@ -922,11 +922,6 @@ export default function FolderAndAssetScreen({ route }: Props) {
       if (projectId.startsWith("offline_")) {
         return { folders: [], assets: [] };
       }
-
-      // Stay on the local cache until everything created/edited offline has
-      // actually finished syncing — otherwise the moment connectivity comes
-      // back we'd switch to the server response, which doesn't have those
-      // not-yet-synced items yet, and they'd flash away until the next load.
       const shouldUseOffline =
         offlineMode ||
         (downloadedOffline && (isOnline === false || isOnline === null)) ||
@@ -1083,27 +1078,12 @@ export default function FolderAndAssetScreen({ route }: Props) {
   };
 
   const askWorkMode = useCallback(async (): Promise<boolean> => {
-    /*
-     * Check whether this project already has
-     * a saved online/offline choice.
-     */
     const existingMode = getProjectWorkMode(projectId);
 
     if (existingMode) {
-      /*
-       * Keep the selected project mode active.
-       *
-       * We normally do not need to call
-       * setProjectWorkMode here because it was
-       * already applied when selected.
-       */
       return true;
     }
 
-    /*
-     * Prevent two save actions from opening
-     * two work-mode prompts.
-     */
     if (workModeSnackbarVisible) {
       return false;
     }
@@ -1376,7 +1356,6 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
     if (!images) return empty;
 
-    // Legacy flat arrays are kept only in the Other bucket so images are not lost.
     if (Array.isArray(images)) {
       return {
         ...empty,
@@ -1413,7 +1392,6 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
       name: draft.name,
 
-      // NEW taxonomy fields
       categoryId: isVehicle ? null : ((draft as any).categoryId ?? null),
       category: isVehicle ? null : ((draft as any).category ?? null),
 
@@ -1890,28 +1868,20 @@ export default function FolderAndAssetScreen({ route }: Props) {
       setPendingAssetSaveCount((count) => Math.max(0, count - 1));
     }
   };
-  const openEditAsset = (asset: AssetItem, openCamera: boolean = false) => {
+  const openEditAsset = (asset: AssetItem) => {
     Keyboard.dismiss();
 
+    setAssetGalleryVisible(false);
+    setAssetCategoryModalVisible(false);
+
     setEditingAsset(asset);
-    setAutoOpenCameraForEdit(openCamera);
-    setCreateAssetInitialData(undefined);
+    setCreateAssetInitialData(mapAssetToDraft(asset));
 
-    /*
-     * Vehicles still use their dedicated wizard.
-     */
-    if (normalizeAssetType((asset as any).assetType) === "vehicle") {
-      setCreateAssetInitialData(mapAssetToDraft(asset));
-      setAssetModalVisible(true);
-      return;
-    }
+    setAutoOpenCameraForEdit(false);
 
-    /*
-     * Other assets first pass through taxonomy selection.
-     */
-    setAssetGalleryMode("edit");
-    setAssetGalleryVisible(true);
+    setAssetModalVisible(true);
   };
+
   const closeAssetModal = () => {
     setAssetModalVisible(false);
     setAssetGalleryVisible(false);
@@ -2133,37 +2103,19 @@ export default function FolderAndAssetScreen({ route }: Props) {
           text: "Delete",
           style: "destructive",
           onPress: async () => {
-            /*
-             * Keep the original asset so we can restore it
-             * if the delete operation fails.
-             */
             const deletedAsset = asset;
 
             try {
               setDeletingAssetId(asset.id);
 
-              /*
-               * Remove immediately from the current UI.
-               */
               setAssets((prev) => prev.filter((item) => item.id !== asset.id));
 
-              /*
-               * Remove it from advanced search results too.
-               */
               setAdvancedSearchResults((prev) =>
                 prev.filter((item) => item.id !== asset.id),
               );
 
-              /*
-               * Remove it from the local SQLite cache.
-               * This prevents loadContents() from showing it again.
-               */
               await deleteOfflineAssetsByIds([asset.id]);
 
-              /*
-               * Assets with local IDs were created offline
-               * and might not exist on the server yet.
-               */
               const isLocallyCreatedAsset =
                 asset.id.startsWith("offline_") ||
                 asset.id.startsWith("asset_");
@@ -2212,9 +2164,6 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
               showSnackbar("Asset deleted successfully", "success");
             } catch (error: any) {
-              /*
-               * Restore the UI item if deleting or queueing failed.
-               */
               setAssets((prev) => {
                 const alreadyExists = prev.some(
                   (item) => item.id === deletedAsset.id,
@@ -2227,9 +2176,6 @@ export default function FolderAndAssetScreen({ route }: Props) {
                 return [deletedAsset, ...prev];
               });
 
-              /*
-               * Restore the local cache too.
-               */
               if (downloadedOffline) {
                 await upsertOfflineAsset(deletedAsset);
               }
@@ -2294,13 +2240,8 @@ export default function FolderAndAssetScreen({ route }: Props) {
     return {
       assetType: "other",
 
-      // Use the selected taxonomy name as the asset name.
       name: selection.name,
 
-      // Keep compatibility with the current wizard until we update it.
-      // subAssetType: selection.type,
-
-      // These fields will be wired properly into AssetDraft / Asset model next.
       categoryId: selection.categoryId,
       category: selection.category,
 
@@ -2472,9 +2413,6 @@ export default function FolderAndAssetScreen({ route }: Props) {
     setAutoOpenCameraForEdit(false);
     setAssetCategoryModalVisible(false);
 
-    /*
-     * Vehicle keeps the current wizard flow.
-     */
     if (category === "Vehicle") {
       setCreateAssetInitialData(buildNewAssetInitialData("Vehicle"));
 
@@ -2482,29 +2420,24 @@ export default function FolderAndAssetScreen({ route }: Props) {
       return;
     }
 
-    /*
-     * Other assets must first go through:
-     *
-     * Category -> Type -> Name
-     */
     setCreateAssetInitialData(undefined);
     setAssetGalleryMode("create");
     setAssetGalleryVisible(true);
   };
 
   const handleAssetGalleryPick = (selection: PickedAssetCategory) => {
+    Keyboard.dismiss();
+
+    setAutoOpenCameraForEdit(false);
+
     const taxonomyData = buildAssetCategoryInitialData(selection);
 
     if (assetGalleryMode === "edit" && editingAsset) {
-      /*
-       * Existing asset:
-       * retain its current values and replace the taxonomy selection.
-       */
       setCreateAssetInitialData({
         ...mapAssetToDraft(editingAsset),
+
         ...taxonomyData,
 
-        // Keep existing raw data.
         rawData:
           (editingAsset as any).rawData &&
           typeof (editingAsset as any).rawData === "object"
@@ -2512,22 +2445,27 @@ export default function FolderAndAssetScreen({ route }: Props) {
             : {},
       });
     } else {
-      /*
-       * New Other asset.
-       */
       setCreateAssetInitialData({
         ...buildNewAssetInitialData("Other"),
+
         ...taxonomyData,
 
         name: selection.name,
-        // subAssetType: selection.type,
+
+        images: createEmptyAssetImages(),
+
+        voiceNotes: [],
       });
     }
 
     setAssetGalleryVisible(false);
-    setAssetModalVisible(true);
-  };
 
+    requestAnimationFrame(() => {
+      setAutoOpenCameraForEdit(false);
+
+      setAssetModalVisible(true);
+    });
+  };
   return (
     <SafeAreaView style={styles.flex} edges={["left", "right", "bottom"]}>
       <TouchableWithoutFeedback
@@ -2577,14 +2515,13 @@ export default function FolderAndAssetScreen({ route }: Props) {
               </Text>
             </TouchableOpacity>
           </View>
-          {/* ── Offline badge ── */}
+
           {downloadedOffline && !isOnline && (
             <Text style={styles.offlineModeText}>
               {t("folderAssetScreen.offline.badge")}
             </Text>
           )}
 
-          {/* ── Pending / sync bar ── */}
           <View style={styles.pendingBadge}>
             <Ionicons
               name="ellipse"
@@ -3715,16 +3652,17 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
           <AssetGalleryScreen
             visible={assetGalleryVisible}
+            projectId={projectId}
             onClose={() => {
               setAssetGalleryVisible(false);
             }}
             onPickAsset={handleAssetGalleryPick}
           />
-
           {/* ── Asset wizard modal ── */}
           {assetModalVisible && (
             <CreateAssetWizardModal
               firstInputRef={assetWizardInputRef}
+              projectId={projectId}
               disableAssetName={!!editingAsset && !canEditAssetName}
               visible={assetModalVisible}
               onClose={closeAssetModal}
