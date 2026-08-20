@@ -145,6 +145,7 @@ export default function OtherAssetForm({
 }: OtherAssetFormProps) {
   const { t, i18n } = useTranslation();
   const [locationDropdownOpen, setLocationDropdownOpen] = useState(false);
+  const [locationSearchText, setLocationSearchText] = useState("");
 
   const [addLocationModalOpen, setAddLocationModalOpen] = useState(false);
 
@@ -202,22 +203,26 @@ export default function OtherAssetForm({
       addLocation(item.value, item.source);
     });
 
-    /*
-     * Ensure this asset's imported location
-     * is available even if the project endpoint
-     * didn't include it.
-     */
     addLocation(normalizedAssetLocation, "normalizedData");
 
-    /*
-     * Also include the current user-created value.
-     */
     addLocation(newAssetLocation, "newAssetLocation");
 
     return Array.from(unique.values()).sort((a, b) =>
       a.value.localeCompare(b.value),
     );
   }, [assetLocations, normalizedAssetLocation, newAssetLocation]);
+
+  const filteredProjectAssetLocations = useMemo(() => {
+    const search = locationSearchText.trim().toLocaleLowerCase();
+
+    if (!search) {
+      return projectAssetLocations;
+    }
+
+    return projectAssetLocations.filter((location) =>
+      location.value.toLocaleLowerCase().includes(search),
+    );
+  }, [projectAssetLocations, locationSearchText]);
   const getQuantity = () => getOtherAssetQuantity(draft);
 
   const updateQuantity = (nextValue: number | string) => {
@@ -277,13 +282,6 @@ export default function OtherAssetForm({
       return;
     }
 
-    /*
-     * Editing NEVER modifies normalizedData.
-     *
-     * Even when the user edits an imported
-     * normalizedData.asset_location, the edited
-     * value becomes newAssetLocation.
-     */
     setDraft(
       (prev) =>
         ({
@@ -344,7 +342,16 @@ export default function OtherAssetForm({
               <TouchableOpacity
                 style={styles.assetTypeInputChoose}
                 onPress={() => {
-                  setLocationDropdownOpen((prev) => !prev);
+                  setLocationDropdownOpen((prev) => {
+                    const next = !prev;
+
+                    if (!next) {
+                      setLocationSearchText("");
+                      Keyboard.dismiss();
+                    }
+
+                    return next;
+                  });
 
                   setAddLocationModalOpen(false);
                 }}
@@ -367,6 +374,7 @@ export default function OtherAssetForm({
                 style={styles.assetTypeInputPlus}
                 onPress={() => {
                   setNewLocationText("");
+                  setLocationSearchText("");
                   setAddLocationModalOpen(true);
                   setLocationDropdownOpen(false);
                 }}
@@ -444,8 +452,6 @@ export default function OtherAssetForm({
                     return;
                   }
 
-                  // Any existing "other" photos (1 or more): open the gallery,
-                  // which lets the user view individual photos AND add more.
                   if (isOtherSlot && otherPhotos.length > 0) {
                     setOtherPhotosOpen(true);
                     return;
@@ -552,146 +558,183 @@ export default function OtherAssetForm({
 
         {locationDropdownOpen && (
           <View style={styles.assetTypeDropdownMenuFull}>
-            {projectAssetLocations.length === 0 ? (
-              <View style={styles.addTypeDropdownOption}>
-                <Text style={styles.addTypeDropdownOptionText}>
-                  No locations available
-                </Text>
-              </View>
-            ) : (
-              projectAssetLocations.map((location) => {
-                const isEditing = editingLocation === location.value;
+            {/* Search row */}
+            <View style={styles.locationSearchRow}>
+              <Ionicons name="search-outline" size={17} color="#767B91" />
 
-                const isSelected = selectedLocation === location.value;
+              <TextInput
+                value={locationSearchText}
+                onChangeText={setLocationSearchText}
+                placeholder="Search location"
+                placeholderTextColor="#767B91"
+                style={styles.locationSearchInput}
+                autoCorrect={false}
+                returnKeyType="search"
+                keyboardType="default"
+              />
 
-                return (
-                  <View
-                    key={`${location.source}-${location.value}`}
-                    style={[
-                      styles.addTypeDropdownOption,
+              {!!locationSearchText && (
+                <TouchableOpacity
+                  style={styles.locationSearchClearBtn}
+                  onPress={() => setLocationSearchText("")}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="close-circle" size={18} color="#767B91" />
+                </TouchableOpacity>
+              )}
+            </View>
 
-                      isEditing && styles.addTypeDropdownOptionEditing,
-                    ]}
-                  >
-                    {isEditing ? (
-                      <>
-                        <TextInput
-                          value={editingLocationText}
-                          onChangeText={setEditingLocationText}
-                          style={styles.assetTypeEditInput}
-                          autoFocus
-                          selectTextOnFocus
-                          placeholder="Edit location"
-                          placeholderTextColor="#767B91"
-                          returnKeyType="done"
-                          onSubmitEditing={saveEditedLocation}
-                        />
+            <ScrollView
+              style={styles.locationDropdownScroll}
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled
+              showsVerticalScrollIndicator
+            >
+              {filteredProjectAssetLocations.length === 0 ? (
+                <View style={styles.locationEmptyRow}>
+                  <Ionicons name="location-outline" size={18} color="#767B91" />
 
-                        <TouchableOpacity
-                          style={styles.assetTypeMiniAction}
-                          onPress={saveEditedLocation}
-                          activeOpacity={0.85}
-                        >
-                          <Ionicons name="checkmark" size={18} color={ACC} />
-                        </TouchableOpacity>
+                  <Text style={styles.locationEmptyText}>
+                    {locationSearchText.trim()
+                      ? "No matching locations"
+                      : "No locations available"}
+                  </Text>
+                </View>
+              ) : (
+                filteredProjectAssetLocations.map((location) => {
+                  const isEditing = editingLocation === location.value;
 
-                        <TouchableOpacity
-                          style={styles.assetTypeMiniAction}
-                          onPress={() => {
-                            setEditingLocation(null);
-                            setEditingLocationText("");
-                          }}
-                          activeOpacity={0.85}
-                        >
-                          <Ionicons name="close" size={18} color="#FF4444" />
-                        </TouchableOpacity>
-                      </>
-                    ) : (
-                      <>
-                        <TouchableOpacity
-                          style={styles.assetTypeOptionMain}
-                          onPress={() => {
-                            setDraft(
-                              (prev) =>
-                                ({
-                                  ...prev,
+                  const isSelected = selectedLocation === location.value;
 
-                                  assetType: "other",
-
-                                  /*
-                                   * Selecting the asset's ORIGINAL
-                                   * imported location means there
-                                   * is no user override.
-                                   */
-                                  newAssetLocation:
-                                    location.source === "normalizedData" &&
-                                    location.value === normalizedAssetLocation
-                                      ? null
-                                      : location.value,
-
-                                  rawData: cleanAssetRawData(
-                                    (prev as any).rawData,
-                                  ),
-                                }) as any,
-                            );
-
-                            setLocationDropdownOpen(false);
-                            setAddLocationModalOpen(false);
-                          }}
-                          activeOpacity={0.85}
-                        >
-                          <View style={{ flex: 1 }}>
-                            <Text
-                              style={[
-                                styles.addTypeDropdownOptionText,
-
-                                isSelected &&
-                                  styles.addTypeDropdownOptionTextSelected,
-                              ]}
-                              numberOfLines={2}
-                            >
-                              {location.value}
-                            </Text>
-
-                            <Text
-                              style={{
-                                fontSize: 10,
-                                opacity: 0.55,
-                                marginTop: 2,
-                              }}
-                            >
-                              {location.source === "normalizedData"
-                                ? "Imported location"
-                                : "Custom location"}
-                            </Text>
-                          </View>
-
-                          {isSelected && (
-                            <Ionicons name="checkmark" size={16} color={ACC} />
-                          )}
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={styles.assetTypeMiniAction}
-                          onPress={() => {
-                            setEditingLocation(location.value);
-
-                            setEditingLocationText(location.value);
-                          }}
-                          activeOpacity={0.85}
-                        >
-                          <Ionicons
-                            name="pencil-outline"
-                            size={16}
-                            color={ACC}
+                  return (
+                    <View
+                      key={`${location.source}-${location.value}`}
+                      style={[
+                        styles.addTypeDropdownOption,
+                        isEditing && styles.addTypeDropdownOptionEditing,
+                      ]}
+                    >
+                      {isEditing ? (
+                        <>
+                          <TextInput
+                            value={editingLocationText}
+                            onChangeText={setEditingLocationText}
+                            style={styles.assetTypeEditInput}
+                            autoFocus
+                            selectTextOnFocus
+                            placeholder="Edit location"
+                            placeholderTextColor="#767B91"
+                            returnKeyType="done"
+                            onSubmitEditing={saveEditedLocation}
                           />
-                        </TouchableOpacity>
-                      </>
-                    )}
-                  </View>
-                );
-              })
-            )}
+
+                          <TouchableOpacity
+                            style={styles.assetTypeMiniAction}
+                            onPress={saveEditedLocation}
+                            activeOpacity={0.85}
+                          >
+                            <Ionicons name="checkmark" size={18} color={ACC} />
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={styles.assetTypeMiniAction}
+                            onPress={() => {
+                              setEditingLocation(null);
+                              setEditingLocationText("");
+                            }}
+                            activeOpacity={0.85}
+                          >
+                            <Ionicons name="close" size={18} color="#FF4444" />
+                          </TouchableOpacity>
+                        </>
+                      ) : (
+                        <>
+                          <TouchableOpacity
+                            style={styles.assetTypeOptionMain}
+                            onPress={() => {
+                              setDraft(
+                                (prev) =>
+                                  ({
+                                    ...prev,
+
+                                    assetType: "other",
+
+                                    newAssetLocation:
+                                      location.source === "normalizedData" &&
+                                      location.value === normalizedAssetLocation
+                                        ? null
+                                        : location.value,
+
+                                    rawData: cleanAssetRawData(
+                                      (prev as any).rawData,
+                                    ),
+                                  }) as any,
+                              );
+
+                              setLocationSearchText("");
+                              setLocationDropdownOpen(false);
+                              setAddLocationModalOpen(false);
+
+                              Keyboard.dismiss();
+                            }}
+                            activeOpacity={0.85}
+                          >
+                            <View style={{ flex: 1 }}>
+                              <Text
+                                style={[
+                                  styles.addTypeDropdownOptionText,
+
+                                  isSelected &&
+                                    styles.addTypeDropdownOptionTextSelected,
+                                ]}
+                                numberOfLines={2}
+                              >
+                                {location.value}
+                              </Text>
+
+                              <Text
+                                style={{
+                                  fontSize: 10,
+                                  opacity: 0.55,
+                                  marginTop: 2,
+                                }}
+                              >
+                                {location.source === "normalizedData"
+                                  ? "Imported location"
+                                  : "Custom location"}
+                              </Text>
+                            </View>
+
+                            {isSelected && (
+                              <Ionicons
+                                name="checkmark"
+                                size={16}
+                                color={ACC}
+                              />
+                            )}
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={styles.assetTypeMiniAction}
+                            onPress={() => {
+                              setEditingLocation(location.value);
+                              setEditingLocationText(location.value);
+                            }}
+                            activeOpacity={0.85}
+                          >
+                            <Ionicons
+                              name="pencil-outline"
+                              size={16}
+                              color={ACC}
+                            />
+                          </TouchableOpacity>
+                        </>
+                      )}
+                    </View>
+                  );
+                })
+              )}
+            </ScrollView>
           </View>
         )}
       </View>
