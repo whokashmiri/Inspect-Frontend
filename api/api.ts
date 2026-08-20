@@ -1581,6 +1581,7 @@ export interface AssetItem {
   projectId: string;
   createdAt: string;
   updatedAt: string;
+  updatedAt?: string | null;
   code: string | null;
 
   rawData: Record<string, any> | null;
@@ -1656,6 +1657,14 @@ export interface GetAssetByCodeResponse {
 }
 
 export interface UpdateAssetResponse {
+  asset: AssetItem;
+}
+
+export interface RecentAssetsResponse {
+  assets: AssetItem[];
+}
+
+export interface MarkAssetUsedResponse {
   asset: AssetItem;
 }
 
@@ -1931,6 +1940,7 @@ export const projectContentApi = {
       method: "GET",
     }),
 
+
 getProjectAssetLocations: (
   projectId: string,
   parent?: string | null,
@@ -1945,6 +1955,26 @@ getProjectAssetLocations: (
 
   return request<AssetLocationsResponse>(
     `/projects/${projectId}/assets/locations${qs ? `?${qs}` : ""}`,
+    {
+      method: "GET",
+    },
+  );
+},
+
+    getRecentAssets: (
+  projectId: string,
+  limit = 20,
+) => {
+  const params =
+    new URLSearchParams();
+
+  params.set(
+    "limit",
+    String(limit),
+  );
+
+  return request<RecentAssetsResponse>(
+    `/projects/${projectId}/assets/recent?${params.toString()}`,
     {
       method: "GET",
     },
@@ -2117,6 +2147,17 @@ newAssetLocation:
       method: "PATCH",
       body: { isDone },
     }),
+
+markAssetUsed: (
+  projectId: string,
+  assetId: string,
+) =>
+  request(
+    `/projects/${projectId}/assets/${assetId}/used`,
+    {
+      method: "PATCH",
+    },
+  ),
 
   updateAsset: async (payload: {
     assetId: string;
