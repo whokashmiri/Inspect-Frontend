@@ -370,6 +370,53 @@ export const formStyles = StyleSheet.create({
     fontSize: 12,
   },
 
+  locationSearchRow: {
+  minHeight: 44,
+  flexDirection: "row",
+  alignItems: "center",
+  paddingHorizontal: 10,
+  gap: 7,
+  backgroundColor: "#F8F9FB",
+  borderBottomWidth: 1,
+  borderBottomColor: "#E1E5EE",
+},
+
+locationSearchInput: {
+  flex: 1,
+  minHeight: 40,
+  paddingVertical: 0,
+  paddingHorizontal: 0,
+  color: "#2A324B",
+  fontSize: 12,
+  fontWeight: "600",
+},
+
+locationSearchClearBtn: {
+  width: 30,
+  height: 30,
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+locationDropdownScroll: {
+  maxHeight: 220,
+},
+
+locationEmptyRow: {
+  minHeight: 60,
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 7,
+  paddingHorizontal: 12,
+},
+
+locationEmptyText: {
+  color: "#767B91",
+  fontSize: 11,
+  fontWeight: "600",
+},
+
   vehiclePreviewGrid: {
   flexDirection: "row",
   flexWrap: "wrap",
