@@ -74,6 +74,7 @@ type Props = {
   visible: boolean;
   onClose: () => void;
   onSubmit: (draft: AssetDraft) => Promise<void> | void;
+  projectId?: string;
   mode?: "create" | "edit";
   initialData?: Partial<AssetDraft>;
   disableAssetName?: boolean;
@@ -237,6 +238,7 @@ export default function CreateAssetWizardModal({
   assetLocations = [],
   conditionOptions = [],
   autoOpenCamera = false,
+  projectId,
 
   onSaveAndNext,
   onSaveAndCreate,
@@ -320,42 +322,40 @@ export default function CreateAssetWizardModal({
   useEffect(() => {
     if (visible) {
       setStep(1);
+
       setDraft(getInitialDraft(initialData));
+
       setImageLoadingMap({});
+
       setIsRecording(false);
+
       setCameraMode("photos");
+
       setPhotoSlot(null);
+
       setSubmitting(false);
 
       setProcessingImages(false);
+
       processingImagesRef.current = false;
 
       setDetailsExpanded(false);
+
       didAutoOpenCameraRef.current = false;
-      const initialAssetType = String(
-        initialData?.assetType || "",
-      ).toLowerCase();
 
-      const shouldAutoOpenForCreate =
-        mode === "create" && initialAssetType === "other";
-
-      const shouldAutoOpenForEdit = mode === "edit" && autoOpenCamera;
-
-      if (
-        (shouldAutoOpenForCreate || shouldAutoOpenForEdit) &&
-        !didAutoOpenCameraRef.current
-      ) {
+      if (autoOpenCamera && !didAutoOpenCameraRef.current) {
         didAutoOpenCameraRef.current = true;
 
         setTimeout(() => {
           setCameraMode("photos");
+
           setCameraOpen(true);
         }, 350);
       }
     } else {
       stopVoicePlayback();
     }
-  }, [visible, initialData, mode, autoOpenCamera]);
+  }, [visible, initialData, autoOpenCamera]);
 
   useEffect(() => {
     const keyboardShowEvent =
@@ -402,7 +402,7 @@ export default function CreateAssetWizardModal({
     const availableWidth =
       modalWidth - modalHorizontalPadding - gridGap * (columns - 1);
 
-    return Math.max(110, Math.min(100, Math.floor(availableWidth / columns)));
+    return Math.max(70, Math.min(100, Math.floor(availableWidth / columns)));
   }, [modalWidth, isSmallScreen]);
 
   const projectConditions = useMemo(() => {
@@ -1622,6 +1622,7 @@ export default function CreateAssetWizardModal({
 
       <AssetGalleryScreen
         visible={assetGalleryOpen}
+        projectId={projectId}
         onClose={() => setAssetGalleryOpen(false)}
         onPickAsset={(selection: PickedAssetCategory) => {
           setDraft(
@@ -1639,19 +1640,7 @@ export default function CreateAssetWizardModal({
 
                 nameId: selection.nameId,
 
-                /*
-                 * Start the editable asset name from the selected taxonomy name.
-                 * User can change this in CreateAssetWizard.
-                 */
                 name: selection.name,
-
-                /*
-                 * IMPORTANT:
-                 * Do NOT touch subAssetType here.
-                 *
-                 * subAssetType is a separate user-entered field/location.
-                 */
-                // subAssetType: (prev as any).subAssetType || "",
 
                 rawData: cleanAssetRawData((prev as any).rawData),
               }) as AssetDraft,
