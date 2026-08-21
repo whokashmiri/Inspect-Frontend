@@ -10,6 +10,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  ScrollView,
   TouchableOpacity,
   TouchableWithoutFeedback,
   useWindowDimensions,
@@ -66,10 +67,10 @@ const BACKGROUND = "#F6F7FA";
 
 const UNKNOWN_ASSET: PickedAssetCategory = {
   categoryId: "unknown",
-  category: "Unknown",
+  category: "",
 
   typeId: "unknown",
-  type: "Unknown",
+  type: "",
 
   nameId: "unknown",
   name: "Unknown",
@@ -500,6 +501,14 @@ export default function AssetGalleryScreen({
     }
   };
 
+  const isValidTaxonomyValue = (value?: string | null) => {
+    const text = String(value || "")
+      .trim()
+      .toLowerCase();
+
+    return text.length > 0 && text !== "unknown";
+  };
+
   const loadRecentAssets = async () => {
     if (!projectId) {
       setRecentAssets([]);
@@ -508,15 +517,21 @@ export default function AssetGalleryScreen({
 
     try {
       const result = await projectContentApi.getRecentAssets(projectId, 8);
+
       setRecentAssets(
-        (result.assets || []).filter((item) => item.assetType === "other"),
+        (result.assets || []).filter(
+          (item) =>
+            item.assetType === "other" &&
+            isValidTaxonomyValue(item.category) &&
+            isValidTaxonomyValue(item.type),
+        ),
       );
     } catch (err) {
       console.warn("[AssetGallery] Could not load recent assets", err);
+
       setRecentAssets([]);
     }
   };
-
   const refreshAll = async () => {
     setRefreshing(true);
 
@@ -1165,14 +1180,74 @@ export default function AssetGalleryScreen({
     const typeLabel = addTypeText.trim();
     const assetLabel = addAssetNameText.trim();
 
-    if (!categoryLabel || !typeLabel || !assetLabel) return;
+    if (!categoryLabel || !typeLabel || !assetLabel) {
+      return;
+    }
+
+    // ---------------------------------------------------------
+    // RECENT ASSET
+    // Category + Type must stay exactly the same.
+    // Only the asset name can be changed.
+    // ---------------------------------------------------------
+
+    if (assetEditorMode === "recent" && selectedRecentAsset) {
+      const newNameId = createLocalId("name");
+
+      const newName: AssetNameItem = {
+        id: newNameId,
+        typeId: selectedRecentAsset.typeId || "unknown",
+        label: assetLabel,
+      };
+
+      setNames((prev) => [newName, ...prev]);
+
+      setSelectionSource("taxonomy");
+      setSelectedRecentAssetId(null);
+
+      setSelectedCategoryId(selectedRecentAsset.categoryId || "unknown");
+
+      setSelectedTypeId(selectedRecentAsset.typeId || "unknown");
+
+      setSelectedNameId(newNameId);
+
+      setFeaturedNameIds((prev) =>
+        prev.includes(newNameId) ? prev : [newNameId, ...prev].slice(0, 10),
+      );
+
+      finishWithAsset({
+        categoryId: selectedRecentAsset.categoryId || "unknown",
+
+        category: selectedRecentAsset.category || categoryLabel,
+
+        typeId: selectedRecentAsset.typeId || "unknown",
+
+        type: selectedRecentAsset.type || typeLabel,
+
+        nameId: newNameId,
+
+        name: assetLabel,
+      });
+
+      closeAssetEditor();
+
+      return;
+    }
+
+    // ---------------------------------------------------------
+    // NORMAL ADD ASSET FLOW
+    // Category, Type and Name can all be created/changed.
+    // ---------------------------------------------------------
 
     let category = categories.find(
       (item) => normalizeText(item.label) === normalizeText(categoryLabel),
     );
 
     if (!category) {
-      category = { id: createLocalId("category"), label: categoryLabel };
+      category = {
+        id: createLocalId("category"),
+        label: categoryLabel,
+      };
+
       setCategories((prev) => [category!, ...prev]);
     }
 
@@ -1188,40 +1263,33 @@ export default function AssetGalleryScreen({
         categoryId: category.id,
         label: typeLabel,
       };
+
       setTypes((prev) => [type!, ...prev]);
     }
 
-    let name: AssetNameItem | undefined;
+    let name = names.find(
+      (item) =>
+        item.typeId === type!.id &&
+        normalizeText(item.label) === normalizeText(assetLabel),
+    );
 
-    if (assetEditorMode === "recent") {
+    if (!name) {
       name = {
         id: createLocalId("name"),
         typeId: type.id,
         label: assetLabel,
       };
-      setNames((prev) => [name!, ...prev]);
-    } else {
-      name = names.find(
-        (item) =>
-          item.typeId === type!.id &&
-          normalizeText(item.label) === normalizeText(assetLabel),
-      );
 
-      if (!name) {
-        name = {
-          id: createLocalId("name"),
-          typeId: type.id,
-          label: assetLabel,
-        };
-        setNames((prev) => [name!, ...prev]);
-      }
+      setNames((prev) => [name!, ...prev]);
     }
 
     setSelectionSource("taxonomy");
     setSelectedRecentAssetId(null);
+
     setSelectedCategoryId(category.id);
     setSelectedTypeId(type.id);
     setSelectedNameId(name.id);
+
     setFeaturedNameIds((prev) =>
       prev.includes(name!.id) ? prev : [name!.id, ...prev].slice(0, 10),
     );
@@ -2323,473 +2391,554 @@ export default function AssetGalleryScreen({
         >
           <KeyboardAvoidingView
             style={styles.addModalKeyboardWrap}
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
           >
             <TouchableWithoutFeedback onPress={closeAssetEditor}>
               <View style={styles.addModalOverlay}>
                 <TouchableWithoutFeedback>
                   <View style={styles.addModalCard}>
-                    <View style={styles.addModalHeader}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.addModalTitle}>
-                          {assetEditorMode === "recent"
-                            ? "Create from Recent"
-                            : "Add Asset"}
-                        </Text>
-                        <Text style={styles.addModalSubtitle}>
-                          {assetEditorMode === "recent"
-                            ? "Creates a new asset selection. The Recent database record is not edited."
-                            : "Select an existing value or type a new Category, Type and Asset name."}
-                        </Text>
-                      </View>
-
-                      <TouchableOpacity
-                        style={styles.closeButton}
-                        onPress={closeAssetEditor}
-                      >
-                        <Ionicons name="close" size={18} color={TEXT} />
-                      </TouchableOpacity>
-                    </View>
-
-                    <View style={styles.addModalField}>
-                      <Text style={styles.addModalLabel}>Category</Text>
-
-                      <View
-                        style={[
-                          styles.editorInputWrap,
-                          focusedEditorField === "category" &&
-                            styles.editorInputWrapActive,
-                        ]}
-                      >
-                        <Ionicons name="grid-outline" size={14} color={ACC} />
-
-                        <TextInput
-                          ref={categoryInputRef}
-                          value={addCategoryText}
-                          onFocus={() => {
-                            setFocusedEditorField("category");
-                          }}
-                          onBlur={() => {
-                            setFocusedEditorField((current) =>
-                              current === "category" ? null : current,
-                            );
-                          }}
-                          onChangeText={(text) => {
-                            setAddCategoryText(text);
-
-                            setAddTypeText("");
-                            setAddAssetNameText("");
-
-                            setTypeDropdownOpen(false);
-                            setNameDropdownOpen(false);
-                          }}
-                          placeholder="Select or add category"
-                          placeholderTextColor={MUTED}
-                          style={styles.editorInput}
-                          returnKeyType="done"
-                          onSubmitEditing={() => {
-                            if (addCategoryText.trim()) {
-                              handleEditorAddCategory();
-                            }
-
-                            setFocusedEditorField(null);
-                          }}
-                        />
-
-                        <TouchableOpacity
-                          style={styles.editorAddButton}
-                          onPress={handleCategoryAction}
-                          hitSlop={6}
-                        >
-                          <Ionicons
-                            name={
-                              focusedEditorField === "category"
-                                ? "checkmark"
-                                : "add"
-                            }
-                            size={18}
-                            color={ACC}
-                          />
-                        </TouchableOpacity>
-
-                        <View style={styles.editorDivider} />
-
-                        <TouchableOpacity
-                          style={styles.editorChevronButton}
-                          onPress={() => {
-                            categoryInputRef.current?.blur();
-                            setFocusedEditorField(null);
-
-                            setTypeDropdownOpen(false);
-                            setNameDropdownOpen(false);
-
-                            setCategoryDropdownOpen((previous) => !previous);
-                          }}
-                          hitSlop={6}
-                        >
-                          <Ionicons
-                            name={
-                              categoryDropdownOpen
-                                ? "chevron-up"
-                                : "chevron-down"
-                            }
-                            size={15}
-                            color={MUTED}
-                          />
-                        </TouchableOpacity>
-                      </View>
-
-                      {categoryDropdownOpen && (
-                        <View style={styles.editorDropdown}>
-                          {editorCategoryMatches.length > 0 ? (
-                            editorCategoryMatches.map((category) => (
-                              <TouchableOpacity
-                                key={category.id}
-                                style={styles.editorDropdownRow}
-                                onPress={() => {
-                                  selectEditorCategory(category);
-
-                                  setCategoryDropdownOpen(false);
-                                  setFocusedEditorField(null);
-                                }}
-                              >
-                                <Text
-                                  style={styles.editorDropdownText}
-                                  numberOfLines={1}
-                                >
-                                  {category.label}
-                                </Text>
-
-                                {normalizeText(category.label) ===
-                                  normalizeText(addCategoryText) && (
-                                  <Ionicons
-                                    name="checkmark"
-                                    size={14}
-                                    color={ACC}
-                                  />
-                                )}
-                              </TouchableOpacity>
-                            ))
-                          ) : (
-                            <View style={styles.editorDropdownEmpty}>
-                              <Text style={styles.editorDropdownEmptyText}>
-                                No categories found
-                              </Text>
-                            </View>
-                          )}
+                    <ScrollView
+                      keyboardShouldPersistTaps="handled"
+                      showsVerticalScrollIndicator={false}
+                      contentContainerStyle={styles.addModalScrollContent}
+                    >
+                      <View style={styles.addModalHeader}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.addModalTitle}>
+                            {assetEditorMode === "recent"
+                              ? "Create from Recent"
+                              : "Add Asset"}
+                          </Text>
+                          <Text style={styles.addModalSubtitle}>
+                            {assetEditorMode === "recent"
+                              ? "Creates a new asset selection. The Recent database record is not edited."
+                              : "Select an existing value or type a new Category, Type and Asset name."}
+                          </Text>
                         </View>
-                      )}
-                    </View>
-                    <View style={styles.addModalField}>
-                      <Text style={styles.addModalLabel}>Type</Text>
-
-                      <View
-                        style={[
-                          styles.editorInputWrap,
-                          !editorSelectedCategory &&
-                            styles.editorInputWrapDisabled,
-                          focusedEditorField === "type" &&
-                            styles.editorInputWrapActive,
-                        ]}
-                      >
-                        <Ionicons
-                          name="layers-outline"
-                          size={14}
-                          color={editorSelectedCategory ? ACC : "#B8BCC8"}
-                        />
-
-                        <TextInput
-                          ref={typeInputRef}
-                          value={addTypeText}
-                          editable={!!editorSelectedCategory}
-                          onFocus={() => {
-                            setFocusedEditorField("type");
-                          }}
-                          onBlur={() => {
-                            setFocusedEditorField((current) =>
-                              current === "type" ? null : current,
-                            );
-                          }}
-                          onChangeText={(text) => {
-                            setAddTypeText(text);
-                            setAddAssetNameText("");
-                            setNameDropdownOpen(false);
-                          }}
-                          placeholder={
-                            editorSelectedCategory
-                              ? "Select or add type"
-                              : "Select category first"
-                          }
-                          placeholderTextColor={MUTED}
-                          style={styles.editorInput}
-                          returnKeyType="done"
-                          onSubmitEditing={() => {
-                            if (addTypeText.trim()) {
-                              handleEditorAddType();
-                            }
-
-                            setFocusedEditorField(null);
-                          }}
-                        />
 
                         <TouchableOpacity
-                          style={styles.editorAddButton}
-                          onPress={handleTypeAction}
-                          hitSlop={6}
+                          style={styles.closeButton}
+                          onPress={closeAssetEditor}
                         >
-                          <Ionicons
-                            name={
-                              focusedEditorField === "type"
-                                ? "checkmark"
-                                : "add"
-                            }
-                            size={18}
-                            color={ACC}
-                          />
-                        </TouchableOpacity>
-
-                        <View style={styles.editorDivider} />
-
-                        <TouchableOpacity
-                          style={styles.editorChevronButton}
-                          disabled={!editorSelectedCategory}
-                          onPress={() => {
-                            typeInputRef.current?.blur();
-                            setFocusedEditorField(null);
-
-                            setCategoryDropdownOpen(false);
-                            setNameDropdownOpen(false);
-
-                            setTypeDropdownOpen((previous) => !previous);
-                          }}
-                          hitSlop={6}
-                        >
-                          <Ionicons
-                            name={
-                              typeDropdownOpen ? "chevron-up" : "chevron-down"
-                            }
-                            size={15}
-                            color={editorSelectedCategory ? MUTED : "#B8BCC8"}
-                          />
+                          <Ionicons name="close" size={18} color={TEXT} />
                         </TouchableOpacity>
                       </View>
 
-                      {typeDropdownOpen && editorSelectedCategory && (
-                        <View style={styles.editorDropdown}>
-                          {editorTypeMatches.length > 0 ? (
-                            editorTypeMatches.map((type) => (
+                      <View style={styles.addModalField}>
+                        <Text style={styles.addModalLabel}>Category</Text>
+
+                        <View
+                          style={[
+                            styles.editorInputWrap,
+                            focusedEditorField === "category" &&
+                              styles.editorInputWrapActive,
+                          ]}
+                        >
+                          <Ionicons name="grid-outline" size={14} color={ACC} />
+
+                          <TextInput
+                            ref={categoryInputRef}
+                            value={addCategoryText}
+                            editable={assetEditorMode !== "recent"}
+                            onFocus={() => {
+                              if (assetEditorMode === "recent") return;
+
+                              setFocusedEditorField("type");
+                            }}
+                            onBlur={() => {
+                              setFocusedEditorField((current) =>
+                                current === "category" ? null : current,
+                              );
+                            }}
+                            onChangeText={(text) => {
+                              if (assetEditorMode === "recent") return;
+
+                              setAddCategoryText(text);
+
+                              setAddTypeText("");
+                              setAddAssetNameText("");
+
+                              setTypeDropdownOpen(false);
+                              setNameDropdownOpen(false);
+                            }}
+                            placeholder="Select or add category"
+                            placeholderTextColor={MUTED}
+                            style={[
+                              styles.editorInput,
+                              assetEditorMode === "recent" &&
+                                styles.editorInputReadOnly,
+                            ]}
+                            returnKeyType="done"
+                          />
+
+                          {assetEditorMode !== "recent" && (
+                            <>
                               <TouchableOpacity
-                                key={type.id}
-                                style={styles.editorDropdownRow}
+                                style={styles.editorAddButton}
+                                onPress={handleCategoryAction}
+                                hitSlop={6}
+                              >
+                                <Ionicons
+                                  name={
+                                    focusedEditorField === "category"
+                                      ? "checkmark"
+                                      : "add"
+                                  }
+                                  size={18}
+                                  color={ACC}
+                                />
+                              </TouchableOpacity>
+
+                              <View style={styles.editorDivider} />
+
+                              <TouchableOpacity
+                                style={styles.editorChevronButton}
                                 onPress={() => {
-                                  selectEditorType(type);
+                                  categoryInputRef.current?.blur();
+                                  setFocusedEditorField(null);
 
                                   setTypeDropdownOpen(false);
-                                  setFocusedEditorField(null);
-                                }}
-                              >
-                                <Text
-                                  style={styles.editorDropdownText}
-                                  numberOfLines={1}
-                                >
-                                  {type.label}
-                                </Text>
+                                  setNameDropdownOpen(false);
 
-                                {normalizeText(type.label) ===
-                                  normalizeText(addTypeText) && (
-                                  <Ionicons
-                                    name="checkmark"
-                                    size={14}
-                                    color={ACC}
-                                  />
-                                )}
+                                  setCategoryDropdownOpen(
+                                    (previous) => !previous,
+                                  );
+                                }}
+                                hitSlop={6}
+                              >
+                                <Ionicons
+                                  name={
+                                    categoryDropdownOpen
+                                      ? "chevron-up"
+                                      : "chevron-down"
+                                  }
+                                  size={15}
+                                  color={MUTED}
+                                />
                               </TouchableOpacity>
-                            ))
-                          ) : (
-                            <View style={styles.editorDropdownEmpty}>
-                              <Text style={styles.editorDropdownEmptyText}>
-                                No types found
-                              </Text>
+                            </>
+                          )}
+                          <View style={styles.editorDivider} />
+
+                          <TouchableOpacity
+                            style={styles.editorChevronButton}
+                            onPress={() => {
+                              categoryInputRef.current?.blur();
+                              setFocusedEditorField(null);
+
+                              setTypeDropdownOpen(false);
+                              setNameDropdownOpen(false);
+
+                              setCategoryDropdownOpen((previous) => !previous);
+                            }}
+                            hitSlop={6}
+                          >
+                            <Ionicons
+                              name={
+                                categoryDropdownOpen
+                                  ? "chevron-up"
+                                  : "chevron-down"
+                              }
+                              size={15}
+                              color={MUTED}
+                            />
+                          </TouchableOpacity>
+                        </View>
+
+                        {assetEditorMode !== "recent" &&
+                          categoryDropdownOpen && (
+                            <View style={styles.editorDropdown}>
+                              {editorCategoryMatches.length > 0 ? (
+                                editorCategoryMatches.map((category) => (
+                                  <TouchableOpacity
+                                    key={category.id}
+                                    style={styles.editorDropdownRow}
+                                    onPress={() => {
+                                      selectEditorCategory(category);
+
+                                      setCategoryDropdownOpen(false);
+                                      setFocusedEditorField(null);
+                                    }}
+                                  >
+                                    <Text
+                                      style={styles.editorDropdownText}
+                                      numberOfLines={1}
+                                    >
+                                      {category.label}
+                                    </Text>
+
+                                    {normalizeText(category.label) ===
+                                      normalizeText(addCategoryText) && (
+                                      <Ionicons
+                                        name="checkmark"
+                                        size={14}
+                                        color={ACC}
+                                      />
+                                    )}
+                                  </TouchableOpacity>
+                                ))
+                              ) : (
+                                <View style={styles.editorDropdownEmpty}>
+                                  <Text style={styles.editorDropdownEmptyText}>
+                                    No categories found
+                                  </Text>
+                                </View>
+                              )}
                             </View>
                           )}
+                      </View>
+                      <View style={styles.addModalField}>
+                        <Text style={styles.addModalLabel}>Type</Text>
+
+                        <View
+                          style={[
+                            styles.editorInputWrap,
+                            !editorSelectedCategory &&
+                              styles.editorInputWrapDisabled,
+                            focusedEditorField === "type" &&
+                              styles.editorInputWrapActive,
+                          ]}
+                        >
+                          <Ionicons
+                            name="layers-outline"
+                            size={14}
+                            color={editorSelectedCategory ? ACC : "#B8BCC8"}
+                          />
+
+                          <TextInput
+                            ref={typeInputRef}
+                            value={addTypeText}
+                            editable={
+                              assetEditorMode !== "recent" &&
+                              !!editorSelectedCategory
+                            }
+                            onFocus={() => {
+                              setFocusedEditorField("type");
+                            }}
+                            onBlur={() => {
+                              setFocusedEditorField((current) =>
+                                current === "type" ? null : current,
+                              );
+                            }}
+                            onChangeText={(text) => {
+                              if (assetEditorMode === "recent") return;
+
+                              setAddTypeText(text);
+                              setAddAssetNameText("");
+                              setNameDropdownOpen(false);
+                            }}
+                            placeholder={
+                              editorSelectedCategory
+                                ? "Select or add type"
+                                : "Select category first"
+                            }
+                            placeholderTextColor={MUTED}
+                            style={styles.editorInput}
+                            returnKeyType="done"
+                            onSubmitEditing={() => {
+                              if (addTypeText.trim()) {
+                                handleEditorAddType();
+                              }
+
+                              setFocusedEditorField(null);
+                            }}
+                          />
+                          {assetEditorMode !== "recent" && (
+                            <>
+                              <TouchableOpacity
+                                style={styles.editorAddButton}
+                                onPress={handleTypeAction}
+                                hitSlop={6}
+                              >
+                                <Ionicons
+                                  name={
+                                    focusedEditorField === "type"
+                                      ? "checkmark"
+                                      : "add"
+                                  }
+                                  size={18}
+                                  color={ACC}
+                                />
+                              </TouchableOpacity>
+
+                              <View style={styles.editorDivider} />
+
+                              <TouchableOpacity
+                                style={styles.editorChevronButton}
+                                disabled={!editorSelectedCategory}
+                                onPress={() => {
+                                  typeInputRef.current?.blur();
+                                  setFocusedEditorField(null);
+
+                                  setCategoryDropdownOpen(false);
+                                  setNameDropdownOpen(false);
+
+                                  setTypeDropdownOpen((previous) => !previous);
+                                }}
+                                hitSlop={6}
+                              >
+                                <Ionicons
+                                  name={
+                                    typeDropdownOpen
+                                      ? "chevron-up"
+                                      : "chevron-down"
+                                  }
+                                  size={15}
+                                  color={
+                                    editorSelectedCategory ? MUTED : "#B8BCC8"
+                                  }
+                                />
+                              </TouchableOpacity>
+                            </>
+                          )}
+
+                          <View style={styles.editorDivider} />
+
+                          <TouchableOpacity
+                            style={styles.editorChevronButton}
+                            disabled={!editorSelectedCategory}
+                            onPress={() => {
+                              typeInputRef.current?.blur();
+                              setFocusedEditorField(null);
+
+                              setCategoryDropdownOpen(false);
+                              setNameDropdownOpen(false);
+
+                              setTypeDropdownOpen((previous) => !previous);
+                            }}
+                            hitSlop={6}
+                          >
+                            <Ionicons
+                              name={
+                                typeDropdownOpen ? "chevron-up" : "chevron-down"
+                              }
+                              size={15}
+                              color={editorSelectedCategory ? MUTED : "#B8BCC8"}
+                            />
+                          </TouchableOpacity>
                         </View>
-                      )}
-                    </View>
-                    <View style={styles.addModalField}>
-                      <Text style={styles.addModalLabel}>Asset name</Text>
 
-                      <View
-                        style={[
-                          styles.editorInputWrap,
-                          !editorSelectedType && styles.editorInputWrapDisabled,
-                          focusedEditorField === "name" &&
-                            styles.editorInputWrapActive,
-                        ]}
-                      >
-                        <Ionicons
-                          name="cube-outline"
-                          size={14}
-                          color={editorSelectedType ? ACC : "#B8BCC8"}
-                        />
+                        {assetEditorMode !== "recent" &&
+                          typeDropdownOpen &&
+                          editorSelectedCategory && (
+                            <View style={styles.editorDropdown}>
+                              {editorTypeMatches.length > 0 ? (
+                                editorTypeMatches.map((type) => (
+                                  <TouchableOpacity
+                                    key={type.id}
+                                    style={styles.editorDropdownRow}
+                                    onPress={() => {
+                                      selectEditorType(type);
 
-                        <TextInput
-                          ref={nameInputRef}
-                          value={addAssetNameText}
-                          editable={!!editorSelectedType}
-                          onFocus={() => {
-                            setFocusedEditorField("name");
-                          }}
-                          onBlur={() => {
-                            setFocusedEditorField((current) =>
-                              current === "name" ? null : current,
-                            );
-                          }}
-                          onChangeText={setAddAssetNameText}
-                          placeholder={
-                            editorSelectedType
-                              ? "Select or add asset name"
-                              : "Select type first"
-                          }
-                          placeholderTextColor={MUTED}
-                          style={styles.editorInput}
-                          returnKeyType="done"
-                          onSubmitEditing={() => {
-                            if (addAssetNameText.trim()) {
-                              handleEditorAddName();
-                            }
+                                      setTypeDropdownOpen(false);
+                                      setFocusedEditorField(null);
+                                    }}
+                                  >
+                                    <Text
+                                      style={styles.editorDropdownText}
+                                      numberOfLines={1}
+                                    >
+                                      {type.label}
+                                    </Text>
 
-                            setFocusedEditorField(null);
-                          }}
-                        />
+                                    {normalizeText(type.label) ===
+                                      normalizeText(addTypeText) && (
+                                      <Ionicons
+                                        name="checkmark"
+                                        size={14}
+                                        color={ACC}
+                                      />
+                                    )}
+                                  </TouchableOpacity>
+                                ))
+                              ) : (
+                                <View style={styles.editorDropdownEmpty}>
+                                  <Text style={styles.editorDropdownEmptyText}>
+                                    No types found
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
+                          )}
+                      </View>
+                      <View style={styles.addModalField}>
+                        <Text style={styles.addModalLabel}>Asset name</Text>
 
-                        <TouchableOpacity
-                          style={styles.editorAddButton}
-                          onPress={handleNameAction}
-                          hitSlop={6}
+                        <View
+                          style={[
+                            styles.editorInputWrap,
+                            !editorSelectedType &&
+                              styles.editorInputWrapDisabled,
+                            focusedEditorField === "name" &&
+                              styles.editorInputWrapActive,
+                          ]}
                         >
                           <Ionicons
-                            name={
-                              focusedEditorField === "name"
-                                ? "checkmark"
-                                : "add"
-                            }
-                            size={18}
-                            color={ACC}
+                            name="cube-outline"
+                            size={14}
+                            color={editorSelectedType ? ACC : "#B8BCC8"}
                           />
-                        </TouchableOpacity>
 
-                        <View style={styles.editorDivider} />
-
-                        <TouchableOpacity
-                          style={styles.editorChevronButton}
-                          disabled={!editorSelectedType}
-                          onPress={() => {
-                            nameInputRef.current?.blur();
-                            setFocusedEditorField(null);
-
-                            setCategoryDropdownOpen(false);
-                            setTypeDropdownOpen(false);
-
-                            setNameDropdownOpen((previous) => !previous);
-                          }}
-                          hitSlop={6}
-                        >
-                          <Ionicons
-                            name={
-                              nameDropdownOpen ? "chevron-up" : "chevron-down"
+                          <TextInput
+                            ref={nameInputRef}
+                            value={addAssetNameText}
+                            editable={!!editorSelectedType}
+                            onFocus={() => {
+                              setFocusedEditorField("name");
+                            }}
+                            onBlur={() => {
+                              setFocusedEditorField((current) =>
+                                current === "name" ? null : current,
+                              );
+                            }}
+                            onChangeText={setAddAssetNameText}
+                            placeholder={
+                              editorSelectedType
+                                ? "Select or add asset name"
+                                : "Select type first"
                             }
-                            size={15}
-                            color={editorSelectedType ? MUTED : "#B8BCC8"}
+                            placeholderTextColor={MUTED}
+                            style={styles.editorInput}
+                            returnKeyType="done"
+                            onSubmitEditing={() => {
+                              if (addAssetNameText.trim()) {
+                                handleEditorAddName();
+                              }
+
+                              setFocusedEditorField(null);
+                            }}
                           />
-                        </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={styles.editorAddButton}
+                            onPress={handleNameAction}
+                            hitSlop={6}
+                          >
+                            <Ionicons
+                              name={
+                                focusedEditorField === "name"
+                                  ? "checkmark"
+                                  : "add"
+                              }
+                              size={18}
+                              color={ACC}
+                            />
+                          </TouchableOpacity>
+
+                          <View style={styles.editorDivider} />
+
+                          <TouchableOpacity
+                            style={styles.editorChevronButton}
+                            disabled={!editorSelectedType}
+                            onPress={() => {
+                              nameInputRef.current?.blur();
+                              setFocusedEditorField(null);
+
+                              setCategoryDropdownOpen(false);
+                              setTypeDropdownOpen(false);
+
+                              setNameDropdownOpen((previous) => !previous);
+                            }}
+                            hitSlop={6}
+                          >
+                            <Ionicons
+                              name={
+                                nameDropdownOpen ? "chevron-up" : "chevron-down"
+                              }
+                              size={15}
+                              color={editorSelectedType ? MUTED : "#B8BCC8"}
+                            />
+                          </TouchableOpacity>
+                        </View>
+
+                        {nameDropdownOpen && editorSelectedType && (
+                          <View style={styles.editorDropdown}>
+                            {editorNameMatches.length > 0 ? (
+                              editorNameMatches.map((name) => (
+                                <TouchableOpacity
+                                  key={name.id}
+                                  style={styles.editorDropdownRow}
+                                  onPress={() => {
+                                    selectEditorName(name);
+
+                                    setNameDropdownOpen(false);
+                                    setFocusedEditorField(null);
+                                  }}
+                                >
+                                  <Text
+                                    style={styles.editorDropdownText}
+                                    numberOfLines={1}
+                                  >
+                                    {name.label}
+                                  </Text>
+
+                                  {normalizeText(name.label) ===
+                                    normalizeText(addAssetNameText) && (
+                                    <Ionicons
+                                      name="checkmark"
+                                      size={14}
+                                      color={ACC}
+                                    />
+                                  )}
+                                </TouchableOpacity>
+                              ))
+                            ) : (
+                              <View style={styles.editorDropdownEmpty}>
+                                <Text style={styles.editorDropdownEmptyText}>
+                                  No asset names found
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                        )}
                       </View>
 
-                      {nameDropdownOpen && editorSelectedType && (
-                        <View style={styles.editorDropdown}>
-                          {editorNameMatches.length > 0 ? (
-                            editorNameMatches.map((name) => (
-                              <TouchableOpacity
-                                key={name.id}
-                                style={styles.editorDropdownRow}
-                                onPress={() => {
-                                  selectEditorName(name);
+                      <Text style={styles.editorHint}>
+                        If a typed value does not exist, it is added locally for
+                        this flow.
+                      </Text>
 
-                                  setNameDropdownOpen(false);
-                                  setFocusedEditorField(null);
-                                }}
-                              >
-                                <Text
-                                  style={styles.editorDropdownText}
-                                  numberOfLines={1}
-                                >
-                                  {name.label}
-                                </Text>
+                      <View style={styles.addModalActions}>
+                        <TouchableOpacity
+                          style={styles.addModalCancel}
+                          onPress={closeAssetEditor}
+                        >
+                          <Text style={styles.addModalCancelText}>Cancel</Text>
+                        </TouchableOpacity>
 
-                                {normalizeText(name.label) ===
-                                  normalizeText(addAssetNameText) && (
-                                  <Ionicons
-                                    name="checkmark"
-                                    size={14}
-                                    color={ACC}
-                                  />
-                                )}
-                              </TouchableOpacity>
-                            ))
-                          ) : (
-                            <View style={styles.editorDropdownEmpty}>
-                              <Text style={styles.editorDropdownEmptyText}>
-                                No asset names found
-                              </Text>
-                            </View>
-                          )}
-                        </View>
-                      )}
-                    </View>
-
-                    <Text style={styles.editorHint}>
-                      If a typed value does not exist, it is added locally for
-                      this flow.
-                    </Text>
-
-                    <View style={styles.addModalActions}>
-                      <TouchableOpacity
-                        style={styles.addModalCancel}
-                        onPress={closeAssetEditor}
-                      >
-                        <Text style={styles.addModalCancelText}>Cancel</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={[
-                          styles.addModalSave,
-                          (!addCategoryText.trim() ||
+                        <TouchableOpacity
+                          style={[
+                            styles.addModalSave,
+                            (!addCategoryText.trim() ||
+                              !addTypeText.trim() ||
+                              !addAssetNameText.trim()) &&
+                              styles.buttonDisabled,
+                          ]}
+                          disabled={
+                            !addCategoryText.trim() ||
                             !addTypeText.trim() ||
-                            !addAssetNameText.trim()) &&
-                            styles.buttonDisabled,
-                        ]}
-                        disabled={
-                          !addCategoryText.trim() ||
-                          !addTypeText.trim() ||
-                          !addAssetNameText.trim()
-                        }
-                        onPress={handleAddCompleteAsset}
-                      >
-                        <Ionicons
-                          name={
-                            assetEditorMode === "recent"
-                              ? "copy-outline"
-                              : "add"
+                            !addAssetNameText.trim()
                           }
-                          size={16}
-                          color="#fff"
-                        />
-                        <Text style={styles.addModalSaveText}>
-                          {assetEditorMode === "recent"
-                            ? "Create New"
-                            : "Add / Select"}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
+                          onPress={handleAddCompleteAsset}
+                        >
+                          <Ionicons
+                            name={
+                              assetEditorMode === "recent"
+                                ? "copy-outline"
+                                : "add"
+                            }
+                            size={16}
+                            color="#fff"
+                          />
+                          <Text style={styles.addModalSaveText}>
+                            {assetEditorMode === "recent"
+                              ? "Create New"
+                              : "Add / Select"}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </ScrollView>
                   </View>
                 </TouchableWithoutFeedback>
               </View>
@@ -2963,7 +3112,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
-
+  editorInputReadOnly: {
+    color: MUTED,
+    backgroundColor: "#F1F3F6",
+  },
   dropdownMain: {
     flex: 1,
     height: "100%",
@@ -3002,6 +3154,10 @@ const styles = StyleSheet.create({
     gap: 7,
     paddingHorizontal: 12,
     marginTop: 9,
+  },
+
+  addModalScrollContent: {
+    flexGrow: 1,
   },
 
   searchBox: {
@@ -3722,6 +3878,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderRadius: 18,
     padding: 16,
+    maxHeight: "85%",
   },
 
   addModalHeader: {
