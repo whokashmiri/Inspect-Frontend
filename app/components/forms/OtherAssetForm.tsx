@@ -110,6 +110,7 @@ export function cleanOtherAssetDraft(draft: AssetDraft): AssetDraft {
     ...draft,
 
     assetType: "other",
+    code: draft.code?.trim() || undefined,
 
     quantity: Math.max(1, finalQuantity),
 
