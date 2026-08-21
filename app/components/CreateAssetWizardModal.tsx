@@ -168,6 +168,7 @@ const getInitialDraft = (initialData?: Partial<AssetDraft>): AssetDraft => {
   return {
     images: normalizeInitialImages(initialData?.images, initialData?.assetType),
     name: initialData?.name || "",
+    code: initialData?.code?.trim() || undefined,
     normalizedData:
       (initialData as any)?.normalizedData &&
       typeof (initialData as any).normalizedData === "object" &&
@@ -322,6 +323,7 @@ export default function CreateAssetWizardModal({
   useEffect(() => {
     if (visible) {
       setStep(1);
+      console.log("WIZARD INITIAL BARCODE:", initialData?.code);
 
       setDraft(getInitialDraft(initialData));
 
@@ -1063,6 +1065,7 @@ export default function CreateAssetWizardModal({
                                 <TextInput
                                   ref={firstInputRef}
                                   value={draft.name}
+                                  selectTextOnFocus
                                   onChangeText={(text) =>
                                     setDraft((prev) => ({
                                       ...prev,
