@@ -1581,8 +1581,8 @@ export interface AssetItem {
   projectId: string;
   createdAt: string;
   updatedAt: string;
-  updatedAt?: string | null;
-  code: string | null;
+  // updatedAt?: string | null;
+  code?: string | null;
 
   rawData: Record<string, any> | null;
 
