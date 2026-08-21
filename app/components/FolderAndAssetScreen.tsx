@@ -386,6 +386,9 @@ export default function FolderAndAssetScreen({ route }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [pendingAssetSaveCount, setPendingAssetSaveCount] = useState(0);
+  const [pendingScannedCode, setPendingScannedCode] = useState<string | null>(
+    null,
+  );
   const [downloadedOffline, setDownloadedOffline] = useState(false);
   const [downloadCheckCompleted, setDownloadCheckCompleted] = useState(false);
   const [snackbar, setSnackbar] = useState<{
@@ -780,6 +783,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
             const matchesSearch =
               !query ||
+              rawDataValueMatches(asset.code, query) ||
               rawDataValueMatches(asset.name, query) ||
               rawDataValueMatches(cleanAssetRawData(asset.rawData), query);
 
@@ -876,15 +880,23 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
   const handleDetectedAssetCode = async (rawCode: string) => {
     const code = normalizeCode(rawCode);
+
     if (!code) return;
+
     try {
       setCodeLookupLoading(true);
+
       const shouldUseOffline =
         offlineMode ||
         (downloadedOffline && (isOnline === false || isOnline === null));
+
       let result;
+
       if (shouldUseOffline) {
-        result = await advancedSearchOfflineAssets({ projectId, search: code });
+        result = await advancedSearchOfflineAssets({
+          projectId,
+          search: code,
+        });
       } else {
         result = await projectContentApi.advancedSearchContents(
           projectId,
@@ -892,24 +904,65 @@ export default function FolderAndAssetScreen({ route }: Props) {
           code,
         );
       }
-      setCodeScannerVisible(false);
-      const foundAsset = result.assets?.[0];
 
       setCodeScannerVisible(false);
 
-      if (!foundAsset) {
-        showSnackbar(
-          t("folderAssetScreen.codeScanner.notFoundMessage"),
-          "error",
-        );
+      const resultAssets = (result.assets || []) as AssetItem[];
+
+      // First preference:
+      // exact match against the dedicated code field.
+      const exactCodeAsset =
+        resultAssets.find(
+          (asset) => normalizeCode(asset.code || "") === code,
+        ) || null;
+
+      // Fallback:
+      // advanced search may have found the scanned value
+      // inside name/rawData.
+      const foundAsset = exactCodeAsset || resultAssets[0] || null;
+
+      // -------------------------------------------------
+      // ASSET FOUND
+      // -------------------------------------------------
+      if (foundAsset) {
+        const scannedAsset: AssetItem = {
+          ...foundAsset,
+          isPresent: true,
+        };
+
+        openEditAsset(scannedAsset);
         return;
       }
 
-      setEditingAsset(foundAsset);
-      // setAssetModalVisible(true);
+      // -------------------------------------------------
+      // ASSET NOT FOUND
+      // -------------------------------------------------
+      Alert.alert(
+        "Asset not found",
+        `No asset exists with barcode ${code}. Would you like to create a new asset?`,
+        [
+          {
+            text: "Cancel",
+            style: "cancel",
+          },
+          {
+            text: "Create Asset",
+            onPress: () => {
+              setPendingScannedCode(code);
+
+              setEditingAsset(null);
+              setAutoOpenCameraForEdit(false);
+
+              setAssetCategoryModalVisible(true);
+            },
+          },
+        ],
+      );
     } catch (error: any) {
+      setCodeScannerVisible(false);
+
       showSnackbar(
-        error?.message || t("folderAssetScreen.codeScanner.notFoundMessage"),
+        error?.message || "Could not search for this barcode.",
         "error",
       );
     } finally {
@@ -1514,7 +1567,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
       const finalRawData = rawData;
 
       const notesText = String(draft.notes || "").trim();
-
+      console.log("CREATE ASSET DRAFT CODE:", draft.code);
       const payload = {
         clientMutationId,
         projectId,
@@ -1553,6 +1606,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
         isDone: draft.isDone ?? false,
         isPresent: draft.isPresent ?? true,
       };
+      console.log("CREATE ASSET PAYLOAD CODE:", payload.code);
 
       const normalizedOptimisticAsset = {
         ...optimisticAsset,
@@ -1585,6 +1639,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
         hasNotes: notesText.length > 0,
         notes: notesText || null,
+        code: draft.code || null,
 
         isDone: draft.isDone ?? false,
         isPresent: draft.isPresent ?? true,
@@ -2241,6 +2296,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
       assetType: "other",
 
       name: selection.name,
+      // code: pendingScannedCode ?? undefined,
 
       categoryId: selection.categoryId,
       category: selection.category,
@@ -2414,16 +2470,68 @@ export default function FolderAndAssetScreen({ route }: Props) {
     setAssetCategoryModalVisible(false);
 
     if (category === "Vehicle") {
-      setCreateAssetInitialData(buildNewAssetInitialData("Vehicle"));
+      setCreateAssetInitialData({
+        ...buildNewAssetInitialData("Vehicle"),
+        code: pendingScannedCode ?? undefined,
+      });
 
+      setPendingScannedCode(null);
       setAssetModalVisible(true);
       return;
     }
 
-    setCreateAssetInitialData(undefined);
+    setCreateAssetInitialData({
+      ...buildNewAssetInitialData("Other"),
+      code: pendingScannedCode ?? undefined,
+    });
+
+    // setPendingScannedCode(null);
+
     setAssetGalleryMode("create");
     setAssetGalleryVisible(true);
   };
+
+  // const handleAssetGalleryPick = (selection: PickedAssetCategory) => {
+  //   Keyboard.dismiss();
+
+  //   setAutoOpenCameraForEdit(false);
+
+  //   const taxonomyData = buildAssetCategoryInitialData(selection);
+
+  //   if (assetGalleryMode === "edit" && editingAsset) {
+  //     setCreateAssetInitialData({
+  //       ...mapAssetToDraft(editingAsset),
+  //       ...taxonomyData,
+
+  //       rawData:
+  //         (editingAsset as any).rawData &&
+  //         typeof (editingAsset as any).rawData === "object"
+  //           ? cleanAssetRawData((editingAsset as any).rawData)
+  //           : {},
+  //     });
+  //   } else {
+  //     setCreateAssetInitialData({
+  //       ...buildNewAssetInitialData("Other"),
+  //       ...taxonomyData,
+
+  //       name: selection.name,
+
+  //       code: pendingScannedCode ?? undefined,
+
+  //       images: createEmptyAssetImages(),
+  //       voiceNotes: [],
+  //     });
+
+  //     setPendingScannedCode(null);
+  //   }
+
+  //   setAssetGalleryVisible(false);
+
+  //   requestAnimationFrame(() => {
+  //     setAutoOpenCameraForEdit(false);
+  //     setAssetModalVisible(true);
+  //   });
+  // };
 
   const handleAssetGalleryPick = (selection: PickedAssetCategory) => {
     Keyboard.dismiss();
@@ -2435,7 +2543,6 @@ export default function FolderAndAssetScreen({ route }: Props) {
     if (assetGalleryMode === "edit" && editingAsset) {
       setCreateAssetInitialData({
         ...mapAssetToDraft(editingAsset),
-
         ...taxonomyData,
 
         rawData:
@@ -2445,27 +2552,33 @@ export default function FolderAndAssetScreen({ route }: Props) {
             : {},
       });
     } else {
+      console.log("BARCODE BEFORE OPENING WIZARD:", pendingScannedCode);
+
       setCreateAssetInitialData({
         ...buildNewAssetInitialData("Other"),
-
         ...taxonomyData,
 
         name: selection.name,
 
-        images: createEmptyAssetImages(),
+        // Barcode is still available here
+        code: pendingScannedCode ?? undefined,
 
+        images: createEmptyAssetImages(),
         voiceNotes: [],
       });
+
+      // NOW it is safe to clear it
+      setPendingScannedCode(null);
     }
 
     setAssetGalleryVisible(false);
 
     requestAnimationFrame(() => {
       setAutoOpenCameraForEdit(false);
-
       setAssetModalVisible(true);
     });
   };
+
   return (
     <SafeAreaView style={styles.flex} edges={["left", "right", "bottom"]}>
       <TouchableWithoutFeedback
@@ -3659,32 +3772,30 @@ export default function FolderAndAssetScreen({ route }: Props) {
             onPickAsset={handleAssetGalleryPick}
           />
           {/* ── Asset wizard modal ── */}
-          {assetModalVisible && (
-            <CreateAssetWizardModal
-              firstInputRef={assetWizardInputRef}
-              projectId={projectId}
-              disableAssetName={!!editingAsset && !canEditAssetName}
-              visible={assetModalVisible}
-              onClose={closeAssetModal}
-              onSubmit={(draft) =>
-                submitAssetInBackground(draft, !!editingAsset)
-              }
-              onSaveAndCreate={saveAndCreateNextAsset}
-              onSaveAndNext={saveAndEditNextAsset}
-              mode={editingAsset ? "edit" : "create"}
-              initialData={
-                editingAsset
-                  ? {
-                      ...mapAssetToDraft(editingAsset),
-                      ...(createAssetInitialData ?? {}),
-                    }
-                  : createAssetInitialData
-              }
-              assetLocations={projectAssetLocations}
-              conditionOptions={projectConditions}
-              autoOpenCamera={autoOpenCameraForEdit}
-            />
-          )}
+
+          <CreateAssetWizardModal
+            firstInputRef={assetWizardInputRef}
+            projectId={projectId}
+            disableAssetName={!!editingAsset && !canEditAssetName}
+            visible={assetModalVisible}
+            onClose={closeAssetModal}
+            onSubmit={(draft) => submitAssetInBackground(draft, !!editingAsset)}
+            onSaveAndCreate={saveAndCreateNextAsset}
+            onSaveAndNext={saveAndEditNextAsset}
+            mode={editingAsset ? "edit" : "create"}
+            initialData={
+              editingAsset
+                ? {
+                    ...mapAssetToDraft(editingAsset),
+                    ...(createAssetInitialData ?? {}),
+                  }
+                : createAssetInitialData
+            }
+            assetLocations={projectAssetLocations}
+            conditionOptions={projectConditions}
+            autoOpenCamera={autoOpenCameraForEdit}
+          />
+
           {assetFlowLoading && (
             <View style={styles.assetFlowLoadingOverlay}>
               <View style={styles.assetFlowLoadingCard}>
