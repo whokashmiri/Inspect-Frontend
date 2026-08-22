@@ -687,6 +687,7 @@ export default function CreateAssetWizardModal({
 
       notes: cleanedNotes || undefined,
       hasNotes: cleanedNotes.length > 0,
+      code: draft.code?.trim() || undefined,
 
       quantity: undefined,
 
@@ -946,6 +947,20 @@ export default function CreateAssetWizardModal({
                             ? t("asset.editAsset")
                             : t("asset.createAsset")}
                         </Text>
+
+                        <TextInput
+                          value={draft.code || ""}
+                          onChangeText={(text) =>
+                            setDraft((prev) => ({
+                              ...prev,
+                              code: text,
+                            }))
+                          }
+                          placeholder={t("Barcode") || "Code"}
+                          placeholderTextColor="#767B91"
+                          style={styles.assetCodeInput}
+                          returnKeyType="done"
+                        />
 
                         <View style={styles.categoryBadge}>
                           <Text
@@ -1763,6 +1778,21 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+  },
+
+  assetCodeInput: {
+    minWidth: 80,
+    maxWidth: 200,
+    height: 34,
+    paddingHorizontal: 6,
+    paddingVertical: 0,
+    fontSize: 11,
+    fontWeight: "700",
+    color: TEXT,
+    backgroundColor: SURFACE,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 8,
   },
 
   modalCard: {
