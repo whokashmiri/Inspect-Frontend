@@ -2464,27 +2464,15 @@ export default function FolderAndAssetScreen({ route }: Props) {
     setEditingAsset(null);
     setAutoOpenCameraForEdit(false);
     setAssetCategoryModalVisible(false);
-
-    if (category === "Vehicle") {
-      setCreateAssetInitialData({
-        ...buildNewAssetInitialData("Vehicle"),
-        code: pendingScannedCode ?? undefined,
-      });
-
-      setPendingScannedCode(null);
-      setAssetModalVisible(true);
-      return;
-    }
+    setAssetGalleryVisible(false);
 
     setCreateAssetInitialData({
-      ...buildNewAssetInitialData("Other"),
+      ...buildNewAssetInitialData(category),
       code: pendingScannedCode ?? undefined,
     });
 
-    // setPendingScannedCode(null);
-
-    setAssetGalleryMode("create");
-    setAssetGalleryVisible(true);
+    setPendingScannedCode(null);
+    setAssetModalVisible(true);
   };
 
   // const handleAssetGalleryPick = (selection: PickedAssetCategory) => {
@@ -3212,16 +3200,12 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
                       setEditingAsset(null);
                       setAutoOpenCameraForEdit(false);
+                      setPendingScannedCode(null);
 
-                      setAssetCategoryModalVisible(false);
                       setAssetGalleryVisible(false);
-                      setAssetGalleryMode("create");
+                      setCreateAssetInitialData(undefined);
 
-                      setCreateAssetInitialData(
-                        buildNewAssetInitialData("Other"),
-                      );
-
-                      setAssetModalVisible(true);
+                      setAssetCategoryModalVisible(true);
                     }}
                     activeOpacity={0.85}
                   >
