@@ -16,7 +16,10 @@ import {
   useCodeScanner,
 } from "react-native-vision-camera";
 import { useTranslation } from "react-i18next";
-import { createCodeDeduper, normalizeCode } from "../components/utils/codeScannerUtils";
+import {
+  createCodeDeduper,
+  normalizeCode,
+} from "../components/utils/codeScannerUtils";
 
 type Props = {
   visible: boolean;
@@ -33,7 +36,7 @@ export default function CodeScannerModal({
   onClose,
   onDetected,
 }: Props) {
-  const device:any = useCameraDevice("back");
+  const device: any = useCameraDevice("back");
   const { hasPermission, requestPermission } = useCameraPermission();
   const lockedRef = useRef(false);
   const allowScanRef = useRef(createCodeDeduper(2000));
@@ -49,19 +52,25 @@ export default function CodeScannerModal({
   useEffect(() => {
     if (!visible) {
       lockedRef.current = false;
-       setTorch("off");
+      setTorch("off");
     }
   }, [visible]);
 
   const codeScanner = useCodeScanner({
-    codeTypes: ["qr", "ean-13", "ean-8", "code-128", "code-39", "upc-a", "upc-e"],
+    codeTypes: [
+      "qr",
+      "ean-13",
+      "ean-8",
+      "code-128",
+      "code-39",
+      "upc-a",
+      "upc-e",
+    ],
     onCodeScanned: (codes) => {
       if (!visible || loading || lockedRef.current || !codes?.length) return;
 
       const raw =
-        codes[0]?.value ||
-        codes.find((item) => !!item?.value)?.value ||
-        "";
+        codes[0]?.value || codes.find((item) => !!item?.value)?.value || "";
 
       const clean = normalizeCode(raw);
       if (!clean) return;
@@ -78,7 +87,7 @@ export default function CodeScannerModal({
 
   const cameraReady = useMemo(
     () => visible && !!device && hasPermission,
-    [visible, device, hasPermission]
+    [visible, device, hasPermission],
   );
 
   return (
@@ -94,30 +103,32 @@ export default function CodeScannerModal({
           <TouchableWithoutFeedback>
             <View style={styles.card}>
               <View style={styles.header}>
-
                 <TouchableOpacity
-  onPress={() => setTorch((prev) => (prev === "on" ? "off" : "on"))}
-  style={[styles.flashBtn, torch === "on" && styles.flashBtnActive]}
-  activeOpacity={0.85}
->
-  <Text
-    style={[
-      styles.flashText,
-      torch === "on" && styles.flashTextActive,
-    ]}
-  >
-    {torch === "on" ? "Flash On" : "Flash"}
-  </Text>
-</TouchableOpacity>
+                  onPress={() =>
+                    setTorch((prev) => (prev === "on" ? "off" : "on"))
+                  }
+                  style={[
+                    styles.flashBtn,
+                    torch === "on" && styles.flashBtnActive,
+                  ]}
+                  activeOpacity={0.85}
+                >
+                  <Text
+                    style={[
+                      styles.flashText,
+                      torch === "on" && styles.flashTextActive,
+                    ]}
+                  >
+                    {torch === "on" ? "Flash On" : "Flash"}
+                  </Text>
+                </TouchableOpacity>
                 <Text style={styles.title}>{t("codeScanner.title")}</Text>
                 <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
                   <Text style={styles.closeText}>✕</Text>
                 </TouchableOpacity>
               </View>
 
-              <Text style={styles.subtitle}>
-                {t("codeScanner.subtitle")}
-              </Text>
+              <Text style={styles.subtitle}>{t("codeScanner.subtitle")}</Text>
 
               <View style={styles.cameraShell}>
                 {cameraReady ? (
@@ -126,15 +137,15 @@ export default function CodeScannerModal({
                     device={device}
                     isActive={visible}
                     codeScanner={codeScanner}
-                     torch={torch}
+                    torch={torch}
                   />
                 ) : (
                   <View style={styles.placeholder}>
-                   <Text style={styles.placeholderText}>
-                    {!hasPermission
-                   ? t("codeScanner.permissionRequired")
-                  : t("codeScanner.loadingCamera")}
-                  </Text>
+                    <Text style={styles.placeholderText}>
+                      {!hasPermission
+                        ? t("codeScanner.permissionRequired")
+                        : t("codeScanner.loadingCamera")}
+                    </Text>
                   </View>
                 )}
 
@@ -143,15 +154,13 @@ export default function CodeScannerModal({
                   <View style={styles.loadingOverlay}>
                     <ActivityIndicator size="small" color={ACC} />
                     <Text style={styles.loadingText}>
-                   {t("codeScanner.lookingUp")}
-                  </Text>
+                      {t("codeScanner.lookingUp")}
+                    </Text>
                   </View>
                 )}
               </View>
 
-              <Text style={styles.helper}>
-                {t("codeScanner.helper")}
-              </Text>
+              <Text style={styles.helper}>{t("codeScanner.helper")}</Text>
             </View>
           </TouchableWithoutFeedback>
         </View>
@@ -259,32 +268,32 @@ const styles = StyleSheet.create({
   },
 
   headerActions: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 8,
-},
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
 
-flashBtn: {
-  paddingHorizontal: 10,
-  paddingVertical: 7,
-  borderRadius: 999,
-  backgroundColor: "rgba(255,255,255,0.12)",
-  borderWidth: 1,
-  borderColor: "rgba(255,255,255,0.18)",
-},
+  flashBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+  },
 
-flashBtnActive: {
-  backgroundColor: ACC,
-  borderColor: ACC,
-},
+  flashBtnActive: {
+    backgroundColor: ACC,
+    borderColor: ACC,
+  },
 
-flashText: {
-  color: "#fff",
-  fontSize: 12,
-  fontWeight: "800",
-},
+  flashText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "800",
+  },
 
-flashTextActive: {
-  color: "#000",
-},
+  flashTextActive: {
+    color: "#000",
+  },
 });
