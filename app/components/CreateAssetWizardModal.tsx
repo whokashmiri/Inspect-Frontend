@@ -25,6 +25,8 @@ import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import AssetCameraModal from "./AssetCameraModal";
 import AssetGalleryScreen, { PickedAssetCategory } from "./AssetGalleryScreen";
+import CodeScannerModal from "../components/CodeScannerModal";
+import { normalizeCode } from "../components/utils/codeScannerUtils";
 
 import OtherAssetForm, {
   cleanOtherAssetDraft,
@@ -250,6 +252,8 @@ export default function CreateAssetWizardModal({
   const [step, setStep] = useState(1);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraMode, setCameraMode] = useState<CameraMode>("photos");
+
+  const [barcodeScannerOpen, setBarcodeScannerOpen] = useState(false);
 
   const [assetGalleryOpen, setAssetGalleryOpen] = useState(false);
 
@@ -903,6 +907,35 @@ export default function CreateAssetWizardModal({
 
   const mainAssetImageUri =
     draft.images?.main?.uri || draft.images?.main?.url || null;
+
+  const handleBarcodeScanned = (rawCode: string) => {
+    const code = normalizeCode(rawCode);
+
+    if (!code) {
+      showSnackbar("Could not read barcode", "error");
+      return;
+    }
+
+    setDraft((prev) => {
+      const hadExistingCode = !!prev.code?.trim();
+
+      setTimeout(() => {
+        showSnackbar(
+          hadExistingCode
+            ? "Barcode replaced successfully"
+            : "Barcode added successfully",
+          "success",
+        );
+      }, 0);
+
+      return {
+        ...prev,
+        code,
+      };
+    });
+
+    setBarcodeScannerOpen(false);
+  };
   return (
     <>
       <Modal
@@ -947,29 +980,47 @@ export default function CreateAssetWizardModal({
                             ? t("asset.editAsset")
                             : t("asset.createAsset")}
                         </Text>
+                        <View style={styles.assetCodeRow}>
+                          <TextInput
+                            value={draft.code || ""}
+                            onChangeText={(text) =>
+                              setDraft((prev) => ({
+                                ...prev,
+                                code: text,
+                              }))
+                            }
+                            placeholder={t("Barcode") || "Code"}
+                            placeholderTextColor="#767B91"
+                            style={styles.assetCodeInput}
+                            returnKeyType="done"
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                          />
 
-                        <TextInput
-                          value={draft.code || ""}
-                          onChangeText={(text) =>
-                            setDraft((prev) => ({
-                              ...prev,
-                              code: text,
-                            }))
-                          }
-                          placeholder={t("Barcode") || "Code"}
-                          placeholderTextColor="#767B91"
-                          style={styles.assetCodeInput}
-                          returnKeyType="done"
-                        />
+                          <TouchableOpacity
+                            style={styles.assetCodeScanBtn}
+                            onPress={() => {
+                              Keyboard.dismiss();
+                              setBarcodeScannerOpen(true);
+                            }}
+                            activeOpacity={0.85}
+                          >
+                            <Ionicons
+                              name="barcode-outline"
+                              size={18}
+                              color="#ffffff"
+                            />
+                          </TouchableOpacity>
+                        </View>
 
-                        <View style={styles.categoryBadge}>
+                        {/* <View style={styles.categoryBadge}>
                           <Text
                             style={styles.categoryBadgeText}
                             numberOfLines={1}
                           >
                             {displayCategory}
                           </Text>
-                        </View>
+                        </View> */}
                       </View>
                     </View>
 
@@ -1752,6 +1803,15 @@ export default function CreateAssetWizardModal({
           setCameraOpen(false);
         }}
       />
+
+      <CodeScannerModal
+        visible={barcodeScannerOpen}
+        loading={false}
+        onClose={() => {
+          setBarcodeScannerOpen(false);
+        }}
+        onDetected={handleBarcodeScanned}
+      />
     </>
   );
 }
@@ -1778,21 +1838,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-  },
-
-  assetCodeInput: {
-    minWidth: 80,
-    maxWidth: 200,
-    height: 34,
-    paddingHorizontal: 6,
-    paddingVertical: 0,
-    fontSize: 11,
-    fontWeight: "700",
-    color: TEXT,
-    backgroundColor: SURFACE,
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 8,
   },
 
   modalCard: {
@@ -1959,6 +2004,35 @@ const styles = StyleSheet.create({
     color: TEXT,
     fontSize: 12,
     fontWeight: "800",
+  },
+
+  assetCodeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+
+  assetCodeInput: {
+    width: 100,
+    height: 34,
+    paddingHorizontal: 8,
+    paddingVertical: 0,
+    fontSize: 11,
+    fontWeight: "700",
+    color: TEXT,
+    backgroundColor: SURFACE,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 8,
+  },
+
+  assetCodeScanBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: ACC,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   conditionBoxFull: {
