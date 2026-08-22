@@ -598,10 +598,6 @@ export default function FolderAndAssetScreen({ route }: Props) {
       const shouldUseOfflineCache =
         downloadedOffline && (isOnline === false || isOnline === null);
 
-      /*
-       * For now, if fully offline, collect locations
-       * from locally cached assets.
-       */
       if (shouldUseOfflineCache) {
         const locations = new Map<
           string,
@@ -3213,11 +3209,19 @@ export default function FolderAndAssetScreen({ route }: Props) {
                     style={styles.secondaryBtn}
                     onPress={() => {
                       Keyboard.dismiss();
+
                       setEditingAsset(null);
-                      setCreateAssetInitialData(undefined);
-                      setAssetCategoryModalVisible(true);
-                      setAssetGalleryMode("create");
+                      setAutoOpenCameraForEdit(false);
+
+                      setAssetCategoryModalVisible(false);
                       setAssetGalleryVisible(false);
+                      setAssetGalleryMode("create");
+
+                      setCreateAssetInitialData(
+                        buildNewAssetInitialData("Other"),
+                      );
+
+                      setAssetModalVisible(true);
                     }}
                     activeOpacity={0.85}
                   >
