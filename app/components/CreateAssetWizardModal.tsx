@@ -936,6 +936,70 @@ export default function CreateAssetWizardModal({
 
     setBarcodeScannerOpen(false);
   };
+
+  const renderStatusRow = () =>
+    mode === "edit" ? (
+      <View style={styles.statusInlineRow}>
+        <TouchableOpacity
+          style={styles.doneInlineBtn}
+          onPress={() =>
+            setDraft((prev) => ({
+              ...prev,
+              isDone: !prev.isDone,
+            }))
+          }
+          activeOpacity={0.75}
+        >
+          <View
+            style={[
+              styles.smallCheckbox,
+              draft.isDone && styles.smallCheckboxChecked,
+            ]}
+          >
+            {draft.isDone && <Text style={styles.smallCheckmark}>✓</Text>}
+          </View>
+          <Text style={styles.statusInlineText}>
+            {t("asset.markAsDone") || "Mark as done"}
+          </Text>
+        </TouchableOpacity>
+
+        <View style={styles.statusDivider} />
+
+        <View style={styles.presentInlineGroup}>
+          <Text style={styles.statusInlineText}>
+            {t("asset.assetIsPresent") || "Asset is present"}
+          </Text>
+
+          <TouchableOpacity
+            style={styles.smallRadioOption}
+            onPress={() => setDraft((prev) => ({ ...prev, isPresent: true }))}
+            activeOpacity={0.75}
+          >
+            <Ionicons
+              name={draft.isPresent ? "radio-button-on" : "radio-button-off"}
+              size={15}
+              color={ACC}
+            />
+            <Text style={styles.smallRadioText}>
+              {t("common.yes") || "Yes"}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.smallRadioOption}
+            onPress={() => setDraft((prev) => ({ ...prev, isPresent: false }))}
+            activeOpacity={0.75}
+          >
+            <Ionicons
+              name={!draft.isPresent ? "radio-button-on" : "radio-button-off"}
+              size={15}
+              color={ACC}
+            />
+            <Text style={styles.smallRadioText}>{t("common.no") || "No"}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    ) : null;
   return (
     <>
       <Modal
@@ -1191,6 +1255,7 @@ export default function CreateAssetWizardModal({
                           height={height}
                           openOtherPhotoCamera={openOtherPhotoCamera}
                           onPreviewImage={setPreviewImageUri}
+                          renderBeforeDetailsButton={renderStatusRow}
                         />
                       )}
 
@@ -1207,9 +1272,96 @@ export default function CreateAssetWizardModal({
                           height={height}
                           openVehiclePhotoCamera={openVehiclePhotoCamera}
                           onPreviewImage={setPreviewImageUri}
+                          renderBeforeDetailsButton={renderStatusRow}
                           // t={t}
                         />
                       )}
+
+                      {/* {mode === "edit" && (
+                        <View style={styles.statusInlineRow}>
+                          <TouchableOpacity
+                            style={styles.doneInlineBtn}
+                            onPress={() =>
+                              setDraft((prev) => ({
+                                ...prev,
+                                isDone: !prev.isDone,
+                              }))
+                            }
+                            activeOpacity={0.75}
+                          >
+                            <View
+                              style={[
+                                styles.smallCheckbox,
+                                draft.isDone && styles.smallCheckboxChecked,
+                              ]}
+                            >
+                              {draft.isDone && (
+                                <Text style={styles.smallCheckmark}>✓</Text>
+                              )}
+                            </View>
+
+                            <Text style={styles.statusInlineText}>
+                              {t("asset.markAsDone") || "Mark as done"}
+                            </Text>
+                          </TouchableOpacity>
+
+                          <View style={styles.statusDivider} />
+
+                          <View style={styles.presentInlineGroup}>
+                            <Text style={styles.statusInlineText}>
+                              {t("asset.assetIsPresent") || "Asset is present"}
+                            </Text>
+
+                            <TouchableOpacity
+                              style={styles.smallRadioOption}
+                              onPress={() =>
+                                setDraft((prev) => ({
+                                  ...prev,
+                                  isPresent: true,
+                                }))
+                              }
+                              activeOpacity={0.75}
+                            >
+                              <Ionicons
+                                name={
+                                  draft.isPresent
+                                    ? "radio-button-on"
+                                    : "radio-button-off"
+                                }
+                                size={15}
+                                color={ACC}
+                              />
+                              <Text style={styles.smallRadioText}>
+                                {t("common.yes") || "Yes"}
+                              </Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={styles.smallRadioOption}
+                              onPress={() =>
+                                setDraft((prev) => ({
+                                  ...prev,
+                                  isPresent: false,
+                                }))
+                              }
+                              activeOpacity={0.75}
+                            >
+                              <Ionicons
+                                name={
+                                  !draft.isPresent
+                                    ? "radio-button-on"
+                                    : "radio-button-off"
+                                }
+                                size={15}
+                                color={ACC}
+                              />
+                              <Text style={styles.smallRadioText}>
+                                {t("common.no") || "No"}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )} */}
 
                       {detailsExpanded && (
                         <>
@@ -1362,93 +1514,6 @@ export default function CreateAssetWizardModal({
                               )}
                             </View>
                           </View>
-
-                          {mode === "edit" && (
-                            <View style={styles.statusInlineRow}>
-                              <TouchableOpacity
-                                style={styles.doneInlineBtn}
-                                onPress={() =>
-                                  setDraft((prev) => ({
-                                    ...prev,
-                                    isDone: !prev.isDone,
-                                  }))
-                                }
-                                activeOpacity={0.75}
-                              >
-                                <View
-                                  style={[
-                                    styles.smallCheckbox,
-                                    draft.isDone && styles.smallCheckboxChecked,
-                                  ]}
-                                >
-                                  {draft.isDone && (
-                                    <Text style={styles.smallCheckmark}>✓</Text>
-                                  )}
-                                </View>
-
-                                <Text style={styles.statusInlineText}>
-                                  {t("asset.markAsDone") || "Mark as done"}
-                                </Text>
-                              </TouchableOpacity>
-
-                              <View style={styles.statusDivider} />
-
-                              <View style={styles.presentInlineGroup}>
-                                <Text style={styles.statusInlineText}>
-                                  {t("asset.assetIsPresent") ||
-                                    "Asset is present"}
-                                </Text>
-
-                                <TouchableOpacity
-                                  style={styles.smallRadioOption}
-                                  onPress={() =>
-                                    setDraft((prev) => ({
-                                      ...prev,
-                                      isPresent: true,
-                                    }))
-                                  }
-                                  activeOpacity={0.75}
-                                >
-                                  <Ionicons
-                                    name={
-                                      draft.isPresent
-                                        ? "radio-button-on"
-                                        : "radio-button-off"
-                                    }
-                                    size={15}
-                                    color={ACC}
-                                  />
-                                  <Text style={styles.smallRadioText}>
-                                    {t("common.yes") || "Yes"}
-                                  </Text>
-                                </TouchableOpacity>
-
-                                <TouchableOpacity
-                                  style={styles.smallRadioOption}
-                                  onPress={() =>
-                                    setDraft((prev) => ({
-                                      ...prev,
-                                      isPresent: false,
-                                    }))
-                                  }
-                                  activeOpacity={0.75}
-                                >
-                                  <Ionicons
-                                    name={
-                                      !draft.isPresent
-                                        ? "radio-button-on"
-                                        : "radio-button-off"
-                                    }
-                                    size={15}
-                                    color={ACC}
-                                  />
-                                  <Text style={styles.smallRadioText}>
-                                    {t("common.no") || "No"}
-                                  </Text>
-                                </TouchableOpacity>
-                              </View>
-                            </View>
-                          )}
                         </>
                       )}
                     </>
