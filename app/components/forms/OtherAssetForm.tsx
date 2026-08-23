@@ -30,6 +30,7 @@ type OtherAssetFormProps = {
 
   detailsExpanded: boolean;
   setDetailsExpanded: React.Dispatch<React.SetStateAction<boolean>>;
+  employers?: string[];
 
   assetLocations?: {
     value: string;
@@ -111,6 +112,9 @@ export function cleanOtherAssetDraft(draft: AssetDraft): AssetDraft {
     ...draft,
 
     assetType: "other",
+    client_code: (draft as any).client_code?.trim() || null,
+
+    employer: (draft as any).employer?.trim() || null,
     code: draft.code?.trim() || undefined,
 
     quantity: Math.max(1, finalQuantity),
@@ -137,6 +141,7 @@ export default function OtherAssetForm({
   detailsExpanded,
   setDetailsExpanded,
   assetLocations = [],
+  employers = [],
   showSnackbar,
   previewSize,
   imageLoadingMap,
@@ -149,6 +154,14 @@ export default function OtherAssetForm({
   const { t, i18n } = useTranslation();
   const [locationDropdownOpen, setLocationDropdownOpen] = useState(false);
   const [locationSearchText, setLocationSearchText] = useState("");
+
+  const [employerDropdownOpen, setEmployerDropdownOpen] = useState(false);
+  const [employerSearchText, setEmployerSearchText] = useState("");
+
+  const [editingEmployer, setEditingEmployer] = useState<string | null>(null);
+  const [editingEmployerText, setEditingEmployerText] = useState("");
+
+  const [newEmployerText, setNewEmployerText] = useState("");
 
   const [addLocationModalOpen, setAddLocationModalOpen] = useState(false);
 
@@ -166,6 +179,12 @@ export default function OtherAssetForm({
   const newAssetLocation = getNewAssetLocation(draft);
 
   const selectedLocation = getEffectiveAssetLocation(draft);
+  const selectedEmployer = String(
+    (draft as any).employer ??
+      (draft as any).normalizedData?.employer ??
+      (draft as any).rawData?.employer ??
+      "",
+  ).trim();
   const otherPreviewSlots = [
     { key: "main", label: "asset.mainPhoto", icon: "document-text-outline" },
     { key: "details", label: "asset.details", icon: "document-text-outline" },
@@ -226,6 +245,40 @@ export default function OtherAssetForm({
       location.value.toLocaleLowerCase().includes(search),
     );
   }, [projectAssetLocations, locationSearchText]);
+
+  const projectEmployers = useMemo(() => {
+    const unique = new Map<string, string>();
+
+    const addEmployer = (value?: string | null) => {
+      const text = String(value || "").trim();
+
+      if (!text) return;
+
+      const key = text.toLocaleLowerCase();
+
+      if (!unique.has(key)) {
+        unique.set(key, text);
+      }
+    };
+
+    employers.forEach(addEmployer);
+
+    addEmployer(selectedEmployer);
+
+    return Array.from(unique.values()).sort((a, b) => a.localeCompare(b));
+  }, [employers, selectedEmployer]);
+
+  const filteredProjectEmployers = useMemo(() => {
+    const search = employerSearchText.trim().toLocaleLowerCase();
+
+    if (!search) {
+      return projectEmployers;
+    }
+
+    return projectEmployers.filter((employer) =>
+      employer.toLocaleLowerCase().includes(search),
+    );
+  }, [projectEmployers, employerSearchText]);
   const getQuantity = () => getOtherAssetQuantity(draft);
 
   const updateQuantity = (nextValue: number | string) => {
@@ -307,6 +360,54 @@ export default function OtherAssetForm({
   };
 
   const otherPhotos = draft.images.other || [];
+  const selectEmployer = (value: string) => {
+    setDraft(
+      (prev) =>
+        ({
+          ...prev,
+          employer: value,
+        }) as any,
+    );
+
+    setEmployerSearchText("");
+    setEmployerDropdownOpen(false);
+    Keyboard.dismiss();
+  };
+
+  const saveNewEmployer = () => {
+    const value = newEmployerText.trim();
+
+    if (!value) {
+      showSnackbar?.("Enter an employer", "error");
+      return;
+    }
+
+    selectEmployer(value);
+    setNewEmployerText("");
+  };
+
+  const saveEditedEmployer = () => {
+    const value = editingEmployerText.trim();
+
+    if (!value) {
+      showSnackbar?.("Enter an employer", "error");
+      return;
+    }
+
+    setDraft(
+      (prev) =>
+        ({
+          ...prev,
+          employer: value,
+        }) as any,
+    );
+
+    setEditingEmployer(null);
+    setEditingEmployerText("");
+    setEmployerDropdownOpen(false);
+
+    showSnackbar?.("Employer updated", "success");
+  };
 
   const imageCount =
     Number(Boolean(draft.images.main)) +
@@ -337,86 +438,93 @@ export default function OtherAssetForm({
   return (
     <>
       <View style={styles.otherAssetControls}>
-        <View style={styles.assetTypeQuantityRow}>
-          <View style={styles.assetTypeFieldWrap}>
-            <Text style={styles.fieldLabel}>Location</Text>
+        <View style={{ width: "100%" }}>
+          <Text style={styles.fieldLabel}>Location</Text>
 
-            <View style={styles.assetTypeInputLikeWrap}>
-              <TouchableOpacity
-                style={styles.assetTypeInputChoose}
-                onPress={() => {
-                  setLocationDropdownOpen((prev) => {
-                    const next = !prev;
+          <View style={styles.assetTypeInputLikeWrap}>
+            <TouchableOpacity
+              style={styles.assetTypeInputChoose}
+              onPress={() => {
+                setLocationDropdownOpen((prev) => !prev);
+                setEmployerDropdownOpen(false);
+                setEmployerSearchText("");
+                setAddLocationModalOpen(false);
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.assetTypeInputText} numberOfLines={1}>
+                {selectedLocation || t("common.choose")}
+              </Text>
 
-                    if (!next) {
-                      setLocationSearchText("");
-                      Keyboard.dismiss();
-                    }
-
-                    return next;
-                  });
-
-                  setAddLocationModalOpen(false);
-                }}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.assetTypeInputText} numberOfLines={1}>
-                  {selectedLocation || t("common.choose")}
-                </Text>
-
-                <Ionicons
-                  name={locationDropdownOpen ? "chevron-up" : "chevron-down"}
-                  size={16}
-                  color={TEXT}
-                />
-              </TouchableOpacity>
-
-              <View style={styles.assetTypeInputDivider} />
-
-              <TouchableOpacity
-                style={styles.assetTypeInputPlus}
-                onPress={() => {
-                  setNewLocationText("");
-                  setLocationSearchText("");
-                  setAddLocationModalOpen(true);
-                  setLocationDropdownOpen(false);
-                }}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="add" size={18} color={TEXT} />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <View style={styles.quantityFieldWrap}>
-            <Text style={styles.fieldLabel}> {t("asset.quantity")}</Text>
-
-            <View style={styles.quantityControl}>
-              <TouchableOpacity
-                style={styles.quantityIconBtn}
-                onPress={() => updateQuantity(Number(getQuantity()) - 1)}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="remove" size={16} color={TEXT} />
-              </TouchableOpacity>
-
-              <TextInput
-                value={getQuantity()}
-                onChangeText={updateQuantity}
-                keyboardType="numeric"
-                style={styles.quantityInput}
-                selectTextOnFocus
-                textAlign="center"
+              <Ionicons
+                name={locationDropdownOpen ? "chevron-up" : "chevron-down"}
+                size={16}
+                color={TEXT}
               />
+            </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.quantityIconBtn}
-                onPress={() => updateQuantity(Number(getQuantity()) + 1)}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="add" size={16} color={TEXT} />
-              </TouchableOpacity>
-            </View>
+            <View style={styles.assetTypeInputDivider} />
+
+            <TouchableOpacity
+              style={styles.assetTypeInputPlus}
+              onPress={() => {
+                setNewLocationText("");
+                setLocationSearchText("");
+                setAddLocationModalOpen(true);
+                setLocationDropdownOpen(false);
+                setEmployerDropdownOpen(false);
+              }}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="add" size={18} color={TEXT} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View
+          style={{
+            width: "100%",
+            marginTop: 1,
+          }}
+        >
+          <Text style={styles.fieldLabel}>Employer</Text>
+
+          <View style={styles.assetTypeInputLikeWrap}>
+            <TouchableOpacity
+              style={styles.assetTypeInputChoose}
+              onPress={() => {
+                setEmployerDropdownOpen((prev) => !prev);
+
+                setLocationDropdownOpen(false);
+                setLocationSearchText("");
+                setAddLocationModalOpen(false);
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.assetTypeInputText} numberOfLines={1}>
+                {selectedEmployer || t("common.choose")}
+              </Text>
+
+              <Ionicons
+                name={employerDropdownOpen ? "chevron-up" : "chevron-down"}
+                size={16}
+                color={TEXT}
+              />
+            </TouchableOpacity>
+
+            <View style={styles.assetTypeInputDivider} />
+
+            <TouchableOpacity
+              style={styles.assetTypeInputPlus}
+              onPress={() => {
+                setEmployerDropdownOpen(true);
+                setLocationDropdownOpen(false);
+                setEmployerSearchText("");
+              }}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="add" size={18} color={TEXT} />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -541,25 +649,83 @@ export default function OtherAssetForm({
 
         {renderBeforeDetailsButton?.()}
 
-        <TouchableOpacity
-          style={styles.addDetailsBtn}
-          onPress={() => setDetailsExpanded((prev) => !prev)}
-          activeOpacity={0.85}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "flex-end",
+            gap: 10,
+          }}
         >
-          <Ionicons
-            name={
-              detailsExpanded ? "remove-circle-outline" : "add-circle-outline"
-            }
-            size={18}
-            color={ACC}
-          />
+          <TouchableOpacity
+            style={[
+              styles.addDetailsBtn,
+              {
+                flex: 1,
+                marginBottom: 0,
+              },
+            ]}
+            onPress={() => setDetailsExpanded((prev) => !prev)}
+            activeOpacity={0.85}
+          >
+            <Ionicons
+              name={
+                detailsExpanded ? "remove-circle-outline" : "add-circle-outline"
+              }
+              size={18}
+              color={ACC}
+            />
 
-          <Text style={styles.addDetailsText}>
-            {detailsExpanded
-              ? t("asset.hideDetails")
-              : t("asset.addAssetDetails")}
-          </Text>
-        </TouchableOpacity>
+            <Text style={styles.addDetailsText}>
+              {detailsExpanded
+                ? t("asset.hideDetails")
+                : t("asset.addAssetDetails")}
+            </Text>
+          </TouchableOpacity>
+
+          <View
+            style={{
+              width: 150,
+              transform: [{ translateY: -9 }],
+            }}
+          >
+            <Text
+              style={[
+                styles.fieldLabel,
+                {
+                  fontSize: 10,
+                  marginBottom: 3,
+                },
+              ]}
+            >
+              {t("asset.quantity")}
+            </Text>
+
+            <View style={styles.quantityControl}>
+              <TouchableOpacity
+                style={styles.quantityIconBtn}
+                onPress={() => updateQuantity(Number(getQuantity()) - 1)}
+              >
+                <Ionicons name="remove" size={15} color={TEXT} />
+              </TouchableOpacity>
+
+              <TextInput
+                value={getQuantity()}
+                onChangeText={updateQuantity}
+                keyboardType="numeric"
+                style={styles.quantityInput}
+                selectTextOnFocus
+                textAlign="center"
+              />
+
+              <TouchableOpacity
+                style={styles.quantityIconBtn}
+                onPress={() => updateQuantity(Number(getQuantity()) + 1)}
+              >
+                <Ionicons name="add" size={15} color={TEXT} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
 
         {locationDropdownOpen && (
           <View style={styles.assetTypeDropdownMenuFull}>
@@ -739,6 +905,153 @@ export default function OtherAssetForm({
                   );
                 })
               )}
+            </ScrollView>
+          </View>
+        )}
+
+        {employerDropdownOpen && (
+          <View style={styles.assetTypeDropdownMenuFull}>
+            <View style={styles.locationSearchRow}>
+              <Ionicons name="search-outline" size={17} color="#767B91" />
+
+              <TextInput
+                value={employerSearchText}
+                onChangeText={setEmployerSearchText}
+                placeholder="Search or add employer"
+                placeholderTextColor="#767B91"
+                style={styles.locationSearchInput}
+                autoCorrect={false}
+              />
+
+              {!!employerSearchText && (
+                <TouchableOpacity
+                  style={styles.locationSearchClearBtn}
+                  onPress={() => setEmployerSearchText("")}
+                >
+                  <Ionicons name="close-circle" size={18} color="#767B91" />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <ScrollView
+              style={styles.locationDropdownScroll}
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled
+            >
+              {filteredProjectEmployers.map((employer) => {
+                const isEditing = editingEmployer === employer;
+
+                const isSelected = selectedEmployer === employer;
+
+                return (
+                  <View
+                    key={employer}
+                    style={[
+                      styles.addTypeDropdownOption,
+                      isEditing && styles.addTypeDropdownOptionEditing,
+                    ]}
+                  >
+                    {isEditing ? (
+                      <>
+                        <TextInput
+                          value={editingEmployerText}
+                          onChangeText={setEditingEmployerText}
+                          style={styles.assetTypeEditInput}
+                          autoFocus
+                          selectTextOnFocus
+                          placeholder="Edit employer"
+                          placeholderTextColor="#767B91"
+                          onSubmitEditing={saveEditedEmployer}
+                        />
+
+                        <TouchableOpacity
+                          style={styles.assetTypeMiniAction}
+                          onPress={saveEditedEmployer}
+                        >
+                          <Ionicons name="checkmark" size={18} color={ACC} />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.assetTypeMiniAction}
+                          onPress={() => {
+                            setEditingEmployer(null);
+                            setEditingEmployerText("");
+                          }}
+                        >
+                          <Ionicons name="close" size={18} color="#FF4444" />
+                        </TouchableOpacity>
+                      </>
+                    ) : (
+                      <>
+                        <TouchableOpacity
+                          style={styles.assetTypeOptionMain}
+                          onPress={() => selectEmployer(employer)}
+                        >
+                          <Text
+                            style={[
+                              styles.addTypeDropdownOptionText,
+                              isSelected &&
+                                styles.addTypeDropdownOptionTextSelected,
+                            ]}
+                            numberOfLines={2}
+                          >
+                            {employer}
+                          </Text>
+
+                          {isSelected && (
+                            <Ionicons name="checkmark" size={16} color={ACC} />
+                          )}
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.assetTypeMiniAction}
+                          onPress={() => {
+                            setEditingEmployer(employer);
+                            setEditingEmployerText(employer);
+                          }}
+                        >
+                          <Ionicons
+                            name="pencil-outline"
+                            size={16}
+                            color={ACC}
+                          />
+                        </TouchableOpacity>
+                      </>
+                    )}
+                  </View>
+                );
+              })}
+
+              {!!employerSearchText.trim() &&
+                !projectEmployers.some(
+                  (item) =>
+                    item.toLocaleLowerCase() ===
+                    employerSearchText.trim().toLocaleLowerCase(),
+                ) && (
+                  <TouchableOpacity
+                    style={styles.addTypeDropdownOption}
+                    onPress={() => {
+                      setNewEmployerText(employerSearchText);
+
+                      setDraft(
+                        (prev) =>
+                          ({
+                            ...prev,
+                            employer: employerSearchText.trim(),
+                          }) as any,
+                      );
+
+                      setEmployerSearchText("");
+                      setEmployerDropdownOpen(false);
+                    }}
+                  >
+                    <Ionicons name="add-circle-outline" size={18} color={ACC} />
+
+                    <Text style={styles.addTypeDropdownOptionText}>
+                      Add "{employerSearchText.trim()}"
+                    </Text>
+                  </TouchableOpacity>
+                )}
             </ScrollView>
           </View>
         )}
