@@ -19,6 +19,7 @@ import {
   ActivityIndicator,
   StyleSheet,
 } from "react-native";
+import { projectContentApi } from "../../api/api";
 
 import { Audio } from "expo-av";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
@@ -166,10 +167,25 @@ const getInitialDraft = (initialData?: Partial<AssetDraft>): AssetDraft => {
   );
 
   const quantity = (initialData as any)?.quantity ?? 1;
+  const initialClientCode = String(
+    (initialData as any)?.client_code ??
+      (initialData as any)?.normalizedData?.client_code ??
+      (initialData as any)?.rawData?.client_code ??
+      "",
+  ).trim();
+
+  const initialEmployer = String(
+    (initialData as any)?.employer ??
+      (initialData as any)?.normalizedData?.employer ??
+      (initialData as any)?.rawData?.employer ??
+      "",
+  ).trim();
 
   return {
     images: normalizeInitialImages(initialData?.images, initialData?.assetType),
     name: initialData?.name || "",
+    client_code: initialClientCode,
+    employer: initialEmployer,
     code: initialData?.code?.trim() || undefined,
     normalizedData:
       (initialData as any)?.normalizedData &&
@@ -301,6 +317,7 @@ export default function CreateAssetWizardModal({
   const [draft, setDraft] = useState<AssetDraft>(getInitialDraft(initialData));
 
   const [conditionModalOpen, setConditionModalOpen] = useState(false);
+  const [projectEmployers, setProjectEmployers] = useState<string[]>([]);
   const [addConditionMode, setAddConditionMode] = useState(false);
   const [newConditionText, setNewConditionText] = useState("");
 
@@ -362,6 +379,40 @@ export default function CreateAssetWizardModal({
       stopVoicePlayback();
     }
   }, [visible, initialData, autoOpenCamera]);
+
+  useEffect(() => {
+    if (!visible || !projectId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadEmployers = async () => {
+      try {
+        const result = await projectContentApi.getProjectEmployers(projectId);
+
+        if (cancelled) {
+          return;
+        }
+
+        setProjectEmployers(
+          Array.isArray(result?.employers) ? result.employers : [],
+        );
+      } catch (error) {
+        console.error("[Project Employers Load Error]", error);
+
+        if (!cancelled) {
+          setProjectEmployers([]);
+        }
+      }
+    };
+
+    loadEmployers();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, projectId]);
 
   useEffect(() => {
     const keyboardShowEvent =
@@ -443,11 +494,11 @@ export default function CreateAssetWizardModal({
 
   const vehicleModalMaxHeight = detailsExpanded ? height * 0.94 : height * 0.86;
 
-  const vehicleModalMinHeight = detailsExpanded ? height * 0.92 : height * 0.5;
+  const vehicleModalMinHeight = detailsExpanded ? height * 0.9 : height * 0.56;
 
   const otherModalMaxHeight = detailsExpanded ? height * 0.88 : height * 0.72;
 
-  const otherModalMinHeight = detailsExpanded ? height * 0.84 : height * 0.65;
+  const otherModalMinHeight = detailsExpanded ? height * 0.84 : height * 0.7;
 
   const modalMaxHeight = isVehicle
     ? vehicleModalMaxHeight
@@ -456,12 +507,6 @@ export default function CreateAssetWizardModal({
   const modalMinHeight = isVehicle
     ? vehicleModalMinHeight
     : otherModalMinHeight;
-
-  const effectiveAssetLocation = getEffectiveAssetLocation(draft);
-
-  const displayCategory = isVehicle
-    ? "vehicle"
-    : effectiveAssetLocation || "other";
 
   const getShortVoiceName = () => {
     if (isRecording) return t("asset.recording");
@@ -688,7 +733,9 @@ export default function CreateAssetWizardModal({
 
     return {
       ...draft,
+      client_code: (draft as any).client_code?.trim() || null,
 
+      employer: (draft as any).employer?.trim() || null,
       notes: cleanedNotes || undefined,
       hasNotes: cleanedNotes.length > 0,
       code: draft.code?.trim() || undefined,
@@ -1044,37 +1091,64 @@ export default function CreateAssetWizardModal({
                             ? t("asset.editAsset")
                             : t("asset.createAsset")}
                         </Text>
-                        <View style={styles.assetCodeRow}>
-                          <TextInput
-                            value={draft.code || ""}
-                            onChangeText={(text) =>
-                              setDraft((prev) => ({
-                                ...prev,
-                                code: text,
-                              }))
-                            }
-                            placeholder={t("Barcode") || "Code"}
-                            placeholderTextColor="#767B91"
-                            style={styles.assetCodeInput}
-                            returnKeyType="done"
-                            autoCapitalize="none"
-                            autoCorrect={false}
-                          />
+                        <View style={styles.assetIdentityRow}>
+                          {/* Barcode */}
 
-                          <TouchableOpacity
-                            style={styles.assetCodeScanBtn}
-                            onPress={() => {
-                              Keyboard.dismiss();
-                              setBarcodeScannerOpen(true);
-                            }}
-                            activeOpacity={0.85}
-                          >
-                            <Ionicons
-                              name="barcode-outline"
-                              size={18}
-                              color="#ffffff"
-                            />
-                          </TouchableOpacity>
+                          <View style={styles.assetIdentityField}>
+                            {/* <Text style={styles.assetIdentityLabel}>
+                              Barcode
+                            </Text> */}
+
+                            <View style={styles.assetCodeRow}>
+                              <TextInput
+                                value={draft.code || ""}
+                                onChangeText={(text) =>
+                                  setDraft((prev) => ({
+                                    ...prev,
+                                    code: text,
+                                  }))
+                                }
+                                placeholder="Barcode"
+                                placeholderTextColor="#767B91"
+                                style={styles.assetCodeInput}
+                                returnKeyType="done"
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                              />
+
+                              <TouchableOpacity
+                                style={styles.assetCodeScanBtn}
+                                onPress={() => {
+                                  Keyboard.dismiss();
+                                  setBarcodeScannerOpen(true);
+                                }}
+                                activeOpacity={0.85}
+                              >
+                                <Ionicons
+                                  name="barcode-outline"
+                                  size={17}
+                                  color="#ffffff"
+                                />
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+
+                          {/* Client Code */}
+
+                          <View style={styles.clientCodeField}>
+                            {/* <Text style={styles.assetIdentityLabel}>
+                              Client Code
+                            </Text> */}
+
+                            <View style={styles.clientCodeDisplay}>
+                              <Text
+                                style={styles.clientCodeText}
+                                numberOfLines={1}
+                              >
+                                {(draft as any).client_code || "—"}
+                              </Text>
+                            </View>
+                          </View>
                         </View>
 
                         {/* <View style={styles.categoryBadge}>
@@ -1104,7 +1178,7 @@ export default function CreateAssetWizardModal({
                       {
                         paddingBottom: keyboardVisible
                           ? Math.max(180, keyboardHeight * 0.65)
-                          : 100,
+                          : 90,
                       },
                     ]}
                     showsVerticalScrollIndicator={false}
@@ -1246,6 +1320,7 @@ export default function CreateAssetWizardModal({
                           draft={draft}
                           setDraft={setDraft}
                           detailsExpanded={detailsExpanded}
+                          employers={projectEmployers}
                           setDetailsExpanded={setDetailsExpanded}
                           assetLocations={assetLocations}
                           showSnackbar={showSnackbar}
@@ -1892,7 +1967,7 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: "rgba(42,50,75,0.55)",
-    paddingHorizontal: 10,
+    paddingHorizontal: 5,
     paddingVertical: 1,
     justifyContent: "center",
     alignItems: "center",
@@ -1910,7 +1985,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER,
     borderRadius: 24,
-    padding: 16,
+    padding: 5,
     alignSelf: "center",
     flexShrink: 1,
     overflow: "visible",
@@ -1930,7 +2005,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 8,
     paddingVertical: 7,
-    marginBottom: 8,
+    marginBottom: 5,
   },
 
   assetSelectedAvatar: {
@@ -2077,12 +2152,45 @@ const styles = StyleSheet.create({
     gap: 5,
   },
 
+  assetIdentityRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 7,
+  },
+
+  assetIdentityField: {
+    flexShrink: 0,
+  },
+
+  clientCodeField: {
+    width: 92,
+  },
+
+  assetIdentityLabel: {
+    color: MUTED,
+    fontSize: 8,
+    fontWeight: "600",
+    marginBottom: 2,
+  },
+
+  clientCodeDisplay: {
+    minHeight: 34,
+    justifyContent: "center",
+    paddingHorizontal: 6,
+  },
+
+  clientCodeText: {
+    color: TEXT,
+    fontSize: 10,
+    fontWeight: "700",
+  },
+
   assetCodeInput: {
-    width: 100,
+    width: 92,
     height: 34,
     paddingHorizontal: 8,
     paddingVertical: 0,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "700",
     color: TEXT,
     backgroundColor: SURFACE,
@@ -2157,8 +2265,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 8,
+    marginBottom: 2,
     gap: 8,
+    // backgroundColor: "red",
   },
 
   title: {
@@ -2235,7 +2344,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    marginBottom: 6,
+    marginBottom: 0,
   },
 
   categoryBadge: {

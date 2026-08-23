@@ -68,6 +68,7 @@ export type AppRole =
   | "company_admin";
 
 export interface CachedUser {
+  // user?:string,
   id: string;
   username: string;
   companyName?: string | null;
