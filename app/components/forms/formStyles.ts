@@ -9,7 +9,7 @@ export const SOFT = "#F7C59F";
 
 export const formStyles = StyleSheet.create({
   otherAssetControls: {
-    marginTop: 8,
+    marginTop: 2,
     gap: 8,
   },
 
@@ -86,7 +86,7 @@ export const formStyles = StyleSheet.create({
   },
 
   quantityControl: {
-    height: 40,
+    height: 35,
     width: "100%",
     flexDirection: "row",
     alignItems: "center",
@@ -95,6 +95,7 @@ export const formStyles = StyleSheet.create({
     borderColor: BORDER,
     borderRadius: 14,
     overflow: "hidden",
+  
   },
 
   quantityIconBtn: {
@@ -421,12 +422,9 @@ locationEmptyText: {
   flexDirection: "row",
   flexWrap: "wrap",
   gap: 6,
-  marginTop: 6,
-  marginBottom: 8,
+  marginTop: 3,
+  marginBottom: 5,
 },
-
-
-
 
 vehiclePreviewItem: {
   alignItems: "center",
