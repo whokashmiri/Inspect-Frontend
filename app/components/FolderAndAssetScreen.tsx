@@ -239,7 +239,6 @@ export default function FolderAndAssetScreen({ route }: Props) {
   const flattenAssetImages = (images: any): any[] => {
     if (!images) return [];
 
-    // Backward compatibility for older assets that still return a flat array.
     if (Array.isArray(images)) {
       return images.filter(Boolean);
     }
@@ -1441,6 +1440,11 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
       name: draft.name,
 
+      val_tech_id: null,
+
+      client_code: (draft as any).client_code?.trim() || null,
+
+      employer: (draft as any).employer?.trim() || null,
       categoryId: isVehicle ? null : ((draft as any).categoryId ?? null),
       category: isVehicle ? null : ((draft as any).category ?? null),
 
@@ -1502,14 +1506,6 @@ export default function FolderAndAssetScreen({ route }: Props) {
   const normalizeConditionValue = (value?: string | null) => {
     const text = String(value || "").trim();
     return text || "Good";
-  };
-
-  const normalizeSubAssetTypeValue = (value?: string | null) => {
-    const text = String(value || "")
-      .trim()
-      .toLowerCase();
-
-    return text || null;
   };
 
   const normalizeAssetQuantity = (value: any) => {
@@ -2474,48 +2470,6 @@ export default function FolderAndAssetScreen({ route }: Props) {
     setPendingScannedCode(null);
     setAssetModalVisible(true);
   };
-
-  // const handleAssetGalleryPick = (selection: PickedAssetCategory) => {
-  //   Keyboard.dismiss();
-
-  //   setAutoOpenCameraForEdit(false);
-
-  //   const taxonomyData = buildAssetCategoryInitialData(selection);
-
-  //   if (assetGalleryMode === "edit" && editingAsset) {
-  //     setCreateAssetInitialData({
-  //       ...mapAssetToDraft(editingAsset),
-  //       ...taxonomyData,
-
-  //       rawData:
-  //         (editingAsset as any).rawData &&
-  //         typeof (editingAsset as any).rawData === "object"
-  //           ? cleanAssetRawData((editingAsset as any).rawData)
-  //           : {},
-  //     });
-  //   } else {
-  //     setCreateAssetInitialData({
-  //       ...buildNewAssetInitialData("Other"),
-  //       ...taxonomyData,
-
-  //       name: selection.name,
-
-  //       code: pendingScannedCode ?? undefined,
-
-  //       images: createEmptyAssetImages(),
-  //       voiceNotes: [],
-  //     });
-
-  //     setPendingScannedCode(null);
-  //   }
-
-  //   setAssetGalleryVisible(false);
-
-  //   requestAnimationFrame(() => {
-  //     setAutoOpenCameraForEdit(false);
-  //     setAssetModalVisible(true);
-  //   });
-  // };
 
   const handleAssetGalleryPick = (selection: PickedAssetCategory) => {
     Keyboard.dismiss();
