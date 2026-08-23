@@ -678,10 +678,7 @@ export async function updatePayload(
 }
 
 
-/**
- * Find pending item for asset update - checks for existing updateAsset or createAsset
- * with same assetId to prevent duplicate sync counts for multiple edits
- */
+
 export async function getPendingAssetItemId(
   assetId: string,
   projectId?: string
