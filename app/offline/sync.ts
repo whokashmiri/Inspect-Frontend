@@ -221,18 +221,6 @@ async function processQueueItem(
         break;
       }
 
-      case "renameSubAssetType": {
-        await projectContentApi.renameProjectSubAssetType({
-          projectId: item.payload.projectId,
-          oldSubAssetType:
-            item.payload.oldSubAssetType,
-          newSubAssetType:
-            item.payload.newSubAssetType,
-          parent: item.payload.parent ?? null,
-        });
-
-        break;
-      }
 
       default:
         console.warn(
