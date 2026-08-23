@@ -1567,6 +1567,10 @@ export interface AssetItem {
   id: string;
   name: string;
 
+  val_tech_id: number | null;
+  client_code: string | null;
+  employer: string | null;
+
   categoryId: string | null;
   category: string | null;
 
@@ -1671,6 +1675,10 @@ export interface MarkAssetUsedResponse {
 
 export interface ConditionsResponse {
   conditions: string[];
+}
+
+export interface EmployersResponse {
+  employers: string[];
 }
 
 export interface AssetLocationOption {
@@ -1935,6 +1943,14 @@ export const projectContentApi = {
 
 
 
+    getProjectEmployers: (projectId: string) =>
+  request<EmployersResponse>(
+    `/projects/${projectId}/assets/employers`,
+    {
+      method: "GET",
+    },
+  ),
+
   getProjectConditions: (projectId: string) =>
     request<ConditionsResponse>(`/projects/${projectId}/assets/conditions`, {
       method: "GET",
@@ -1984,6 +2000,8 @@ getProjectAssetLocations: (
   createAsset: async (payload: {
     projectId: string;
     name: string;
+    client_code?: string | null;
+    employer?: string | null;
 
     categoryId?: string | null;
 category?: string | null;
@@ -2065,6 +2083,11 @@ const newAssetLocation =
 
         body: {
           name: payload.name,
+          client_code:
+  payload.client_code?.trim() || null,
+
+employer:
+  payload.employer?.trim() || null,
           parent: resolvedParentSubProjectId,
           categoryId: payload.categoryId?.trim() || null,
 category: payload.category?.trim() || null,
@@ -2164,6 +2187,9 @@ markAssetUsed: (
     projectId: string;
     name?: string | null;
 
+      client_code?: string | null;
+  employer?: string | null;
+
      categoryId?: string | null;
   category?: string | null;
 
@@ -2251,6 +2277,15 @@ const newAssetLocation =
       method: "PATCH",
       body: {
         name: payload.name,
+        client_code:
+  payload.client_code === undefined
+    ? undefined
+    : payload.client_code?.trim() || null,
+
+employer:
+  payload.employer === undefined
+    ? undefined
+    : payload.employer?.trim() || null,
 
         categoryId: payload.categoryId,
 category: payload.category,
