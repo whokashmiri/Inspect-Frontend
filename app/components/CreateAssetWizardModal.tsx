@@ -491,6 +491,11 @@ export default function CreateAssetWizardModal({
   const isVehicleAsset =
     String((draft as any).assetType || "").toLowerCase() === "vehicle" ||
     String((draft as any).assetType || "") === "Vehicle";
+  const hasClientCode = !!String((draft as any).client_code || "").trim();
+
+  const displayedBarcode = hasClientCode
+    ? String((draft as any).client_code).trim()
+    : draft.code || "";
 
   const vehicleModalMaxHeight = detailsExpanded ? height * 0.94 : height * 0.86;
 
@@ -956,6 +961,11 @@ export default function CreateAssetWizardModal({
     draft.images?.main?.uri || draft.images?.main?.url || null;
 
   const handleBarcodeScanned = (rawCode: string) => {
+    if (String((draft as any).client_code || "").trim()) {
+      setBarcodeScannerOpen(false);
+      return;
+    }
+
     const code = normalizeCode(rawCode);
 
     if (!code) {
@@ -1101,28 +1111,45 @@ export default function CreateAssetWizardModal({
 
                             <View style={styles.assetCodeRow}>
                               <TextInput
-                                value={draft.code || ""}
-                                onChangeText={(text) =>
+                                value={displayedBarcode}
+                                onChangeText={(text) => {
+                                  if (hasClientCode) {
+                                    return;
+                                  }
+
                                   setDraft((prev) => ({
                                     ...prev,
                                     code: text,
-                                  }))
-                                }
+                                  }));
+                                }}
+                                editable={!hasClientCode}
                                 placeholder="Barcode"
                                 placeholderTextColor="#767B91"
-                                style={styles.assetCodeInput}
+                                style={[
+                                  styles.assetCodeInput,
+                                  hasClientCode &&
+                                    styles.assetCodeInputDisabled,
+                                ]}
                                 returnKeyType="done"
                                 autoCapitalize="none"
                                 autoCorrect={false}
                               />
-
                               <TouchableOpacity
-                                style={styles.assetCodeScanBtn}
+                                style={[
+                                  styles.assetCodeScanBtn,
+                                  hasClientCode &&
+                                    styles.assetCodeScanBtnDisabled,
+                                ]}
                                 onPress={() => {
+                                  if (hasClientCode) {
+                                    return;
+                                  }
+
                                   Keyboard.dismiss();
                                   setBarcodeScannerOpen(true);
                                 }}
                                 activeOpacity={0.85}
+                                disabled={hasClientCode}
                               >
                                 <Ionicons
                                   name="barcode-outline"
@@ -1135,12 +1162,12 @@ export default function CreateAssetWizardModal({
 
                           {/* Client Code */}
 
-                          <View style={styles.clientCodeField}>
-                            {/* <Text style={styles.assetIdentityLabel}>
+                          {/* <View style={styles.clientCodeField}> */}
+                          {/* <Text style={styles.assetIdentityLabel}>
                               Client Code
                             </Text> */}
 
-                            <View style={styles.clientCodeDisplay}>
+                          {/* <View style={styles.clientCodeDisplay}>
                               <Text
                                 style={styles.clientCodeText}
                                 numberOfLines={1}
@@ -1148,7 +1175,7 @@ export default function CreateAssetWizardModal({
                                 {(draft as any).client_code || "—"}
                               </Text>
                             </View>
-                          </View>
+                          </View> */}
                         </View>
 
                         {/* <View style={styles.categoryBadge}>
@@ -2198,7 +2225,13 @@ const styles = StyleSheet.create({
     borderColor: BORDER,
     borderRadius: 8,
   },
+  assetCodeInputDisabled: {
+    opacity: 0.65,
+  },
 
+  assetCodeScanBtnDisabled: {
+    opacity: 0.45,
+  },
   assetCodeScanBtn: {
     width: 34,
     height: 34,
