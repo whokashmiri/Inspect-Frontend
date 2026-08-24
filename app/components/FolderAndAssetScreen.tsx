@@ -1564,6 +1564,9 @@ export default function FolderAndAssetScreen({ route }: Props) {
         clientMutationId,
         projectId,
         name: draft.name,
+        client_code: (draft as any).client_code?.trim() || null,
+
+        employer: (draft as any).employer?.trim() || null,
         parent: currentFolderId || undefined,
 
         images: allImages,
@@ -1606,6 +1609,9 @@ export default function FolderAndAssetScreen({ route }: Props) {
         projectId,
         parent: currentFolderId || null,
         folderId: currentFolderId || null,
+        client_code: (draft as any).client_code?.trim() || null,
+
+        employer: (draft as any).employer?.trim() || null,
 
         condition,
         assetType: normalizedAssetType,
@@ -1675,7 +1681,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
             id: localId,
           });
         }
-        await await loadProjectAssetLocations();
+        await loadProjectAssetLocations();
         await loadProjectConditions();
         showSnackbar(result.message, "info");
         return;
@@ -1797,6 +1803,10 @@ export default function FolderAndAssetScreen({ route }: Props) {
       projectId,
       name: draft.name,
 
+      client_code: (draft as any).client_code?.trim() || null,
+
+      employer: (draft as any).employer?.trim() || null,
+
       images: allImages,
       voiceNotes: allVoiceNotes,
 
@@ -1842,6 +1852,17 @@ export default function FolderAndAssetScreen({ route }: Props) {
         const updatedOfflineAsset: AssetItem = {
           ...existingOfflineAsset,
           name: draft.name,
+          client_code:
+            (draft as any).client_code?.trim() ||
+            existingOfflineAsset.client_code ||
+            null,
+
+          employer:
+            (draft as any).employer?.trim() ||
+            existingOfflineAsset.employer ||
+            null,
+
+          val_tech_id: existingOfflineAsset.val_tech_id ?? null,
           quantity: safeQuantity,
           categoryId: isVehicle ? null : (draft.categoryId ?? null),
 
@@ -1922,10 +1943,26 @@ export default function FolderAndAssetScreen({ route }: Props) {
     setAssetCategoryModalVisible(false);
 
     setEditingAsset(asset);
-    setCreateAssetInitialData(mapAssetToDraft(asset));
+
+    setCreateAssetInitialData({
+      ...mapAssetToDraft(asset),
+
+      client_code:
+        asset.client_code ??
+        asset.normalizedData?.client_code ??
+        asset.rawData?.client_code ??
+        null,
+
+      employer:
+        asset.employer ??
+        asset.normalizedData?.employer ??
+        asset.rawData?.employer ??
+        null,
+
+      val_tech_id: asset.val_tech_id ?? null,
+    } as any);
 
     setAutoOpenCameraForEdit(false);
-
     setAssetModalVisible(true);
   };
 
@@ -2481,6 +2518,19 @@ export default function FolderAndAssetScreen({ route }: Props) {
     if (assetGalleryMode === "edit" && editingAsset) {
       setCreateAssetInitialData({
         ...mapAssetToDraft(editingAsset),
+        client_code:
+          editingAsset.client_code ??
+          editingAsset.normalizedData?.client_code ??
+          editingAsset.rawData?.client_code ??
+          null,
+
+        employer:
+          editingAsset.employer ??
+          editingAsset.normalizedData?.employer ??
+          editingAsset.rawData?.employer ??
+          null,
+
+        val_tech_id: editingAsset.val_tech_id ?? null,
         ...taxonomyData,
 
         rawData:
