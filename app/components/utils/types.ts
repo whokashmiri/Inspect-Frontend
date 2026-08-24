@@ -46,6 +46,9 @@ export type AssetDraft = {
 
   name: string;
   writtenDescription: string;
+  val_tech_id?: number | null;
+  client_code?: string | null;
+  employer?: string | null;
 
   code?: string;
   rawData?: Record<string, any> | null;
