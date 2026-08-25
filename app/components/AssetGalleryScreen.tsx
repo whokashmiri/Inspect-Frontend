@@ -27,6 +27,16 @@ import {
 } from "../../api/assetCategory.api";
 import { AssetImageItem, AssetItem, projectContentApi } from "../../api/api";
 
+import {
+  getAssetTaxonomyOffline,
+  getOfflineRecentAssets,
+  markOfflineAssetUsed,
+  saveAssetTaxonomyOffline,
+  useIsOnline,
+} from "../offline";
+
+import { isManualOfflineMode } from "../offline/connectivityMode";
+
 // Types
 
 export type PickedAssetCategory = {
@@ -320,6 +330,9 @@ export default function AssetGalleryScreen({
 }: AssetGalleryScreenProps) {
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
+  const isOnline = useIsOnline();
+
+  const shouldUseOffline = !isOnline || isManualOfflineMode();
 
   const [categories, setCategories] = useState<AssetCategoryItem[]>([]);
   const [types, setTypes] = useState<AssetTypeItem[]>([]);
@@ -470,6 +483,24 @@ export default function AssetGalleryScreen({
     setRecentViewerIndex(0);
   };
 
+  const applyTaxonomyData = (result: {
+    categories?: AssetCategoryItem[];
+    types?: AssetTypeItem[];
+    names?: AssetNameItem[];
+  }) => {
+    const loadedCategories = result?.categories ?? [];
+
+    const loadedTypes = result?.types ?? [];
+
+    const loadedNames = result?.names ?? [];
+
+    setCategories(loadedCategories);
+    setTypes(loadedTypes);
+    setNames(loadedNames);
+
+    setFeaturedNameIds(createRandomFeaturedIds(loadedNames, 10));
+  };
+
   const loadData = async (isRefresh = false) => {
     try {
       setError(null);
@@ -480,27 +511,80 @@ export default function AssetGalleryScreen({
         setLoading(true);
       }
 
-      const result = await assetCategoryApi.getAll();
+      // ---------------------------------------------------------
+      // OFFLINE / MANUAL OFFLINE
+      // ---------------------------------------------------------
 
-      const loadedCategories = result?.categories ?? [];
-      const loadedTypes = result?.types ?? [];
-      const loadedNames = result?.names ?? [];
+      if (shouldUseOffline) {
+        const cached = await getAssetTaxonomyOffline();
 
-      setCategories(loadedCategories);
-      setTypes(loadedTypes);
-      setNames(loadedNames);
-      setFeaturedNameIds(createRandomFeaturedIds(loadedNames, 10));
+        if (!cached) {
+          setCategories([]);
+          setTypes([]);
+          setNames([]);
+          setFeaturedNameIds([]);
+
+          setError(
+            "Asset suggestions are not available offline yet. Download the project while online first.",
+          );
+
+          return;
+        }
+
+        applyTaxonomyData(cached);
+
+        return;
+      }
+
+      // ---------------------------------------------------------
+      // ONLINE
+      // ---------------------------------------------------------
+
+      try {
+        const result = await assetCategoryApi.getAll();
+
+        applyTaxonomyData(result);
+
+        /*
+         * Keep the latest successful server taxonomy
+         * available for offline usage.
+         */
+        await saveAssetTaxonomyOffline({
+          categories: result?.categories ?? [],
+
+          types: result?.types ?? [],
+
+          names: result?.names ?? [],
+        });
+      } catch (onlineError) {
+        console.warn(
+          "[AssetGallery] Online taxonomy load failed. Trying offline cache.",
+          onlineError,
+        );
+
+        /*
+         * Network/API can fail even while NetInfo
+         * says we're online.
+         */
+        const cached = await getAssetTaxonomyOffline();
+
+        if (cached) {
+          applyTaxonomyData(cached);
+
+          return;
+        }
+
+        throw onlineError;
+      }
     } catch (err: any) {
       console.error("[Asset Category Load Error]", err);
-      setError(
-        err?.message || "Could not load asset categories. Please try again.",
-      );
+
+      setError(err?.message || "Could not load asset categories.");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
-
   const isValidTaxonomyValue = (value?: string | null) => {
     const text = String(value || "")
       .trim()
@@ -516,16 +600,43 @@ export default function AssetGalleryScreen({
     }
 
     try {
-      const result = await projectContentApi.getRecentAssets(projectId, 8);
+      // ---------------------------------------------------------
+      // OFFLINE
+      // ---------------------------------------------------------
 
-      setRecentAssets(
-        (result.assets || []).filter(
+      if (shouldUseOffline) {
+        const assets = await getOfflineRecentAssets(projectId, 8);
+
+        setRecentAssets(assets);
+
+        return;
+      }
+
+      // ---------------------------------------------------------
+      // ONLINE
+      // ---------------------------------------------------------
+
+      try {
+        const result = await projectContentApi.getRecentAssets(projectId, 8);
+
+        const assets = (result.assets || []).filter(
           (item) =>
             item.assetType === "other" &&
             isValidTaxonomyValue(item.category) &&
             isValidTaxonomyValue(item.type),
-        ),
-      );
+        );
+
+        setRecentAssets(assets);
+      } catch (onlineError) {
+        console.warn(
+          "[AssetGallery] Online recent load failed. Using offline recent assets.",
+          onlineError,
+        );
+
+        const offlineAssets = await getOfflineRecentAssets(projectId, 8);
+
+        setRecentAssets(offlineAssets);
+      }
     } catch (err) {
       console.warn("[AssetGallery] Could not load recent assets", err);
 
@@ -543,11 +654,14 @@ export default function AssetGalleryScreen({
   };
 
   useEffect(() => {
-    if (!visible) return;
+    if (!visible) {
+      return;
+    }
 
     resetTransientState();
+
     void Promise.all([loadData(), loadRecentAssets()]);
-  }, [visible, projectId]);
+  }, [visible, projectId, shouldUseOffline]);
 
   const filteredRecentAssets = useMemo(() => {
     const query = normalizeText(searchQuery);
@@ -1398,9 +1512,42 @@ export default function AssetGalleryScreen({
 
   const handleUseRecentAsset = (asset: AssetItem) => {
     if (projectId) {
-      void projectContentApi.markAssetUsed(projectId, asset.id).catch((err) => {
-        console.warn("[AssetGallery] Could not mark recent asset used", err);
-      });
+      if (shouldUseOffline) {
+        /*
+         * Offline equivalent of markAssetUsed.
+         *
+         * Only changes local updatedAt so this asset
+         * moves to the top of Recent locally.
+         */
+        void markOfflineAssetUsed(asset.id).catch((err) => {
+          console.warn(
+            "[AssetGallery] Could not mark offline recent asset used",
+            err,
+          );
+        });
+      } else {
+        void projectContentApi
+          .markAssetUsed(projectId, asset.id)
+          .catch(async (err) => {
+            console.warn(
+              "[AssetGallery] Could not mark recent asset used online",
+              err,
+            );
+
+            /*
+             * Fall back locally if connectivity disappears
+             * during the action.
+             */
+            try {
+              await markOfflineAssetUsed(asset.id);
+            } catch (offlineError) {
+              console.warn(
+                "[AssetGallery] Could not mark recent asset used offline either",
+                offlineError,
+              );
+            }
+          });
+      }
     }
 
     finishWithAsset(recentAssetToPick(asset));
@@ -1597,7 +1744,9 @@ export default function AssetGalleryScreen({
               <View style={styles.headerText}>
                 <Text style={styles.title}>Select Asset</Text>
                 <Text style={styles.subtitle}>
-                  Choose or customize the asset
+                  {shouldUseOffline
+                    ? "Choose or customize the asset • Offline"
+                    : "Choose or customize the asset"}
                 </Text>
               </View>
 
@@ -1626,7 +1775,7 @@ export default function AssetGalleryScreen({
 
                 <Text style={styles.errorText}>{error}</Text>
 
-                <TouchableOpacity onPress={() => void loadData()}>
+                <TouchableOpacity onPress={() => void refreshAll()}>
                   <Text style={styles.retryText}>Retry</Text>
                 </TouchableOpacity>
               </View>
@@ -2444,7 +2593,7 @@ export default function AssetGalleryScreen({
                             onFocus={() => {
                               if (assetEditorMode === "recent") return;
 
-                              setFocusedEditorField("type");
+                              setFocusedEditorField("category");
                             }}
                             onBlur={() => {
                               setFocusedEditorField((current) =>
