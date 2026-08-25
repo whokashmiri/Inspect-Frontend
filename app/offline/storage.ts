@@ -142,6 +142,8 @@ export function initStorage(): Promise<void> {
         CREATE INDEX IF NOT EXISTS idx_offline_assets_folderId
         ON offline_assets(folderId);
 
+
+
         CREATE TABLE IF NOT EXISTS project_sync_state (
           projectId TEXT PRIMARY KEY NOT NULL,
           syncVersion INTEGER NOT NULL DEFAULT 0,
@@ -348,11 +350,14 @@ function normalizeSubAssetTypeValue(value: any): string | null {
 
 function normalizeOfflineAsset(asset: any) {
   const assetType =
-    String(asset?.assetType || "").trim().toLowerCase() === "vehicle"
+    String(asset?.assetType || "")
+      .trim()
+      .toLowerCase() === "vehicle"
       ? "vehicle"
       : "other";
 
-  const condition = normalizeCondition(asset?.condition) || "Good";
+  const condition =
+    normalizeCondition(asset?.condition) || "Good";
 
   const subAssetType =
     assetType === "vehicle"
@@ -360,11 +365,13 @@ function normalizeOfflineAsset(asset: any) {
       : normalizeSubAssetTypeValue(
           asset?.subAssetType ??
             asset?.rawData?.subAssetType ??
-            asset?.rawData?.customAssetType
+            asset?.rawData?.customAssetType,
         );
 
   const rawData =
-    asset?.rawData && typeof asset.rawData === "object" && !Array.isArray(asset.rawData)
+    asset?.rawData &&
+    typeof asset.rawData === "object" &&
+    !Array.isArray(asset.rawData)
       ? { ...asset.rawData }
       : {};
 
@@ -374,9 +381,56 @@ function normalizeOfflineAsset(asset: any) {
 
   return {
     ...asset,
+
+    id: String(asset?.id || asset?._id || ""),
+
+    projectId: String(
+      asset?.projectId || "",
+    ),
+
+    folderId:
+      asset?.folderId ??
+      asset?.parent ??
+      null,
+
+    parent:
+      asset?.parent ??
+      asset?.folderId ??
+      null,
+
     assetType,
     condition,
     subAssetType,
+
+    val_tech_id:
+      typeof asset?.val_tech_id === "number"
+        ? asset.val_tech_id
+        : null,
+
+    client_code:
+      normalizeText(asset?.client_code),
+
+    code:
+      normalizeText(asset?.code),
+
+    employer:
+      normalizeText(asset?.employer),
+
+    asset_source:
+      normalizeText(asset?.asset_source),
+
+    createdBy:
+      asset?.createdBy ?? null,
+
+    updatedBy:
+      asset?.updatedBy ?? null,
+
+    createdAt:
+      asset?.createdAt ?? null,
+
+    updatedAt:
+      asset?.updatedAt ?? null,
+
     rawData,
   };
 }
@@ -848,6 +902,198 @@ export async function saveAssetsOffline(
   });
 }
 
+export async function replaceOfflineProjectSnapshot({
+  project,
+  folders,
+  assets,
+}: {
+  project: {
+    id: string;
+    companyId?: string | null;
+    userId?: string | null;
+    [key: string]: any;
+  };
+  folders: Array<{
+    id: string;
+    projectId: string;
+    parentId?: string | null;
+    parent?: string | null;
+    [key: string]: any;
+  }>;
+  assets: Array<{
+    id: string;
+    projectId: string;
+    folderId?: string | null;
+    parent?: string | null;
+    [key: string]: any;
+  }>;
+}): Promise<void> {
+  await initStorage();
+
+  const projectId = String(project?.id || "").trim();
+
+  if (!projectId) {
+    throw new Error(
+      "Cannot replace offline project snapshot without a project ID.",
+    );
+  }
+
+  const normalizedFolders = folders.map((folder) => {
+    const parentId = normalizeFolderParent(folder);
+
+    return {
+      ...folder,
+      projectId:
+        String(folder.projectId || projectId),
+      parentId,
+    };
+  });
+
+  const normalizedAssets = assets.map((asset) => {
+    const folderId = normalizeAssetFolder(asset);
+
+    return normalizeOfflineAsset({
+      ...asset,
+      projectId:
+        String(asset.projectId || projectId),
+      folderId,
+    });
+  });
+
+  await runDbTask(async () => {
+    await db.withTransactionAsync(async () => {
+      /*
+       * Remove only the current project's previous snapshot.
+       *
+       * pending_queue is intentionally NOT touched.
+       * project_sync_state is intentionally NOT touched.
+       */
+      await db.runAsync(
+        `DELETE FROM offline_folders WHERE projectId = ?;`,
+        [projectId],
+      );
+
+      await db.runAsync(
+        `DELETE FROM offline_assets WHERE projectId = ?;`,
+        [projectId],
+      );
+
+      await db.runAsync(
+        `DELETE FROM offline_projects WHERE id = ?;`,
+        [projectId],
+      );
+
+      /*
+       * Save project.
+       */
+      await db.runAsync(
+        `
+          INSERT INTO offline_projects
+          (
+            id,
+            companyId,
+            userId,
+            data,
+            downloadedAt
+          )
+          VALUES (?, ?, ?, ?, ?);
+        `,
+        [
+          projectId,
+          project.companyId ?? null,
+          project.userId ?? null,
+          JSON.stringify({
+            ...project,
+            id: projectId,
+          }),
+          Date.now(),
+        ],
+      );
+
+      /*
+       * Save folders.
+       */
+      for (const folder of normalizedFolders) {
+        const folderId =
+          String(folder?.id || "").trim();
+
+        if (!folderId) {
+          throw new Error(
+            "Cannot save offline folder without an ID.",
+          );
+        }
+
+        await db.runAsync(
+          `
+            INSERT INTO offline_folders
+            (
+              id,
+              projectId,
+              parentId,
+              data
+            )
+            VALUES (?, ?, ?, ?);
+          `,
+          [
+            folderId,
+            projectId,
+            folder.parentId ?? null,
+            JSON.stringify({
+              ...folder,
+              id: folderId,
+              projectId,
+            }),
+          ],
+        );
+      }
+
+      /*
+       * Save assets.
+       */
+      for (const asset of normalizedAssets) {
+        const assetId =
+          String(asset?.id || "").trim();
+
+        if (!assetId) {
+          throw new Error(
+            "Cannot save offline asset without an ID.",
+          );
+        }
+
+        const folderId =
+          normalizeAssetFolder(asset);
+
+        await db.runAsync(
+          `
+            INSERT INTO offline_assets
+            (
+              id,
+              projectId,
+              folderId,
+              data
+            )
+            VALUES (?, ?, ?, ?);
+          `,
+          [
+            assetId,
+            projectId,
+            folderId,
+            JSON.stringify({
+              ...asset,
+              id: assetId,
+              projectId,
+              folderId,
+              parent:
+                asset.parent ??
+                folderId ??
+                null,
+            }),
+          ],
+        );
+      }
+    });
+  });
+}
 
 export async function clearOfflineProjectContents(projectId: string): Promise<void> {
   await initStorage();
