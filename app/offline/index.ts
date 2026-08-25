@@ -1,6 +1,7 @@
 
 //offline/index.ts
 import { initStorage } from "./storage";
+import { initAssetGalleryStorage } from "./assetGalleryStorage";
 import { initSync, syncQueue, triggerManualSync, startSyncListener, stopSyncListener } from "./sync";
 import { initAuthStorage } from "./authStorage";
 
@@ -15,6 +16,17 @@ export {
   startSyncListener,
   stopSyncListener,
 } from "./sync";
+
+export {
+  initAssetGalleryStorage,
+  saveAssetTaxonomyOffline,
+  getAssetTaxonomyOffline,
+  clearAssetTaxonomyOffline,
+  hasAssetTaxonomyOffline,
+  getOfflineRecentAssets,
+  markOfflineAssetUsed,
+  getOfflineAssetGalleryData,
+} from "./assetGalleryStorage";
 
 export {
   initStorage,
@@ -56,6 +68,7 @@ export { useIsOnline } from "./network";
 export async function initOfflineSupport() {
   console.log("🚀 Initializing offline support...");
   await initStorage();
+  await initAssetGalleryStorage();
   await initAuthStorage();
   await initSync();
   console.log("✅ Offline support ready");
