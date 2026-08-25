@@ -11,6 +11,8 @@ import {
   updatePayload,
   getProjectSyncState,
   saveProjectSyncState,
+  upsertOfflineAsset,
+  deleteOfflineAssetsByIds,
 } from "./storage";
 import { deleteOfflineMediaFiles } from "./mediaStorage";
 import { PendingItem } from "./types";
@@ -115,6 +117,54 @@ async function patchPendingFolderRefs(
 
     if (changed) {
       await updatePayload(item.id, updatedPayload);
+      item.payload = updatedPayload;
+    }
+  }
+}
+
+async function patchPendingAssetRefs(
+  localId: string,
+  remoteId: string,
+  pendingItems?: PendingItem[],
+) {
+  if (!localId || !remoteId || localId === remoteId) {
+    return;
+  }
+
+  const queue =
+    pendingItems ?? (await getPending("pending"));
+
+  for (const item of queue) {
+    const payload =
+      item.payload as Record<string, any>;
+
+    let updatedPayload = payload;
+    let changed = false;
+
+    if (payload?.assetId === localId) {
+      updatedPayload = {
+        ...updatedPayload,
+        assetId: remoteId,
+      };
+
+      changed = true;
+    }
+
+    if (payload?.id === localId) {
+      updatedPayload = {
+        ...updatedPayload,
+        id: remoteId,
+      };
+
+      changed = true;
+    }
+
+    if (changed) {
+      await updatePayload(
+        item.id,
+        updatedPayload,
+      );
+
       item.payload = updatedPayload;
     }
   }
