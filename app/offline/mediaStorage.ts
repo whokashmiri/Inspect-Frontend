@@ -11,6 +11,7 @@ type AssetMediaInput = {
 };
 
 type AssetImagesInput = {
+  main?: AssetMediaInput | null;
   plate?: AssetMediaInput | null;
   details?: AssetMediaInput | null;
   odometer?: AssetMediaInput | null;
@@ -57,6 +58,10 @@ function flattenAssetImages(
   }
 
   const result: AssetMediaInput[] = [];
+  if (images.main) {
+  result.push(images.main);
+}
+
 
   if (images.plate) {
     result.push(images.plate);
@@ -127,6 +132,7 @@ async function persistStructuredImages(
 ): Promise<AssetImagesInput> {
   if (!images) {
     return {
+      main: null,
       plate: null,
       details: null,
       odometer: null,
@@ -144,6 +150,7 @@ async function persistStructuredImages(
     );
 
     return {
+      main: null,
       plate: null,
       details: null,
       odometer: null,
@@ -152,11 +159,12 @@ async function persistStructuredImages(
     };
   }
 
-  const [plate, details, odometer, brand, other] = await Promise.all([
+  const [main , plate, details, odometer, brand, other] = await Promise.all([
     persistOptionalImage(images.plate),
     persistOptionalImage(images.details),
     persistOptionalImage(images.odometer),
     persistOptionalImage(images.brand),
+    persistOptionalImage(images.main),
     Promise.all(
       normalizeOtherImages(images.other).map((file) =>
         persistOfflineFile(file)
@@ -165,6 +173,7 @@ async function persistStructuredImages(
   ]);
 
   return {
+    main,
     plate,
     details,
     odometer,
