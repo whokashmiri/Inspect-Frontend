@@ -15,7 +15,7 @@ import {
   deleteOfflineAssetsByIds,
 } from "./storage";
 import { deleteOfflineMediaFiles } from "./mediaStorage";
-import { PendingItem } from "./types";
+import { PendingItem , CachedUser } from "./types";
 import {
   getCachedUser,
   getSessionMeta,
@@ -29,38 +29,90 @@ let isSyncing = false;
 
 async function ensureValidSessionForSync(): Promise<boolean> {
   const state = await NetInfo.fetch();
-  const isOnline = !!state.isConnected && !!state.isInternetReachable;
-  if (!isOnline) return false;
+
+  const isOnline =
+    state.isConnected === true &&
+    state.isInternetReachable !== false;
+
+  if (!isOnline) {
+    return false;
+  }
 
   try {
-    const token = await tokenStore.getToken();
-    if (!token) return false;
+    const token =
+      await tokenStore.getToken();
 
-    const user = await authApi.me();
-    const cachedUser = await getCachedUser();
-    const companies = cachedUser ? await getCachedCompanies(cachedUser.id) : [];
+    if (!token) {
+      return false;
+    }
+
+    const user =
+      await authApi.me();
+
+    const cachedUser =
+      await getCachedUser();
+
+    const sessionMeta =
+      await getSessionMeta();
+
+
+    const role =
+      user.role ??
+      cachedUser?.role;
+
+    if (!role) {
+      throw new Error(
+        "Authenticated user has no role.",
+      );
+    }
+
+    const selectedCompanyId =
+      cachedUser?.selectedCompanyId ??
+      sessionMeta?.selectedCompanyId ??
+      null;
+
+    const companies =
+      cachedUser
+        ? await getCachedCompanies(
+            cachedUser.id,
+          )
+        : [];
+
+    const userForCache: CachedUser = {
+      ...user,
+
+      id: String(user.id),
+
+      username:
+        String(user.username),
+
+      role,
+
+      selectedCompanyId,
+    };
 
     await cacheAuthenticatedSession({
-      user: {
-        ...user,
-        selectedCompanyId:
-          cachedUser?.selectedCompanyId ??
-          (await getSessionMeta())?.selectedCompanyId ??
-          null,
-      },
-      accessToken: token,
-      refreshToken: null,
-      companies,
-      selectedCompanyId:
-        cachedUser?.selectedCompanyId ??
-        (await getSessionMeta())?.selectedCompanyId ??
+      user: userForCache,
+
+      accessToken:
+        token,
+
+      refreshToken:
         null,
+
+      companies,
+
+      selectedCompanyId,
     });
 
     return true;
-  } catch (error: any) {
-    const validOffline = await isOfflineSessionValid();
-    return validOffline;
+  } catch (error) {
+    console.warn(
+      "[Sync] Could not refresh authenticated session",
+      error,
+    );
+
+    return false
   }
 }
 
@@ -215,61 +267,131 @@ async function processQueueItem(
         break;
       }
 
-      case "createAsset": {
-        await projectContentApi.createAsset(
-          item.payload as any
-        );
+case "createAsset": {
+  const result =
+    await projectContentApi.createAsset(
+      item.payload as any,
+    );
 
-        await deleteOfflineMediaFiles(item.payload);
+  const serverAsset =
+    (result as any)?.asset ??
+    result;
 
-        break;
-      }
+  const serverAssetId =
+    String(
+      serverAsset?.id ??
+        serverAsset?._id ??
+        "",
+    ).trim();
 
-      case "updateAsset": {
-        await projectContentApi.updateAsset(
-          item.payload as any
-        );
+  if (!serverAssetId) {
+    throw new Error(
+      `Server returned no asset for createAsset queue item ${item.id}`,
+    );
+  }
 
-        await deleteOfflineMediaFiles(item.payload);
+  const localAssetId =
+    item.id;
 
-        break;
-      }
+  await patchPendingAssetRefs(
+    localAssetId,
+    serverAssetId,
+    pendingItems,
+  );
 
-      case "deleteAsset": {
-        const assetId =
-          item.payload?.assetId ??
-          item.payload?.id;
+ 
+  await upsertOfflineAsset({
+    ...serverAsset,
+    id: serverAssetId,
+  });
 
-        if (!assetId) {
-          throw new Error(
-            `Missing assetId for deleteAsset queue item ${item.id}`
-          );
-        }
+ 
+  if (
+    localAssetId &&
+    localAssetId !== serverAssetId
+  ) {
+    await deleteOfflineAssetsByIds([
+      localAssetId,
+    ]);
+  }
 
-        try {
-          await projectContentApi.deleteAsset(
-            assetId
-          );
-        } catch (error: any) {
-          const status =
-            error?.response?.status ??
-            error?.status;
+  await deleteOfflineMediaFiles(
+    item.payload,
+  );
 
-          /*
-           * If the server says the asset does not exist,
-           * the desired delete result is already achieved.
-           */
-          if (status !== 404) {
-            throw error;
-          }
+  break;
+}
 
-          console.log(
-            `Asset ${assetId} was already deleted on the server.`
-          );
-        }
+case "updateAsset": {
+  const result =
+    await projectContentApi.updateAsset(
+      item.payload as any,
+    );
 
-        break;
-      }
+  const serverAsset =
+    (result as any)?.asset ??
+    result;
+
+  const serverAssetId =
+    String(
+      serverAsset?.id ??
+        serverAsset?._id ??
+        "",
+    ).trim();
+
+  if (!serverAssetId) {
+    throw new Error(
+      `Server returned no asset for updateAsset queue item ${item.id}`,
+    );
+  }
+
+  await upsertOfflineAsset({
+    ...serverAsset,
+    id: serverAssetId,
+  });
+
+  await deleteOfflineMediaFiles(
+    item.payload,
+  );
+
+  break;
+}
+
+case "deleteAsset": {
+  const assetId =
+    item.payload?.assetId ??
+    item.payload?.id;
+
+  if (!assetId) {
+    throw new Error(
+      `Missing assetId for deleteAsset queue item ${item.id}`,
+    );
+  }
+
+  try {
+    await projectContentApi.deleteAsset(
+      assetId,
+    );
+  } catch (error: any) {
+    const status =
+      error?.response?.status ??
+      error?.status;
+
+    if (status !== 404) {
+      throw error;
+    }
+
+    console.log(
+      `Asset ${assetId} was already deleted on the server.`,
+    );
+  }
+
+  await deleteOfflineAssetsByIds([
+    String(assetId),
+  ]);
+
+  break;
+}
 
 
       default:
@@ -373,10 +495,7 @@ export async function syncQueue(): Promise<{
       };
     }
 
-    /*
-     * Check manual offline mode again because
-     * NetInfo.fetch() is asynchronous.
-     */
+ 
     if (isManualOfflineMode()) {
       const pendingItems =
         await getPending("pending");
@@ -402,10 +521,7 @@ export async function syncQueue(): Promise<{
       };
     }
 
-    /*
-     * Check again because session validation
-     * is also asynchronous.
-     */
+ 
     if (isManualOfflineMode()) {
       const pendingItems =
         await getPending("pending");

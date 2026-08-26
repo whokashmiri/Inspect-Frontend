@@ -25,6 +25,7 @@ type OfflineMediaItem = {
 };
 
 type OfflineAssetImages = {
+  main?: OfflineMediaItem | null;
   plate?: OfflineMediaItem | null;
   details?: OfflineMediaItem | null;
   odometer?: OfflineMediaItem | null;
@@ -43,6 +44,9 @@ function flattenOfflineAssetImages(
   }
 
   const result: OfflineMediaItem[] = [];
+  if (images.main) {
+    result.push(images.main);
+  }
 
   if (images.plate) {
     result.push(images.plate);
