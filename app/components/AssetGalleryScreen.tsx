@@ -593,6 +593,18 @@ export default function AssetGalleryScreen({
     return text.length > 0 && text !== "unknown";
   };
 
+  const hasMainImage = (asset: AssetItem) => {
+    const images = asset.images;
+
+    if (!images) return false;
+
+    if (Array.isArray(images)) {
+      return false;
+    }
+
+    return !!getMediaUrl(images.main);
+  };
+
   const loadRecentAssets = async () => {
     if (!projectId) {
       setRecentAssets([]);
@@ -607,7 +619,15 @@ export default function AssetGalleryScreen({
       if (shouldUseOffline) {
         const assets = await getOfflineRecentAssets(projectId, 8);
 
-        setRecentAssets(assets);
+        setRecentAssets(
+          assets.filter(
+            (item) =>
+              item.assetType === "other" &&
+              isValidTaxonomyValue(item.category) &&
+              isValidTaxonomyValue(item.type) &&
+              hasMainImage(item),
+          ),
+        );
 
         return;
       }
@@ -623,7 +643,8 @@ export default function AssetGalleryScreen({
           (item) =>
             item.assetType === "other" &&
             isValidTaxonomyValue(item.category) &&
-            isValidTaxonomyValue(item.type),
+            isValidTaxonomyValue(item.type) &&
+            hasMainImage(item),
         );
 
         setRecentAssets(assets);
@@ -635,7 +656,15 @@ export default function AssetGalleryScreen({
 
         const offlineAssets = await getOfflineRecentAssets(projectId, 8);
 
-        setRecentAssets(offlineAssets);
+        setRecentAssets(
+          offlineAssets.filter(
+            (item) =>
+              item.assetType === "other" &&
+              isValidTaxonomyValue(item.category) &&
+              isValidTaxonomyValue(item.type) &&
+              hasMainImage(item),
+          ),
+        );
       }
     } catch (err) {
       console.warn("[AssetGallery] Could not load recent assets", err);

@@ -474,7 +474,7 @@ export async function getOfflineRecentAssets(
   const safeLimit =
     Math.min(
       Math.max(
-        Number(limit) || 8,
+        Number(limit) || 20,
         1,
       ),
       30,
