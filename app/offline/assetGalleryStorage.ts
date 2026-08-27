@@ -695,21 +695,7 @@ export async function getOfflineRecentAssets(
   return uniqueAssets;
 }
 
-// -----------------------------------------------------------------------------
-// Mark recent asset used locally
-// -----------------------------------------------------------------------------
 
-/*
- * Online:
- * backend markAssetUsed() updates updatedAt.
- *
- * Offline:
- * we need equivalent local behavior so Recent ordering
- * changes immediately.
- *
- * This does NOT set updatedBy because selecting a recent
- * item is not necessarily editing the real asset.
- */
 export async function markOfflineAssetUsed(
   assetId: string,
 ): Promise<void> {
