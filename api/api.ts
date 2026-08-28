@@ -1666,6 +1666,10 @@ export interface UpdateAssetResponse {
 
 export interface RecentAssetsResponse {
   assets: AssetItem[];
+  page: number;
+  limit: number;
+  total: number;
+  hasMore: boolean;
 }
 
 export interface MarkAssetUsedResponse {
@@ -1977,12 +1981,18 @@ getProjectAssetLocations: (
   );
 },
 
-    getRecentAssets: (
+getRecentAssets: (
   projectId: string,
-  limit = 20,
+  page = 1,
+  limit = 10,
 ) => {
   const params =
     new URLSearchParams();
+
+  params.set(
+    "page",
+    String(page),
+  );
 
   params.set(
     "limit",
