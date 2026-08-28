@@ -86,6 +86,8 @@ const UNKNOWN_ASSET: PickedAssetCategory = {
   name: "Unknown",
 };
 
+const RECENT_PAGE_SIZE = 15;
+
 // Helpers
 
 const createLocalId = (prefix: string) =>
@@ -344,6 +346,19 @@ export default function AssetGalleryScreen({
   const [error, setError] = useState<string | null>(null);
 
   const [recentAssets, setRecentAssets] = useState<AssetItem[]>([]);
+
+  const [recentExpanded, setRecentExpanded] = useState(true);
+
+  const [suggestedExpanded, setSuggestedExpanded] = useState(true);
+
+  const [recentPage, setRecentPage] = useState(1);
+
+  const [recentTotal, setRecentTotal] = useState(0);
+
+  const [recentHasMore, setRecentHasMore] = useState(false);
+
+  const [recentLoadingMore, setRecentLoadingMore] = useState(false);
+
   const [selectedRecentAssetId, setSelectedRecentAssetId] = useState<
     string | null
   >(null);
@@ -481,6 +496,14 @@ export default function AssetGalleryScreen({
 
     setRecentViewerAsset(null);
     setRecentViewerIndex(0);
+
+    setRecentExpanded(true);
+    setSuggestedExpanded(true);
+
+    setRecentPage(1);
+    setRecentTotal(0);
+    setRecentHasMore(false);
+    setRecentLoadingMore(false);
   };
 
   const applyTaxonomyData = (result: {
@@ -605,9 +628,23 @@ export default function AssetGalleryScreen({
     return !!getMediaUrl(images.main);
   };
 
+  const filterRecentAssets = (assets: AssetItem[]) => {
+    return assets.filter(
+      (item) =>
+        item.assetType === "other" &&
+        isValidTaxonomyValue(item.category) &&
+        isValidTaxonomyValue(item.type) &&
+        hasMainImage(item),
+    );
+  };
+
   const loadRecentAssets = async () => {
     if (!projectId) {
       setRecentAssets([]);
+      setRecentPage(1);
+      setRecentTotal(0);
+      setRecentHasMore(false);
+
       return;
     }
 
@@ -617,17 +654,30 @@ export default function AssetGalleryScreen({
       // ---------------------------------------------------------
 
       if (shouldUseOffline) {
-        const assets = await getOfflineRecentAssets(projectId, 8);
-
-        setRecentAssets(
-          assets.filter(
-            (item) =>
-              item.assetType === "other" &&
-              isValidTaxonomyValue(item.category) &&
-              isValidTaxonomyValue(item.type) &&
-              hasMainImage(item),
-          ),
+        /*
+         * Offline storage currently accepts a limit,
+         * not page/limit.
+         *
+         * Initial offline page = first RECENT_PAGE_SIZE.
+         */
+        const assets = await getOfflineRecentAssets(
+          projectId,
+          RECENT_PAGE_SIZE,
         );
+
+        const filtered = filterRecentAssets(assets);
+
+        setRecentAssets(filtered);
+
+        setRecentPage(1);
+
+        /*
+         * We don't know the complete offline total yet.
+         * If storage returned a full page, allow Load More.
+         */
+        setRecentHasMore(assets.length >= RECENT_PAGE_SIZE);
+
+        setRecentTotal(filtered.length);
 
         return;
       }
@@ -637,39 +687,49 @@ export default function AssetGalleryScreen({
       // ---------------------------------------------------------
 
       try {
-        const result = await projectContentApi.getRecentAssets(projectId, 8);
-
-        const assets = (result.assets || []).filter(
-          (item) =>
-            item.assetType === "other" &&
-            isValidTaxonomyValue(item.category) &&
-            isValidTaxonomyValue(item.type) &&
-            hasMainImage(item),
+        const result = await projectContentApi.getRecentAssets(
+          projectId,
+          1,
+          RECENT_PAGE_SIZE,
         );
 
-        setRecentAssets(assets);
+        const filtered = filterRecentAssets(result.assets || []);
+
+        setRecentAssets(filtered);
+
+        setRecentPage(result.page ?? 1);
+
+        setRecentTotal(result.total ?? 0);
+
+        setRecentHasMore(result.hasMore === true);
       } catch (onlineError) {
         console.warn(
           "[AssetGallery] Online recent load failed. Using offline recent assets.",
           onlineError,
         );
 
-        const offlineAssets = await getOfflineRecentAssets(projectId, 8);
-
-        setRecentAssets(
-          offlineAssets.filter(
-            (item) =>
-              item.assetType === "other" &&
-              isValidTaxonomyValue(item.category) &&
-              isValidTaxonomyValue(item.type) &&
-              hasMainImage(item),
-          ),
+        const offlineAssets = await getOfflineRecentAssets(
+          projectId,
+          RECENT_PAGE_SIZE,
         );
+
+        const filtered = filterRecentAssets(offlineAssets);
+
+        setRecentAssets(filtered);
+
+        setRecentPage(1);
+
+        setRecentTotal(filtered.length);
+
+        setRecentHasMore(offlineAssets.length >= RECENT_PAGE_SIZE);
       }
     } catch (err) {
       console.warn("[AssetGallery] Could not load recent assets", err);
 
       setRecentAssets([]);
+      setRecentPage(1);
+      setRecentTotal(0);
+      setRecentHasMore(false);
     }
   };
   const refreshAll = async () => {
@@ -704,6 +764,90 @@ export default function AssetGalleryScreen({
         normalizeText(item.category).includes(query),
     );
   }, [recentAssets, searchQuery]);
+
+  // const recentHasMore = recentVisibleCount < filteredRecentAssets.length;
+
+  const loadMoreRecent = async () => {
+    if (!projectId || recentLoadingMore || !recentHasMore) {
+      return;
+    }
+
+    const nextPage = recentPage + 1;
+
+    try {
+      setRecentLoadingMore(true);
+
+      // ---------------------------------------------------------
+      // OFFLINE
+      // ---------------------------------------------------------
+
+      if (shouldUseOffline) {
+        /*
+         * Offline helper uses limit rather than page.
+         *
+         * Ask SQLite for:
+         *
+         * page 1 -> 10
+         * page 2 -> 20
+         * page 3 -> 30
+         */
+        const nextLimit = nextPage * RECENT_PAGE_SIZE;
+
+        const assets = await getOfflineRecentAssets(projectId, nextLimit);
+
+        const filtered = filterRecentAssets(assets);
+
+        setRecentAssets(filtered);
+
+        setRecentPage(nextPage);
+
+        setRecentTotal(filtered.length);
+
+        /*
+         * If SQLite returned less than requested,
+         * we've reached the end.
+         */
+        setRecentHasMore(assets.length >= nextLimit);
+
+        return;
+      }
+
+      // ---------------------------------------------------------
+      // ONLINE
+      // ---------------------------------------------------------
+
+      const result = await projectContentApi.getRecentAssets(
+        projectId,
+        nextPage,
+        RECENT_PAGE_SIZE,
+      );
+
+      const incoming = filterRecentAssets(result.assets || []);
+
+      /*
+       * Append page instead of replacing previous pages.
+       *
+       * Guard against duplicate IDs as well.
+       */
+      setRecentAssets((current) => {
+        const existingIds = new Set(current.map((item) => item.id));
+
+        const newAssets = incoming.filter((item) => !existingIds.has(item.id));
+
+        return [...current, ...newAssets];
+      });
+
+      setRecentPage(result.page ?? nextPage);
+
+      setRecentTotal(result.total ?? recentTotal);
+
+      setRecentHasMore(result.hasMore === true);
+    } catch (error) {
+      console.warn("[AssetGallery] Could not load more recent assets", error);
+    } finally {
+      setRecentLoadingMore(false);
+    }
+  };
 
   const displayedNames = useMemo(() => {
     const query = normalizeText(searchQuery);
@@ -1327,11 +1471,9 @@ export default function AssetGalleryScreen({
       return;
     }
 
-    // ---------------------------------------------------------
     // RECENT ASSET
     // Category + Type must stay exactly the same.
     // Only the asset name can be changed.
-    // ---------------------------------------------------------
 
     if (assetEditorMode === "recent" && selectedRecentAsset) {
       const newNameId = createLocalId("name");
@@ -1376,10 +1518,8 @@ export default function AssetGalleryScreen({
       return;
     }
 
-    // ---------------------------------------------------------
     // NORMAL ADD ASSET FLOW
     // Category, Type and Name can all be created/changed.
-    // ---------------------------------------------------------
 
     let category = categories.find(
       (item) => normalizeText(item.label) === normalizeText(categoryLabel),
@@ -1542,12 +1682,6 @@ export default function AssetGalleryScreen({
   const handleUseRecentAsset = (asset: AssetItem) => {
     if (projectId) {
       if (shouldUseOffline) {
-        /*
-         * Offline equivalent of markAssetUsed.
-         *
-         * Only changes local updatedAt so this asset
-         * moves to the top of Recent locally.
-         */
         void markOfflineAssetUsed(asset.id).catch((err) => {
           console.warn(
             "[AssetGallery] Could not mark offline recent asset used",
@@ -1563,10 +1697,6 @@ export default function AssetGalleryScreen({
               err,
             );
 
-            /*
-             * Fall back locally if connectivity disappears
-             * during the action.
-             */
             try {
               await markOfflineAssetUsed(asset.id);
             } catch (offlineError) {
@@ -1930,7 +2060,15 @@ export default function AssetGalleryScreen({
 
                     <TextInput
                       value={searchQuery}
-                      onChangeText={setSearchQuery}
+                      onChangeText={(text) => {
+                        setSearchQuery(text);
+
+                        if (text.trim()) {
+                          setRecentExpanded(true);
+                          setSuggestedExpanded(true);
+                          // setRecentVisibleCount(RECENT_PAGE_SIZE);
+                        }
+                      }}
                       placeholder="Search assets or recent..."
                       placeholderTextColor="#999EAE"
                       style={styles.searchInput}
@@ -1961,7 +2099,7 @@ export default function AssetGalleryScreen({
 
                 {/* Main list */}
                 <FlatList
-                  data={displayedNames}
+                  data={suggestedExpanded ? displayedNames : []}
                   keyExtractor={(item) => item.id}
                   keyboardShouldPersistTaps="handled"
                   showsVerticalScrollIndicator={false}
@@ -1980,41 +2118,136 @@ export default function AssetGalleryScreen({
                       {/* Recent backend assets */}
                       {filteredRecentAssets.length > 0 && (
                         <View style={styles.recentSection}>
-                          <View style={styles.recentHeader}>
+                          <TouchableOpacity
+                            style={styles.sectionToggleHeader}
+                            activeOpacity={0.8}
+                            onPress={() =>
+                              setRecentExpanded((current) => !current)
+                            }
+                          >
                             <View style={styles.recentHeaderLeft}>
                               <Ionicons
                                 name="time-outline"
                                 size={13}
                                 color={MUTED}
                               />
+
                               <Text style={styles.recentTitle}>Recent</Text>
+
+                              <View style={styles.sectionCountBadge}>
+                                <Text style={styles.sectionCountText}>
+                                  {recentTotal}
+                                </Text>
+                              </View>
                             </View>
 
-                            <Text style={styles.recentHint}>
-                              Tap image to view photos
-                            </Text>
-                          </View>
+                            <View style={styles.sectionHeaderRight}>
+                              {recentExpanded && (
+                                <Text style={styles.recentHint}>
+                                  Tap image to view photos
+                                </Text>
+                              )}
 
-                          <View style={styles.recentList}>
-                            {filteredRecentAssets.map(renderRecentAsset)}
-                          </View>
+                              <View style={styles.sectionChevron}>
+                                <Ionicons
+                                  name={
+                                    recentExpanded
+                                      ? "chevron-up"
+                                      : "chevron-down"
+                                  }
+                                  size={15}
+                                  color={MUTED}
+                                />
+                              </View>
+                            </View>
+                          </TouchableOpacity>
+
+                          {recentExpanded && (
+                            <>
+                              <View style={styles.recentList}>
+                                {filterRecentAssets(recentAssets).map(
+                                  renderRecentAsset,
+                                )}
+                              </View>
+
+                              {recentHasMore && (
+                                <TouchableOpacity
+                                  style={[
+                                    styles.loadMoreRecentButton,
+
+                                    recentLoadingMore && styles.buttonDisabled,
+                                  ]}
+                                  activeOpacity={0.82}
+                                  disabled={recentLoadingMore}
+                                  onPress={() => void loadMoreRecent()}
+                                >
+                                  {recentLoadingMore ? (
+                                    <Text style={styles.loadMoreRecentText}>
+                                      Loading...
+                                    </Text>
+                                  ) : (
+                                    <>
+                                      <Text style={styles.loadMoreRecentText}>
+                                        Load more
+                                      </Text>
+
+                                      <Ionicons
+                                        name="chevron-down"
+                                        size={13}
+                                        color={ACC}
+                                      />
+                                    </>
+                                  )}
+                                </TouchableOpacity>
+                              )}
+                            </>
+                          )}
                         </View>
                       )}
 
-                      {/* Suggested header + persistent Add button */}
                       <View style={styles.assetListHeader}>
-                        <View style={styles.assetListHeaderText}>
-                          <Text style={styles.assetListTitle}>
-                            {assetListTitle}
-                          </Text>
+                        <TouchableOpacity
+                          style={styles.suggestedHeaderToggle}
+                          activeOpacity={0.8}
+                          onPress={() =>
+                            setSuggestedExpanded((current) => !current)
+                          }
+                        >
+                          <View style={styles.assetListHeaderText}>
+                            <View style={styles.sectionTitleRow}>
+                              <Text style={styles.assetListTitle}>
+                                {assetListTitle}
+                              </Text>
 
-                          <Text
-                            style={styles.assetListSubtitle}
-                            numberOfLines={1}
-                          >
-                            {assetListSubtitle}
-                          </Text>
-                        </View>
+                              <View style={styles.sectionCountBadge}>
+                                <Text style={styles.sectionCountText}>
+                                  {displayedNames.length}
+                                </Text>
+                              </View>
+                            </View>
+
+                            {suggestedExpanded && (
+                              <Text
+                                style={styles.assetListSubtitle}
+                                numberOfLines={1}
+                              >
+                                {assetListSubtitle}
+                              </Text>
+                            )}
+                          </View>
+
+                          <View style={styles.sectionChevron}>
+                            <Ionicons
+                              name={
+                                suggestedExpanded
+                                  ? "chevron-up"
+                                  : "chevron-down"
+                              }
+                              size={15}
+                              color={MUTED}
+                            />
+                          </View>
+                        </TouchableOpacity>
 
                         <TouchableOpacity
                           style={styles.addNameButton}
@@ -2022,31 +2255,36 @@ export default function AssetGalleryScreen({
                           activeOpacity={0.85}
                         >
                           <Ionicons name="add" size={15} color={ACC} />
+
                           <Text style={styles.addNameButtonText}>Add</Text>
                         </TouchableOpacity>
                       </View>
                     </>
                   }
                   ListEmptyComponent={
-                    <View style={styles.emptyState}>
-                      <View style={styles.emptyIcon}>
-                        <Ionicons
-                          name={favoritesOnly ? "star-outline" : "cube-outline"}
-                          size={23}
-                          color={MUTED}
-                        />
+                    suggestedExpanded ? (
+                      <View style={styles.emptyState}>
+                        <View style={styles.emptyIcon}>
+                          <Ionicons
+                            name={
+                              favoritesOnly ? "star-outline" : "cube-outline"
+                            }
+                            size={23}
+                            color={MUTED}
+                          />
+                        </View>
+
+                        <Text style={styles.emptyTitle}>
+                          {favoritesOnly
+                            ? "No favorite assets"
+                            : "No matching assets"}
+                        </Text>
+
+                        <Text style={styles.emptyText}>
+                          Try another search or choose a category and type.
+                        </Text>
                       </View>
-
-                      <Text style={styles.emptyTitle}>
-                        {favoritesOnly
-                          ? "No favorite assets"
-                          : "No matching assets"}
-                      </Text>
-
-                      <Text style={styles.emptyText}>
-                        Try another search or choose a category and type.
-                      </Text>
-                    </View>
+                    ) : null
                   }
                   renderItem={({ item }) => {
                     const selected =
@@ -3191,9 +3429,7 @@ export default function AssetGalleryScreen({
   );
 }
 
-// ---------------------------------------------------------------------------
 // Styles
-// ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
   screen: {
@@ -4383,5 +4619,76 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: 12,
     backgroundColor: "#E7E9EF",
+  },
+  sectionToggleHeader: {
+    minHeight: 34,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 5,
+  },
+
+  sectionHeaderRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+
+  sectionChevron: {
+    width: 27,
+    height: 27,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EEF0F5",
+  },
+
+  sectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+
+  sectionCountBadge: {
+    minWidth: 20,
+    height: 18,
+    paddingHorizontal: 5,
+    borderRadius: 9,
+    backgroundColor: "#EEF0F5",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  sectionCountText: {
+    color: MUTED,
+    fontSize: 7.5,
+    fontWeight: "800",
+  },
+
+  suggestedHeaderToggle: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    marginRight: 7,
+  },
+
+  loadMoreRecentButton: {
+    minHeight: 34,
+    marginTop: 6,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: "#fff",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
+
+  loadMoreRecentText: {
+    color: ACC,
+    fontSize: 9,
+    fontWeight: "800",
   },
 });
