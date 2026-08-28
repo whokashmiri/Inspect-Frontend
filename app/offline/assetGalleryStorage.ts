@@ -460,7 +460,7 @@ export async function hasAssetTaxonomyOffline():
  */
 export async function getOfflineRecentAssets(
   projectId: string,
-  limit = 8,
+  limit = 10,
 ): Promise<AssetItem[]> {
   await initAssetGalleryStorage();
 
