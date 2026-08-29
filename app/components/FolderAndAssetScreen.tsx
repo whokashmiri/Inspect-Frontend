@@ -2032,10 +2032,9 @@ export default function FolderAndAssetScreen({ route }: Props) {
       if (!nextAsset || nextAsset.id === currentAssetId) {
         showSnackbar("Asset saved. No next asset found.", "success");
 
-        // Save current in background even if no next asset
         setPendingAssetSaveCount((count) => count + 1);
 
-        updateAssetAsync(draft, currentAsset)
+        void updateAssetAsync(draft, currentAsset)
           .catch((error: any) => {
             showSnackbar(
               error?.message || t("folderAssetScreen.snackbar.saveFailed"),
@@ -2050,15 +2049,43 @@ export default function FolderAndAssetScreen({ route }: Props) {
         return;
       }
 
-      // Move to next asset immediately
-      setAutoOpenCameraForEdit(false);
-      setCreateAssetInitialData(undefined);
+      // -------------------------------------------------
+      // Prepare NEXT asset exactly like openEditAsset()
+      // -------------------------------------------------
+
+      const nextDraft = mapAssetToDraft(nextAsset);
+
+      setCreateAssetInitialData({
+        ...nextDraft,
+
+        code: nextAsset.code ?? nextDraft.code ?? undefined,
+
+        client_code:
+          nextAsset.client_code ??
+          nextAsset.normalizedData?.client_code ??
+          nextAsset.rawData?.client_code ??
+          null,
+
+        employer:
+          nextAsset.employer ??
+          nextAsset.normalizedData?.employer ??
+          nextAsset.rawData?.employer ??
+          null,
+
+        val_tech_id: nextAsset.val_tech_id ?? null,
+      } as Partial<AssetDraft>);
+
       setEditingAsset(nextAsset);
 
-      // Save previous asset in background
+      setAutoOpenCameraForEdit(false);
+
+      // -------------------------------------------------
+      // Save PREVIOUS asset in background
+      // -------------------------------------------------
+
       setPendingAssetSaveCount((count) => count + 1);
 
-      updateAssetAsync(draft)
+      void updateAssetAsync(draft, currentAsset)
         .catch((error: any) => {
           showSnackbar(
             error?.message || t("folderAssetScreen.snackbar.saveFailed"),
@@ -2075,7 +2102,6 @@ export default function FolderAndAssetScreen({ route }: Props) {
       }, 250);
     }
   };
-
   const items = useMemo(() => {
     const combined = [
       ...folders.map((folder) => ({ ...folder, itemType: "folder" as const })),
