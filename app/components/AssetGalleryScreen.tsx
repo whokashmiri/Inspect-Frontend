@@ -363,6 +363,11 @@ export default function AssetGalleryScreen({
     string | null
   >(null);
 
+  const [editingRecentAsset, setEditingRecentAsset] =
+    useState<AssetItem | null>(null);
+
+  const [creatingTaxonomy, setCreatingTaxonomy] = useState(false);
+
   const [recentViewerAsset, setRecentViewerAsset] = useState<AssetItem | null>(
     null,
   );
@@ -415,6 +420,9 @@ export default function AssetGalleryScreen({
   const categoryInputRef = useRef<TextInput>(null);
   const typeInputRef = useRef<TextInput>(null);
   const nameInputRef = useRef<TextInput>(null);
+  const mainListRef = useRef<FlatList<AssetNameItem>>(null);
+
+  const addModalScrollRef = useRef<ScrollView>(null);
 
   const [focusedEditorField, setFocusedEditorField] =
     useState<EditorField>(null);
@@ -462,6 +470,125 @@ export default function AssetGalleryScreen({
     return categories.find((item) => item.id === type.categoryId) ?? null;
   };
 
+  const createCategoryValue = async (
+    label: string,
+  ): Promise<AssetCategoryItem> => {
+    const existing = categories.find(
+      (item) => normalizeText(item.label) === normalizeText(label),
+    );
+
+    if (existing) {
+      return existing;
+    }
+
+    if (shouldUseOffline) {
+      const category: AssetCategoryItem = {
+        id: createLocalId("category"),
+        label,
+      };
+
+      setCategories((prev) => [category, ...prev]);
+
+      return category;
+    }
+
+    const result = await assetCategoryApi.createCategory(label);
+
+    const category = result.category;
+
+    setCategories((prev) => {
+      if (prev.some((item) => item.id === category.id)) {
+        return prev;
+      }
+
+      return [category, ...prev];
+    });
+
+    return category;
+  };
+
+  const createTypeValue = async (
+    categoryId: string,
+    label: string,
+  ): Promise<AssetTypeItem> => {
+    const existing = types.find(
+      (item) =>
+        item.categoryId === categoryId &&
+        normalizeText(item.label) === normalizeText(label),
+    );
+
+    if (existing) {
+      return existing;
+    }
+
+    if (shouldUseOffline) {
+      const type: AssetTypeItem = {
+        id: createLocalId("type"),
+        categoryId,
+        label,
+      };
+
+      setTypes((prev) => [type, ...prev]);
+
+      return type;
+    }
+
+    const result = await assetCategoryApi.createType(categoryId, label);
+
+    const type = result.type;
+
+    setTypes((prev) => {
+      if (prev.some((item) => item.id === type.id)) {
+        return prev;
+      }
+
+      return [type, ...prev];
+    });
+
+    return type;
+  };
+
+  const createNameValue = async (
+    typeId: string,
+    label: string,
+  ): Promise<AssetNameItem> => {
+    const existing = names.find(
+      (item) =>
+        item.typeId === typeId &&
+        normalizeText(item.label) === normalizeText(label),
+    );
+
+    if (existing) {
+      return existing;
+    }
+
+    if (shouldUseOffline) {
+      const name: AssetNameItem = {
+        id: createLocalId("name"),
+        typeId,
+        label,
+      };
+
+      setNames((prev) => [name, ...prev]);
+
+      return name;
+    }
+
+    const result = await assetCategoryApi.createName(typeId, label);
+
+    const name = result.name;
+
+    setNames((prev) => {
+      if (prev.some((item) => item.id === name.id)) {
+        return prev;
+      }
+
+      return [name, ...prev];
+    });
+
+    return name;
+  };
+
   const resetTransientState = () => {
     setPickerMode(null);
     setPickerSearch("");
@@ -504,6 +631,8 @@ export default function AssetGalleryScreen({
     setRecentTotal(0);
     setRecentHasMore(false);
     setRecentLoadingMore(false);
+    setEditingRecentAsset(null);
+    setCreatingTaxonomy(false);
   };
 
   const applyTaxonomyData = (result: {
@@ -1174,32 +1303,73 @@ export default function AssetGalleryScreen({
     });
   };
 
-  const handleAddCategory = () => {
+  // const handleAddCategory = () => {
+  //   const label = newCategoryText.trim();
+  //   if (!label) return;
+
+  //   const existing = categories.find(
+  //     (item) => normalizeText(item.label) === normalizeText(label),
+  //   );
+
+  //   if (existing) {
+  //     selectCategory(existing);
+  //     return;
+  //   }
+
+  //   const category: AssetCategoryItem = {
+  //     id: createLocalId("category"),
+  //     label,
+  //   };
+
+  //   setCategories((prev) => [category, ...prev]);
+  //   setSelectionSource("taxonomy");
+  //   setSelectedRecentAssetId(null);
+  //   setSelectedCategoryId(category.id);
+  //   setSelectedTypeId(null);
+  //   setSelectedNameId(null);
+  //   setNewCategoryText("");
+  //   setShowAddCategory(false);
+  // };
+
+  const handleAddCategory = async () => {
     const label = newCategoryText.trim();
-    if (!label) return;
 
-    const existing = categories.find(
-      (item) => normalizeText(item.label) === normalizeText(label),
-    );
-
-    if (existing) {
-      selectCategory(existing);
+    if (!label || creatingTaxonomy) {
       return;
     }
 
-    const category: AssetCategoryItem = {
-      id: createLocalId("category"),
-      label,
-    };
+    try {
+      setCreatingTaxonomy(true);
 
-    setCategories((prev) => [category, ...prev]);
-    setSelectionSource("taxonomy");
-    setSelectedRecentAssetId(null);
-    setSelectedCategoryId(category.id);
-    setSelectedTypeId(null);
-    setSelectedNameId(null);
-    setNewCategoryText("");
-    setShowAddCategory(false);
+      const category = await createCategoryValue(label);
+
+      setSelectionSource("taxonomy");
+
+      setSelectedRecentAssetId(null);
+
+      setSelectedCategoryId(category.id);
+
+      setSelectedTypeId(null);
+      setSelectedNameId(null);
+
+      setNewCategoryText("");
+      setShowAddCategory(false);
+
+      /*
+       * Automatically continue
+       * Category -> Type.
+       */
+      setPickerMode("type");
+
+      setPickerSearch("");
+
+      setShowAddType(true);
+      setNewTypeText("");
+    } catch (error) {
+      console.warn("[AssetGallery] Could not create category", error);
+    } finally {
+      setCreatingTaxonomy(false);
+    }
   };
 
   const beginEditCategory = (category: AssetCategoryItem) => {
@@ -1226,36 +1396,104 @@ export default function AssetGalleryScreen({
     setEditingCategoryText("");
   };
 
-  const handleAddType = () => {
-    if (!selectedCategoryId) return;
+  // const handleAddType = () => {
+  //   if (!selectedCategoryId) return;
 
-    const label = newTypeText.trim();
-    if (!label) return;
+  //   const label = newTypeText.trim();
+  //   if (!label) return;
 
-    const existing = availableTypes.find(
-      (item) => normalizeText(item.label) === normalizeText(label),
-    );
+  //   const existing = availableTypes.find(
+  //     (item) => normalizeText(item.label) === normalizeText(label),
+  //   );
 
-    if (existing) {
-      selectType(existing);
+  //   if (existing) {
+  //     selectType(existing);
+  //     return;
+  //   }
+
+  //   const type: AssetTypeItem = {
+  //     id: createLocalId("type"),
+  //     categoryId: selectedCategoryId,
+  //     label,
+  //   };
+
+  //   setTypes((prev) => [type, ...prev]);
+  //   setSelectionSource("taxonomy");
+  //   setSelectedRecentAssetId(null);
+  //   setSelectedTypeId(type.id);
+  //   setSelectedNameId(null);
+  //   setNewTypeText("");
+  //   setShowAddType(false);
+  // };
+
+  const handleAddType = async () => {
+    if (!selectedCategoryId || creatingTaxonomy) {
       return;
     }
 
-    const type: AssetTypeItem = {
-      id: createLocalId("type"),
-      categoryId: selectedCategoryId,
-      label,
-    };
+    const label = newTypeText.trim();
 
-    setTypes((prev) => [type, ...prev]);
-    setSelectionSource("taxonomy");
-    setSelectedRecentAssetId(null);
-    setSelectedTypeId(type.id);
-    setSelectedNameId(null);
-    setNewTypeText("");
-    setShowAddType(false);
+    if (!label) return;
+
+    try {
+      setCreatingTaxonomy(true);
+
+      const type = await createTypeValue(selectedCategoryId, label);
+
+      setSelectionSource("taxonomy");
+
+      setSelectedRecentAssetId(null);
+
+      setSelectedTypeId(type.id);
+
+      setSelectedNameId(null);
+
+      setNewTypeText("");
+      setShowAddType(false);
+
+      /*
+       * Type is done.
+       *
+       * There is currently no separate
+       * Name picker, so continue into the
+       * Add Asset modal with Category +
+       * Type already filled.
+       */
+      const category = categories.find(
+        (item) => item.id === selectedCategoryId,
+      );
+
+      setPickerMode(null);
+
+      setAddCategoryText(category?.label || "");
+
+      setAddTypeText(type.label);
+
+      setAddAssetNameText("");
+
+      setCategoryDropdownOpen(false);
+      setTypeDropdownOpen(false);
+      setNameDropdownOpen(true);
+
+      setFocusedEditorField("name");
+
+      setAssetEditorMode("add");
+
+      setAddAssetModalOpen(true);
+
+      setTimeout(() => {
+        nameInputRef.current?.focus();
+
+        addModalScrollRef.current?.scrollToEnd({
+          animated: true,
+        });
+      }, 250);
+    } catch (error) {
+      console.warn("[AssetGallery] Could not create type", error);
+    } finally {
+      setCreatingTaxonomy(false);
+    }
   };
-
   const beginEditType = (type: AssetTypeItem) => {
     setShowAddType(false);
     setNewTypeText("");
@@ -1286,7 +1524,24 @@ export default function AssetGalleryScreen({
     }
 
     setEditingNameId(item.id);
+
     setEditingNameText(item.label);
+
+    const index = displayedNames.findIndex((row) => row.id === item.id);
+
+    if (index >= 0) {
+      /*
+       * Wait until keyboard resize has
+       * happened before scrolling.
+       */
+      setTimeout(() => {
+        mainListRef.current?.scrollToIndex({
+          index,
+          animated: true,
+          viewPosition: 0.25,
+        });
+      }, 250);
+    }
   };
 
   const cancelEditName = () => {
@@ -1317,14 +1572,28 @@ export default function AssetGalleryScreen({
       .slice(0, 6);
   }, [categories, addCategoryText]);
 
-  const editorSelectedCategory = useMemo(
-    () =>
+  // const editorSelectedCategory = useMemo(
+  //   () =>
+  //     categories.find(
+  //       (item) => normalizeText(item.label) === normalizeText(addCategoryText),
+  //     ) ?? null,
+  //   [categories, addCategoryText],
+  // );
+
+  const editorSelectedCategory = useMemo(() => {
+    if (assetEditorMode === "recent" && editingRecentAsset) {
+      return (
+        categories.find((item) => item.id === editingRecentAsset.categoryId) ??
+        null
+      );
+    }
+
+    return (
       categories.find(
         (item) => normalizeText(item.label) === normalizeText(addCategoryText),
-      ) ?? null,
-    [categories, addCategoryText],
-  );
-
+      ) ?? null
+    );
+  }, [categories, addCategoryText, assetEditorMode, editingRecentAsset]);
   const editorTypeMatches = useMemo(() => {
     if (!editorSelectedCategory) return [];
 
@@ -1342,17 +1611,43 @@ export default function AssetGalleryScreen({
       .slice(0, 6);
   }, [types, editorSelectedCategory, addTypeText]);
 
-  const editorSelectedType = useMemo(
-    () =>
-      editorSelectedCategory
-        ? (types.find(
-            (item) =>
-              item.categoryId === editorSelectedCategory.id &&
-              normalizeText(item.label) === normalizeText(addTypeText),
-          ) ?? null)
-        : null,
-    [types, editorSelectedCategory, addTypeText],
-  );
+  // const editorSelectedType = useMemo(
+  //   () =>
+  //     editorSelectedCategory
+  //       ? (types.find(
+  //           (item) =>
+  //             item.categoryId === editorSelectedCategory.id &&
+  //             normalizeText(item.label) === normalizeText(addTypeText),
+  //         ) ?? null)
+  //       : null,
+  //   [types, editorSelectedCategory, addTypeText],
+  // );
+
+  const editorSelectedType = useMemo(() => {
+    if (assetEditorMode === "recent" && editingRecentAsset) {
+      return (
+        types.find((item) => item.id === editingRecentAsset.typeId) ?? null
+      );
+    }
+
+    if (!editorSelectedCategory) {
+      return null;
+    }
+
+    return (
+      types.find(
+        (item) =>
+          item.categoryId === editorSelectedCategory.id &&
+          normalizeText(item.label) === normalizeText(addTypeText),
+      ) ?? null
+    );
+  }, [
+    types,
+    editorSelectedCategory,
+    addTypeText,
+    assetEditorMode,
+    editingRecentAsset,
+  ]);
 
   const editorNameMatches = useMemo(() => {
     if (!editorSelectedType) return [];
@@ -1384,6 +1679,7 @@ export default function AssetGalleryScreen({
     setNameDropdownOpen(false);
 
     setFocusedEditorField(null);
+    setEditingRecentAsset(null);
   };
 
   const openAddAssetModal = () => {
@@ -1413,20 +1709,52 @@ export default function AssetGalleryScreen({
   };
 
   const openRecentAssetEditor = (asset: AssetItem) => {
+    /*
+     * Editing is independent from
+     * row selection.
+     */
+    setEditingRecentAsset(asset);
+
     setAssetEditorMode("recent");
 
     setAddCategoryText(asset.category || "");
+
     setAddTypeText(asset.type || "");
+
     setAddAssetNameText(asset.name || "");
 
     setCategoryDropdownOpen(false);
     setTypeDropdownOpen(false);
     setNameDropdownOpen(false);
 
-    setFocusedEditorField(null);
+    setFocusedEditorField("name");
 
     setAddAssetModalOpen(true);
+
+    setTimeout(() => {
+      nameInputRef.current?.focus();
+
+      addModalScrollRef.current?.scrollToEnd({
+        animated: true,
+      });
+    }, 250);
   };
+
+  // const openRecentAssetEditor = (asset: AssetItem) => {
+  //   setAssetEditorMode("recent");
+
+  //   setAddCategoryText(asset.category || "");
+  //   setAddTypeText(asset.type || "");
+  //   setAddAssetNameText(asset.name || "");
+
+  //   setCategoryDropdownOpen(false);
+  //   setTypeDropdownOpen(false);
+  //   setNameDropdownOpen(false);
+
+  //   setFocusedEditorField(null);
+
+  //   setAddAssetModalOpen(true);
+  // };
 
   const selectEditorCategory = (category: AssetCategoryItem) => {
     const changed =
@@ -1462,218 +1790,415 @@ export default function AssetGalleryScreen({
     setNameDropdownOpen(false);
   };
 
-  const handleAddCompleteAsset = () => {
+  // const handleAddCompleteAsset = () => {
+  //   const categoryLabel = addCategoryText.trim();
+  //   const typeLabel = addTypeText.trim();
+  //   const assetLabel = addAssetNameText.trim();
+
+  //   if (!categoryLabel || !typeLabel || !assetLabel) {
+  //     return;
+  //   }
+
+  //   // RECENT ASSET
+  //   // Category + Type must stay exactly the same.
+  //   // Only the asset name can be changed.
+
+  //   if (assetEditorMode === "recent" && selectedRecentAsset) {
+  //     const newNameId = createLocalId("name");
+
+  //     const newName: AssetNameItem = {
+  //       id: newNameId,
+  //       typeId: selectedRecentAsset.typeId || "unknown",
+  //       label: assetLabel,
+  //     };
+
+  //     setNames((prev) => [newName, ...prev]);
+
+  //     setSelectionSource("taxonomy");
+  //     setSelectedRecentAssetId(null);
+
+  //     setSelectedCategoryId(selectedRecentAsset.categoryId || "unknown");
+
+  //     setSelectedTypeId(selectedRecentAsset.typeId || "unknown");
+
+  //     setSelectedNameId(newNameId);
+
+  //     setFeaturedNameIds((prev) =>
+  //       prev.includes(newNameId) ? prev : [newNameId, ...prev].slice(0, 10),
+  //     );
+
+  //     finishWithAsset({
+  //       categoryId: selectedRecentAsset.categoryId || "unknown",
+
+  //       category: selectedRecentAsset.category || categoryLabel,
+
+  //       typeId: selectedRecentAsset.typeId || "unknown",
+
+  //       type: selectedRecentAsset.type || typeLabel,
+
+  //       nameId: newNameId,
+
+  //       name: assetLabel,
+  //     });
+
+  //     closeAssetEditor();
+
+  //     return;
+  //   }
+
+  //   // NORMAL ADD ASSET FLOW
+  //   // Category, Type and Name can all be created/changed.
+
+  //   let category = categories.find(
+  //     (item) => normalizeText(item.label) === normalizeText(categoryLabel),
+  //   );
+
+  //   if (!category) {
+  //     category = {
+  //       id: createLocalId("category"),
+  //       label: categoryLabel,
+  //     };
+
+  //     setCategories((prev) => [category!, ...prev]);
+  //   }
+
+  //   let type = types.find(
+  //     (item) =>
+  //       item.categoryId === category!.id &&
+  //       normalizeText(item.label) === normalizeText(typeLabel),
+  //   );
+
+  //   if (!type) {
+  //     type = {
+  //       id: createLocalId("type"),
+  //       categoryId: category.id,
+  //       label: typeLabel,
+  //     };
+
+  //     setTypes((prev) => [type!, ...prev]);
+  //   }
+
+  //   let name = names.find(
+  //     (item) =>
+  //       item.typeId === type!.id &&
+  //       normalizeText(item.label) === normalizeText(assetLabel),
+  //   );
+
+  //   if (!name) {
+  //     name = {
+  //       id: createLocalId("name"),
+  //       typeId: type.id,
+  //       label: assetLabel,
+  //     };
+
+  //     setNames((prev) => [name!, ...prev]);
+  //   }
+
+  //   setSelectionSource("taxonomy");
+  //   setSelectedRecentAssetId(null);
+
+  //   setSelectedCategoryId(category.id);
+  //   setSelectedTypeId(type.id);
+  //   setSelectedNameId(name.id);
+
+  //   setFeaturedNameIds((prev) =>
+  //     prev.includes(name!.id) ? prev : [name!.id, ...prev].slice(0, 10),
+  //   );
+
+  //   closeAssetEditor();
+  // };
+
+  const handleAddCompleteAsset = async () => {
     const categoryLabel = addCategoryText.trim();
+
     const typeLabel = addTypeText.trim();
+
     const assetLabel = addAssetNameText.trim();
 
-    if (!categoryLabel || !typeLabel || !assetLabel) {
+    if (!categoryLabel || !typeLabel || !assetLabel || creatingTaxonomy) {
       return;
     }
 
-    // RECENT ASSET
-    // Category + Type must stay exactly the same.
-    // Only the asset name can be changed.
+    try {
+      setCreatingTaxonomy(true);
 
-    if (assetEditorMode === "recent" && selectedRecentAsset) {
-      const newNameId = createLocalId("name");
+      // -------------------------------------------------------
+      // RECENT -> SUGGESTED
+      // -------------------------------------------------------
 
-      const newName: AssetNameItem = {
-        id: newNameId,
-        typeId: selectedRecentAsset.typeId || "unknown",
-        label: assetLabel,
-      };
+      if (assetEditorMode === "recent" && editingRecentAsset) {
+        /*
+         * Recent category/type stay fixed.
+         *
+         * Editing Recent means:
+         * create/select a taxonomy Name
+         * and move selection to Suggested.
+         *
+         * We DO NOT select Recent.
+         */
 
-      setNames((prev) => [newName, ...prev]);
+        const type = types.find(
+          (item) => item.id === editingRecentAsset.typeId,
+        );
+
+        if (!type) {
+          console.warn(
+            "[AssetGallery] Recent asset type not found in taxonomy",
+          );
+          return;
+        }
+
+        const name = await createNameValue(type.id, assetLabel);
+
+        setSelectionSource("taxonomy");
+
+        setSelectedRecentAssetId(null);
+
+        setSelectedCategoryId(type.categoryId);
+
+        setSelectedTypeId(type.id);
+
+        setSelectedNameId(name.id);
+
+        setFeaturedNameIds((prev) =>
+          prev.includes(name.id) ? prev : [name.id, ...prev].slice(0, 10),
+        );
+
+        /*
+         * Make sure Suggested is visible.
+         */
+        setSuggestedExpanded(true);
+
+        setEditingRecentAsset(null);
+
+        closeAssetEditor();
+
+        return;
+      }
+
+      // -------------------------------------------------------
+      // NORMAL ADD ASSET
+      // -------------------------------------------------------
+
+      const category = await createCategoryValue(categoryLabel);
+
+      const type = await createTypeValue(category.id, typeLabel);
+
+      const name = await createNameValue(type.id, assetLabel);
 
       setSelectionSource("taxonomy");
+
       setSelectedRecentAssetId(null);
 
-      setSelectedCategoryId(selectedRecentAsset.categoryId || "unknown");
+      setSelectedCategoryId(category.id);
 
-      setSelectedTypeId(selectedRecentAsset.typeId || "unknown");
+      setSelectedTypeId(type.id);
 
-      setSelectedNameId(newNameId);
+      setSelectedNameId(name.id);
 
       setFeaturedNameIds((prev) =>
-        prev.includes(newNameId) ? prev : [newNameId, ...prev].slice(0, 10),
+        prev.includes(name.id) ? prev : [name.id, ...prev].slice(0, 10),
       );
 
-      finishWithAsset({
-        categoryId: selectedRecentAsset.categoryId || "unknown",
-
-        category: selectedRecentAsset.category || categoryLabel,
-
-        typeId: selectedRecentAsset.typeId || "unknown",
-
-        type: selectedRecentAsset.type || typeLabel,
-
-        nameId: newNameId,
-
-        name: assetLabel,
-      });
+      setSuggestedExpanded(true);
 
       closeAssetEditor();
-
-      return;
+    } catch (error) {
+      console.warn("[AssetGallery] Could not create asset taxonomy", error);
+    } finally {
+      setCreatingTaxonomy(false);
     }
-
-    // NORMAL ADD ASSET FLOW
-    // Category, Type and Name can all be created/changed.
-
-    let category = categories.find(
-      (item) => normalizeText(item.label) === normalizeText(categoryLabel),
-    );
-
-    if (!category) {
-      category = {
-        id: createLocalId("category"),
-        label: categoryLabel,
-      };
-
-      setCategories((prev) => [category!, ...prev]);
-    }
-
-    let type = types.find(
-      (item) =>
-        item.categoryId === category!.id &&
-        normalizeText(item.label) === normalizeText(typeLabel),
-    );
-
-    if (!type) {
-      type = {
-        id: createLocalId("type"),
-        categoryId: category.id,
-        label: typeLabel,
-      };
-
-      setTypes((prev) => [type!, ...prev]);
-    }
-
-    let name = names.find(
-      (item) =>
-        item.typeId === type!.id &&
-        normalizeText(item.label) === normalizeText(assetLabel),
-    );
-
-    if (!name) {
-      name = {
-        id: createLocalId("name"),
-        typeId: type.id,
-        label: assetLabel,
-      };
-
-      setNames((prev) => [name!, ...prev]);
-    }
-
-    setSelectionSource("taxonomy");
-    setSelectedRecentAssetId(null);
-
-    setSelectedCategoryId(category.id);
-    setSelectedTypeId(type.id);
-    setSelectedNameId(name.id);
-
-    setFeaturedNameIds((prev) =>
-      prev.includes(name!.id) ? prev : [name!.id, ...prev].slice(0, 10),
-    );
-
-    closeAssetEditor();
   };
 
-  const handleEditorAddCategory = () => {
+  // const handleEditorAddCategory = () => {
+  //   const label = addCategoryText.trim();
+  //   if (!label) return;
+
+  //   const existing = categories.find(
+  //     (item) => normalizeText(item.label) === normalizeText(label),
+  //   );
+
+  //   if (existing) {
+  //     selectEditorCategory(existing);
+  //     setCategoryDropdownOpen(false);
+  //     setTypeDropdownOpen(true);
+  //     return;
+  //   }
+
+  //   const category: AssetCategoryItem = {
+  //     id: createLocalId("category"),
+  //     label,
+  //   };
+
+  //   setCategories((prev) => [category, ...prev]);
+
+  //   setAddCategoryText(category.label);
+  //   setAddTypeText("");
+  //   setAddAssetNameText("");
+
+  //   setCategoryDropdownOpen(false);
+  //   setTypeDropdownOpen(true);
+  //   setNameDropdownOpen(false);
+  // };
+
+  const handleEditorAddCategory = async () => {
     const label = addCategoryText.trim();
-    if (!label) return;
 
-    const existing = categories.find(
-      (item) => normalizeText(item.label) === normalizeText(label),
-    );
-
-    if (existing) {
-      selectEditorCategory(existing);
-      setCategoryDropdownOpen(false);
-      setTypeDropdownOpen(true);
+    if (!label || creatingTaxonomy) {
       return;
     }
 
-    const category: AssetCategoryItem = {
-      id: createLocalId("category"),
-      label,
-    };
+    try {
+      setCreatingTaxonomy(true);
 
-    setCategories((prev) => [category, ...prev]);
+      const category = await createCategoryValue(label);
 
-    setAddCategoryText(category.label);
-    setAddTypeText("");
-    setAddAssetNameText("");
+      setAddCategoryText(category.label);
 
-    setCategoryDropdownOpen(false);
-    setTypeDropdownOpen(true);
-    setNameDropdownOpen(false);
+      setAddTypeText("");
+      setAddAssetNameText("");
+
+      setCategoryDropdownOpen(false);
+
+      setTypeDropdownOpen(true);
+      setNameDropdownOpen(false);
+
+      setFocusedEditorField("type");
+
+      setTimeout(() => {
+        typeInputRef.current?.focus();
+      }, 100);
+    } catch (error) {
+      console.warn("[AssetGallery] Could not create category", error);
+    } finally {
+      setCreatingTaxonomy(false);
+    }
   };
+  // const handleEditorAddType = () => {
+  //   if (!editorSelectedCategory) return;
 
-  const handleEditorAddType = () => {
-    if (!editorSelectedCategory) return;
+  //   const label = addTypeText.trim();
+  //   if (!label) return;
+
+  //   const existing = types.find(
+  //     (item) =>
+  //       item.categoryId === editorSelectedCategory.id &&
+  //       normalizeText(item.label) === normalizeText(label),
+  //   );
+
+  //   if (existing) {
+  //     selectEditorType(existing);
+  //     setTypeDropdownOpen(false);
+  //     setNameDropdownOpen(true);
+  //     return;
+  //   }
+
+  //   const type: AssetTypeItem = {
+  //     id: createLocalId("type"),
+  //     categoryId: editorSelectedCategory.id,
+  //     label,
+  //   };
+
+  //   setTypes((prev) => [type, ...prev]);
+
+  //   setAddTypeText(type.label);
+  //   setAddAssetNameText("");
+
+  //   setTypeDropdownOpen(false);
+  //   setNameDropdownOpen(true);
+  // };
+
+  const handleEditorAddType = async () => {
+    if (!editorSelectedCategory || creatingTaxonomy) {
+      return;
+    }
 
     const label = addTypeText.trim();
+
     if (!label) return;
 
-    const existing = types.find(
-      (item) =>
-        item.categoryId === editorSelectedCategory.id &&
-        normalizeText(item.label) === normalizeText(label),
-    );
+    try {
+      setCreatingTaxonomy(true);
 
-    if (existing) {
-      selectEditorType(existing);
+      const type = await createTypeValue(editorSelectedCategory.id, label);
+
+      setAddTypeText(type.label);
+
+      setAddAssetNameText("");
+
       setTypeDropdownOpen(false);
       setNameDropdownOpen(true);
+
+      setFocusedEditorField("name");
+
+      setTimeout(() => {
+        nameInputRef.current?.focus();
+
+        addModalScrollRef.current?.scrollToEnd({
+          animated: true,
+        });
+      }, 100);
+    } catch (error) {
+      console.warn("[AssetGallery] Could not create type", error);
+    } finally {
+      setCreatingTaxonomy(false);
+    }
+  };
+  // const handleEditorAddName = () => {
+  //   if (!editorSelectedType) return;
+
+  //   const label = addAssetNameText.trim();
+  //   if (!label) return;
+
+  //   const existing = names.find(
+  //     (item) =>
+  //       item.typeId === editorSelectedType.id &&
+  //       normalizeText(item.label) === normalizeText(label),
+  //   );
+
+  //   if (existing) {
+  //     setAddAssetNameText(existing.label);
+  //     setNameDropdownOpen(false);
+  //     return;
+  //   }
+
+  //   const name: AssetNameItem = {
+  //     id: createLocalId("name"),
+  //     typeId: editorSelectedType.id,
+  //     label,
+  //   };
+
+  //   setNames((prev) => [name, ...prev]);
+  //   setAddAssetNameText(name.label);
+  //   setNameDropdownOpen(false);
+  // };
+
+  const handleEditorAddName = async () => {
+    if (!editorSelectedType || creatingTaxonomy) {
       return;
     }
-
-    const type: AssetTypeItem = {
-      id: createLocalId("type"),
-      categoryId: editorSelectedCategory.id,
-      label,
-    };
-
-    setTypes((prev) => [type, ...prev]);
-
-    setAddTypeText(type.label);
-    setAddAssetNameText("");
-
-    setTypeDropdownOpen(false);
-    setNameDropdownOpen(true);
-  };
-
-  const handleEditorAddName = () => {
-    if (!editorSelectedType) return;
 
     const label = addAssetNameText.trim();
+
     if (!label) return;
 
-    const existing = names.find(
-      (item) =>
-        item.typeId === editorSelectedType.id &&
-        normalizeText(item.label) === normalizeText(label),
-    );
+    try {
+      setCreatingTaxonomy(true);
 
-    if (existing) {
-      setAddAssetNameText(existing.label);
+      const name = await createNameValue(editorSelectedType.id, label);
+
+      setAddAssetNameText(name.label);
+
       setNameDropdownOpen(false);
-      return;
+
+      setFocusedEditorField(null);
+      nameInputRef.current?.blur();
+    } catch (error) {
+      console.warn("[AssetGallery] Could not create name", error);
+    } finally {
+      setCreatingTaxonomy(false);
     }
-
-    const name: AssetNameItem = {
-      id: createLocalId("name"),
-      typeId: editorSelectedType.id,
-      label,
-    };
-
-    setNames((prev) => [name, ...prev]);
-    setAddAssetNameText(name.label);
-    setNameDropdownOpen(false);
   };
-
   const finishWithAsset = (picked: PickedAssetCategory) => {
     onPickAsset?.(picked);
     onClose();
@@ -2099,10 +2624,25 @@ export default function AssetGalleryScreen({
 
                 {/* Main list */}
                 <FlatList
+                  ref={mainListRef}
                   data={suggestedExpanded ? displayedNames : []}
                   keyExtractor={(item) => item.id}
                   keyboardShouldPersistTaps="handled"
                   showsVerticalScrollIndicator={false}
+                  onScrollToIndexFailed={(info) => {
+                    mainListRef.current?.scrollToOffset({
+                      offset: info.averageItemLength * info.index,
+                      animated: true,
+                    });
+
+                    setTimeout(() => {
+                      mainListRef.current?.scrollToIndex({
+                        index: info.index,
+                        animated: true,
+                        viewPosition: 0.25,
+                      });
+                    }, 150);
+                  }}
                   refreshControl={
                     <RefreshControl
                       refreshing={refreshing}
@@ -2588,7 +3128,9 @@ export default function AssetGalleryScreen({
                   <TouchableOpacity
                     style={[
                       styles.rowActionButton,
-                      !newCategoryText.trim() && styles.buttonDisabled,
+
+                      (!newCategoryText.trim() || creatingTaxonomy) &&
+                        styles.buttonDisabled,
                     ]}
                     disabled={!newCategoryText.trim()}
                     onPress={handleAddCategory}
@@ -2815,7 +3357,9 @@ export default function AssetGalleryScreen({
                 <TouchableWithoutFeedback>
                   <View style={styles.addModalCard}>
                     <ScrollView
+                      ref={addModalScrollRef}
                       keyboardShouldPersistTaps="handled"
+                      keyboardDismissMode="interactive"
                       showsVerticalScrollIndicator={false}
                       contentContainerStyle={styles.addModalScrollContent}
                     >
@@ -3202,6 +3746,12 @@ export default function AssetGalleryScreen({
                             editable={!!editorSelectedType}
                             onFocus={() => {
                               setFocusedEditorField("name");
+
+                              setTimeout(() => {
+                                addModalScrollRef.current?.scrollToEnd({
+                                  animated: true,
+                                });
+                              }, 200);
                             }}
                             onBlur={() => {
                               setFocusedEditorField((current) =>
