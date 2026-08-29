@@ -46,7 +46,7 @@ type OtherAssetFormProps = {
 
   openOtherPhotoCamera: (slot: OtherPhotoSlot) => void;
   onPreviewImage: (uri: string) => void;
-  renderBeforeDetailsButton?: () => React.ReactNode;
+  // renderBeforeDetailsButton?: () => React.ReactNode;
 };
 
 const cleanAssetRawData = (rawData?: Record<string, any> | null) => {
@@ -149,7 +149,7 @@ export default function OtherAssetForm({
   height,
   openOtherPhotoCamera,
   onPreviewImage,
-  renderBeforeDetailsButton,
+  // renderBeforeDetailsButton,
 }: OtherAssetFormProps) {
   const { t, i18n } = useTranslation();
   const [locationDropdownOpen, setLocationDropdownOpen] = useState(false);
@@ -647,7 +647,7 @@ export default function OtherAssetForm({
           })}
         </View>
 
-        {renderBeforeDetailsButton?.()}
+        {/* {renderBeforeDetailsButton?.()} */}
 
         <View
           style={{
