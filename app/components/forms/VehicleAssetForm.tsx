@@ -45,7 +45,7 @@ type VehicleAssetFormProps = {
 
   openVehiclePhotoCamera: (slot: VehiclePhotoSlot) => void;
   onPreviewImage: (uri: string) => void;
-  renderBeforeDetailsButton?: () => React.ReactNode;
+  // renderBeforeDetailsButton?: () => React.ReactNode;
   // t: any;
 };
 
@@ -109,7 +109,7 @@ export default function VehicleAssetForm({
   manufactureYears,
   height,
   openVehiclePhotoCamera,
-  renderBeforeDetailsButton,
+  // renderBeforeDetailsButton,
   // t,
 }: VehicleAssetFormProps) {
   const { t, i18n } = useTranslation();
@@ -420,7 +420,7 @@ export default function VehicleAssetForm({
           );
         })}
       </View>
-      {renderBeforeDetailsButton?.()}
+      {/* {renderBeforeDetailsButton?.()} */}
 
       <TouchableOpacity
         style={styles.addDetailsBtn}
