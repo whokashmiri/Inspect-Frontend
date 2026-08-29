@@ -298,6 +298,10 @@ export default function CreateAssetWizardModal({
 
   const [previewImageUri, setPreviewImageUri] = useState<string | null>(null);
 
+  const [nameSelection, setNameSelection] = useState<
+    { start: number; end: number } | undefined
+  >(undefined);
+
   const didAutoOpenCameraRef = useRef(false);
 
   const { width, height } = useWindowDimensions();
@@ -347,6 +351,7 @@ export default function CreateAssetWizardModal({
       console.log("WIZARD INITIAL BARCODE:", initialData?.code);
 
       setDraft(getInitialDraft(initialData));
+      setNameSelection(undefined);
 
       setImageLoadingMap({});
 
@@ -1231,14 +1236,36 @@ export default function CreateAssetWizardModal({
                                 placeholder={t("asset.assetName")}
                                 placeholderTextColor="#767B91"
                                 value={draft.name}
+                                selection={nameSelection}
+                                onFocus={() => {
+                                  const length = String(
+                                    draft.name || "",
+                                  ).length;
+
+                                  if (length > 0) {
+                                    setNameSelection({
+                                      start: 0,
+                                      end: length,
+                                    });
+                                  }
+
+                                  scrollToField("name");
+                                }}
                                 onChangeText={(text) => {
+                                  // Once typing begins, stop controlling selection.
+                                  setNameSelection(undefined);
+
                                   setDraft((prev) => ({
                                     ...prev,
                                     name: text,
                                   }));
                                 }}
+                                onSelectionChange={() => {
+                                  if (nameSelection) {
+                                    setNameSelection(undefined);
+                                  }
+                                }}
                                 editable
-                                selectTextOnFocus
                                 style={[
                                   styles.input,
                                   styles.compactInput,
@@ -1246,7 +1273,6 @@ export default function CreateAssetWizardModal({
                                   disableAssetName && styles.inputDisabled,
                                 ]}
                                 returnKeyType="done"
-                                onFocus={() => scrollToField("name")}
                               />
 
                               {!!draft.name?.trim() && !disableAssetName && (
@@ -1296,13 +1322,34 @@ export default function CreateAssetWizardModal({
                                 <TextInput
                                   ref={firstInputRef}
                                   value={draft.name}
-                                  selectTextOnFocus
-                                  onChangeText={(text) =>
+                                  selection={nameSelection}
+                                  onFocus={() => {
+                                    const length = String(
+                                      draft.name || "",
+                                    ).length;
+
+                                    if (length > 0) {
+                                      setNameSelection({
+                                        start: 0,
+                                        end: length,
+                                      });
+                                    }
+
+                                    scrollToField("name");
+                                  }}
+                                  onChangeText={(text) => {
+                                    setNameSelection(undefined);
+
                                     setDraft((prev) => ({
                                       ...prev,
                                       name: text,
-                                    }))
-                                  }
+                                    }));
+                                  }}
+                                  onSelectionChange={() => {
+                                    if (nameSelection) {
+                                      setNameSelection(undefined);
+                                    }
+                                  }}
                                   style={styles.assetSelectedNameInput}
                                   placeholder="Asset name"
                                   placeholderTextColor={MUTED}
@@ -1357,7 +1404,7 @@ export default function CreateAssetWizardModal({
                           height={height}
                           openOtherPhotoCamera={openOtherPhotoCamera}
                           onPreviewImage={setPreviewImageUri}
-                          renderBeforeDetailsButton={renderStatusRow}
+                          // renderBeforeDetailsButton={renderStatusRow}
                         />
                       )}
 
@@ -1374,10 +1421,11 @@ export default function CreateAssetWizardModal({
                           height={height}
                           openVehiclePhotoCamera={openVehiclePhotoCamera}
                           onPreviewImage={setPreviewImageUri}
-                          renderBeforeDetailsButton={renderStatusRow}
+                          // renderBeforeDetailsButton={renderStatusRow}
                           // t={t}
                         />
                       )}
+                      {mode === "edit" && renderStatusRow()}
 
                       {/* {mode === "edit" && (
                         <View style={styles.statusInlineRow}>
@@ -1652,28 +1700,6 @@ export default function CreateAssetWizardModal({
                             opacity: 0.6,
                           },
                         ]}
-                        onPress={handleFooterSave}
-                        disabled={submitting || processingImages}
-                      >
-                        <Text style={styles.primaryText}>
-                          {processingImages
-                            ? t("asset.processingPhotos")
-                            : submitting
-                              ? t("asset.saving")
-                              : mode === "edit"
-                                ? t("asset.saveAndNext")
-                                : t("asset.saveAndNewAsset")}
-                        </Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={[
-                          styles.primaryBtn,
-                          styles.finishBtn,
-                          (submitting || processingImages) && {
-                            opacity: 0.6,
-                          },
-                        ]}
                         onPress={handleFinish}
                         disabled={submitting || processingImages}
                       >
@@ -1685,6 +1711,28 @@ export default function CreateAssetWizardModal({
                               : mode === "edit"
                                 ? t("asset.saveChanges")
                                 : t("asset.finish")}
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.primaryBtn,
+                          styles.finishBtn,
+                          (submitting || processingImages) && {
+                            opacity: 0.6,
+                          },
+                        ]}
+                        onPress={handleFooterSave}
+                        disabled={submitting || processingImages}
+                      >
+                        <Text style={styles.primaryText}>
+                          {processingImages
+                            ? t("asset.processingPhotos")
+                            : submitting
+                              ? t("asset.saving")
+                              : mode === "edit"
+                                ? t("asset.saveAndNext")
+                                : t("asset.saveAndNewAsset")}
                         </Text>
                       </TouchableOpacity>
                     </View>
@@ -2547,10 +2595,10 @@ const styles = StyleSheet.create({
   },
 
   smallCheckbox: {
-    width: 16,
-    height: 16,
-    borderRadius: 4,
-    borderWidth: 1,
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 1.5,
     borderColor: ACC,
     alignItems: "center",
     justifyContent: "center",
@@ -2563,9 +2611,9 @@ const styles = StyleSheet.create({
 
   smallCheckmark: {
     color: "#ffffff",
-    fontSize: 10,
+    fontSize: 16,
     fontWeight: "900",
-    lineHeight: 12,
+    lineHeight: 18,
   },
 
   smallRadioOption: {
