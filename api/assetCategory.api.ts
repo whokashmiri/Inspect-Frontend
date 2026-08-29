@@ -41,32 +41,29 @@ export interface NamesResponse {
   names: AssetNameItem[];
 }
 
+export interface CreateCategoryResponse {
+  category: AssetCategoryItem;
+}
+
+export interface CreateTypeResponse {
+  type: AssetTypeItem;
+}
+
+export interface CreateNameResponse {
+  name: AssetNameItem;
+}
+
 export const assetCategoryApi = {
-  /**
-   * Get complete category/type/name data.
-   *
-   * GET /asset-categories
-   */
   getAll: () =>
     request<AssetCategoryData>("/asset-categories", {
       method: "GET",
     }),
 
-  /**
-   * Get only categories.
-   *
-   * GET /asset-categories/categories
-   */
   getCategories: () =>
     request<CategoriesResponse>("/asset-categories/categories", {
       method: "GET",
     }),
 
-  /**
-   * Get types belonging to a category.
-   *
-   * GET /asset-categories/categories/:categoryId/types
-   */
   getTypesByCategoryId: (categoryId: string) =>
     request<TypesResponse>(
       `/asset-categories/categories/${encodeURIComponent(categoryId)}/types`,
@@ -75,11 +72,6 @@ export const assetCategoryApi = {
       },
     ),
 
-  /**
-   * Get names belonging to a type.
-   *
-   * GET /asset-categories/types/:typeId/names
-   */
   getNamesByTypeId: (typeId: string) =>
     request<NamesResponse>(
       `/asset-categories/types/${encodeURIComponent(typeId)}/names`,
@@ -87,4 +79,43 @@ export const assetCategoryApi = {
         method: "GET",
       },
     ),
+
+ createCategory: (label: string) =>
+  request<CreateCategoryResponse>(
+    "/asset-categories/categories",
+    {
+      method: "POST",
+      body: {
+        label,
+      },
+    },
+  ),
+
+createType: (
+  categoryId: string,
+  label: string,
+) =>
+  request<CreateTypeResponse>(
+    `/asset-categories/categories/${encodeURIComponent(categoryId)}/types`,
+    {
+      method: "POST",
+      body: {
+        label,
+      },
+    },
+  ),
+
+  createName: (
+  typeId: string,
+  label: string,
+) =>
+  request<CreateNameResponse>(
+    `/asset-categories/types/${encodeURIComponent(typeId)}/names`,
+    {
+      method: "POST",
+      body: {
+        label,
+      },
+    },
+  ),
 };
