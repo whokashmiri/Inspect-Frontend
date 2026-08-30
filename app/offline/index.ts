@@ -1,5 +1,6 @@
 
 //offline/index.ts
+import { configureOfflineDb } from "./database";
 import { initStorage } from "./storage";
 import { initAssetGalleryStorage } from "./assetGalleryStorage";
 import { initSync, syncQueue, triggerManualSync, startSyncListener, stopSyncListener } from "./sync";
@@ -67,9 +68,19 @@ export { useIsOnline } from "./network";
 
 export async function initOfflineSupport() {
   console.log("🚀 Initializing offline support...");
+
+  // Configure the ONE shared SQLite connection first.
+  await configureOfflineDb();
+
+  // Keep initialization sequential.
   await initStorage();
+
   await initAssetGalleryStorage();
+
   await initAuthStorage();
+
+  // Sync starts only after every storage module is ready.
   await initSync();
+
   console.log("✅ Offline support ready");
 }
