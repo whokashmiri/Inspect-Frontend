@@ -1,32 +1,106 @@
-import * as SQLite from "expo-sqlite";
+
 import * as FileSystem from "expo-file-system/legacy";
 
-const db = SQLite.openDatabaseSync("offline-transactions.db");
+import {
+  transactionsDb as db,
+  configureTransactionsDb,
+  runTransactionsDbTask,
+} from "./transactionsDatabase";
 
-export async function initTransactionsOfflineDb() {
-  await db.execAsync(`
-    CREATE TABLE IF NOT EXISTS offline_transactions (
-      id TEXT PRIMARY KEY NOT NULL,
-      data TEXT NOT NULL,
-      updatedAt TEXT
-    );
-  `);
+let transactionsInitialized =
+  false;
+
+let transactionsInitializationPromise:
+  | Promise<void>
+  | null = null;
+
+export function initTransactionsOfflineDb():
+  Promise<void> {
+  if (transactionsInitialized) {
+    return Promise.resolve();
+  }
+
+  if (
+    transactionsInitializationPromise
+  ) {
+    return transactionsInitializationPromise;
+  }
+
+  transactionsInitializationPromise =
+    (async () => {
+      await configureTransactionsDb();
+
+      await runTransactionsDbTask(
+        async () => {
+          if (
+            transactionsInitialized
+          ) {
+            return;
+          }
+
+          await db.execAsync(`
+            CREATE TABLE IF NOT EXISTS offline_transactions (
+              id TEXT PRIMARY KEY NOT NULL,
+              data TEXT NOT NULL,
+              updatedAt TEXT
+            );
+          `);
+
+          transactionsInitialized =
+            true;
+        },
+      );
+    })().catch((error) => {
+      transactionsInitializationPromise =
+        null;
+
+      throw error;
+    });
+
+  return transactionsInitializationPromise;
 }
 
-export async function saveOfflineTransactions(transactions: any[]) {
+export async function saveOfflineTransactions(
+  transactions: any[],
+) {
   await initTransactionsOfflineDb();
 
-  for (const item of transactions) {
-    const id = String(item.id || item._id);
+  await runTransactionsDbTask(
+    async () => {
+      for (
+        const item of transactions
+      ) {
+        const id =
+          String(
+            item.id ||
+              item._id,
+          );
 
-    await db.runAsync(
-      `INSERT OR REPLACE INTO offline_transactions (id, data, updatedAt)
-       VALUES (?, ?, ?);`,
-      [id, JSON.stringify(item), item.updatedAt || new Date().toISOString()]
-    );
-  }
+        await db.runAsync(
+          `
+            INSERT OR REPLACE
+            INTO offline_transactions
+            (
+              id,
+              data,
+              updatedAt
+            )
+            VALUES (?, ?, ?);
+          `,
+          [
+            id,
+            JSON.stringify(
+              item,
+            ),
+            item.updatedAt ||
+              new Date()
+                .toISOString(),
+          ],
+        );
+      }
+    },
+  );
 }
-
 export async function getOfflineTransactions() {
   await initTransactionsOfflineDb();
 
@@ -114,36 +188,89 @@ export async function saveOfflineTransaction(transaction: any) {
 
 
 
-export async function initInspectionSyncQueue() {
-  await initTransactionsOfflineDb();
+let inspectionQueueInitialized =
+  false;
 
-  await db.execAsync(`
-    CREATE TABLE IF NOT EXISTS pending_inspection_sync (
-      id TEXT PRIMARY KEY NOT NULL,
-      transactionId TEXT NOT NULL,
-      data TEXT NOT NULL,
-      media TEXT,
-      createdAt TEXT NOT NULL,
-      status TEXT NOT NULL
-    );
-  `);
+let inspectionQueueInitializationPromise:
+  | Promise<void>
+  | null = null;
 
-  // Migration for old local DBs
-  try {
-    await db.execAsync(`
-      ALTER TABLE pending_inspection_sync ADD COLUMN projectId TEXT;
-    `);
-  } catch (error: any) {
-    // Ignore if column already exists
-    if (!String(error?.message || error).includes("duplicate column")) {
-      console.log("projectId migration skipped:", error);
-    }
+export function initInspectionSyncQueue():
+  Promise<void> {
+  if (inspectionQueueInitialized) {
+    return Promise.resolve();
   }
+
+  if (
+    inspectionQueueInitializationPromise
+  ) {
+    return inspectionQueueInitializationPromise;
+  }
+
+  inspectionQueueInitializationPromise =
+    (async () => {
+      await initTransactionsOfflineDb();
+
+      await runTransactionsDbTask(
+        async () => {
+          if (
+            inspectionQueueInitialized
+          ) {
+            return;
+          }
+
+          await db.execAsync(`
+            CREATE TABLE IF NOT EXISTS pending_inspection_sync (
+              id TEXT PRIMARY KEY NOT NULL,
+              transactionId TEXT NOT NULL,
+              data TEXT NOT NULL,
+              media TEXT,
+              createdAt TEXT NOT NULL,
+              status TEXT NOT NULL
+            );
+          `);
+
+          const columns =
+            await db.getAllAsync<{
+              name: string;
+            }>(
+              `PRAGMA table_info(pending_inspection_sync);`,
+            );
+
+          const columnNames =
+            columns.map(
+              (column) =>
+                column.name,
+            );
+
+          if (
+            !columnNames.includes(
+              "projectId",
+            )
+          ) {
+            await db.execAsync(`
+              ALTER TABLE pending_inspection_sync
+              ADD COLUMN projectId TEXT;
+            `);
+          }
+
+          inspectionQueueInitialized =
+            true;
+        },
+      );
+    })().catch((error) => {
+      inspectionQueueInitializationPromise =
+        null;
+
+      throw error;
+    });
+
+  return inspectionQueueInitializationPromise;
 }
 
 export async function savePendingInspectionSync({
   transactionId,
-   projectId,
+  projectId,
   data,
   media = [],
 }: {
@@ -154,87 +281,104 @@ export async function savePendingInspectionSync({
 }) {
   await initInspectionSyncQueue();
 
-  const existing = await db.getFirstAsync<any>(
-    `SELECT * FROM pending_inspection_sync
-     WHERE transactionId = ? AND status = ?;`,
-    [transactionId, "pending"]
+  return runTransactionsDbTask(
+    async () => {
+      const existing =
+        await db.getFirstAsync<any>(
+          `
+            SELECT *
+            FROM pending_inspection_sync
+            WHERE transactionId = ?
+              AND status = ?
+            LIMIT 1;
+          `,
+          [
+            transactionId,
+            "pending",
+          ],
+        );
+
+      const cleanMedia =
+        dedupeMedia(media);
+
+      if (existing) {
+        const oldData =
+          JSON.parse(
+            existing.data || "{}",
+          );
+
+        const oldMedia =
+          JSON.parse(
+            existing.media || "[]",
+          );
+
+        const mergedMedia =
+          dedupeMedia([
+            ...oldMedia,
+            ...cleanMedia,
+          ]);
+
+        await db.runAsync(
+          `
+            UPDATE pending_inspection_sync
+            SET
+              data = ?,
+              media = ?,
+              createdAt = ?
+            WHERE id = ?;
+          `,
+          [
+            JSON.stringify({
+              ...oldData,
+              ...data,
+            }),
+            JSON.stringify(
+              mergedMedia,
+            ),
+            new Date()
+              .toISOString(),
+            existing.id,
+          ],
+        );
+
+        return existing.id;
+      }
+
+      const id =
+        `inspection_${transactionId}_${Date.now()}`;
+
+      await db.runAsync(
+        `
+          INSERT INTO pending_inspection_sync
+          (
+            id,
+            transactionId,
+            projectId,
+            data,
+            media,
+            createdAt,
+            status
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?);
+        `,
+        [
+          id,
+          transactionId,
+          projectId ?? null,
+          JSON.stringify(data),
+          JSON.stringify(
+            cleanMedia,
+          ),
+          new Date()
+            .toISOString(),
+          "pending",
+        ],
+      );
+
+      return id;
+    },
   );
-
-  const cleanMedia = dedupeMedia(media);
-
-
-  console.log("[PENDING_INSPECTION] savePendingInspectionSync", {
-  transactionId,
-  projectId,
-  incomingCount: media.length,
-  cleanCount: cleanMedia.length,
-  hasExisting: !!existing,
-});
-
-logOfflineMedia("incoming media", media);
-logOfflineMedia("clean media", cleanMedia);
-
-  if (existing) {
-    const oldData = JSON.parse(existing.data || "{}");
-    const oldMedia = JSON.parse(existing.media || "[]");
-
-    const mergedMedia = dedupeMedia([...oldMedia, ...cleanMedia]);
-
-console.log("[PENDING_INSPECTION] updating existing queue", {
-  transactionId,
-  oldCount: oldMedia.length,
-  newCount: cleanMedia.length,
-  mergedCount: mergedMedia.length,
-});
-
-logOfflineMedia("old queued media", oldMedia);
-logOfflineMedia("new clean media", cleanMedia);
-logOfflineMedia("merged queued media", mergedMedia);
-
-    await db.runAsync(
-      `UPDATE pending_inspection_sync
-       SET data = ?, media = ?, createdAt = ?
-       WHERE id = ?;`,
-      [
-        JSON.stringify({ ...oldData, ...data }),
-        JSON.stringify(mergedMedia),
-        new Date().toISOString(),
-        existing.id,
-      ]
-    );
-
-    return existing.id;
-  }
-
-  const id = `inspection_${transactionId}_${Date.now()}`;
-
-  console.log("[PENDING_INSPECTION] creating new queue item", {
-  id,
-  transactionId,
-  projectId,
-  mediaCount: cleanMedia.length,
-});
-
-logOfflineMedia("new queued media", cleanMedia);
-
- await db.runAsync(
-  `INSERT INTO pending_inspection_sync
-   (id, transactionId, projectId, data, media, createdAt, status)
-   VALUES (?, ?, ?, ?, ?, ?, ?);`,
-  [
-    id,
-    transactionId,
-    projectId ?? null,
-    JSON.stringify(data),
-    JSON.stringify(cleanMedia),
-    new Date().toISOString(),
-    "pending",
-  ]
-);
-
-  return id;
 }
-
 export async function saveLocalInspectionMedia(
   transactionId: string,
   media: any[]
