@@ -1,7 +1,5 @@
 // offline/assetGalleryStorage.ts
 
-import * as SQLite from "expo-sqlite";
-import { Platform } from "react-native";
 
 import {
   AssetCategoryItem,
@@ -15,13 +13,12 @@ import { AssetItem } from "../../api/api";
 // Database
 // -----------------------------------------------------------------------------
 
-const DB_NAME = Platform.select({
-  ios: "offline-queue.db",
-  default: "offline-queue.db",
-})!;
+import {
+  offlineDb as db,
+  configureOfflineDb,
+} from "./database";
 
-const db =
-  SQLite.openDatabaseSync(DB_NAME);
+import { runDbTask } from "./dbQueue";
 
 // -----------------------------------------------------------------------------
 // Types
@@ -56,11 +53,11 @@ const TAXONOMY_CACHE_ID =
 // -----------------------------------------------------------------------------
 // Init
 // -----------------------------------------------------------------------------
-
 let initialized = false;
 
 let initializationPromise:
-  Promise<void> | null = null;
+  | Promise<void>
+  | null = null;
 
 export function initAssetGalleryStorage():
   Promise<void> {
@@ -74,36 +71,38 @@ export function initAssetGalleryStorage():
 
   initializationPromise =
     (async () => {
-      try {
-        /*
-         * We only create the table owned by
-         * AssetGalleryScreen here.
-         *
-         * offline_assets is created by storage.ts.
-         */
-        await db.execAsync(`
-          CREATE TABLE IF NOT EXISTS offline_asset_taxonomy (
-            id TEXT PRIMARY KEY NOT NULL,
-            data TEXT NOT NULL,
-            updatedAt INTEGER NOT NULL
+      await configureOfflineDb();
+
+      await runDbTask(async () => {
+        if (initialized) {
+          return;
+        }
+
+        try {
+          await db.execAsync(`
+            CREATE TABLE IF NOT EXISTS offline_asset_taxonomy (
+              id TEXT PRIMARY KEY NOT NULL,
+              data TEXT NOT NULL,
+              updatedAt INTEGER NOT NULL
+            );
+          `);
+
+          initialized = true;
+
+          console.log(
+            "✅ Asset gallery offline storage initialized",
           );
-        `);
+        } catch (error) {
+          initialized = false;
 
-        initialized = true;
+          console.error(
+            "Asset gallery storage initialization failed:",
+            error,
+          );
 
-        console.log(
-          "✅ Asset gallery offline storage initialized",
-        );
-      } catch (error) {
-        initialized = false;
-
-        console.error(
-          "Asset gallery storage initialization failed:",
-          error,
-        );
-
-        throw error;
-      }
+          throw error;
+        }
+      });
     })().catch((error) => {
       initializationPromise = null;
       throw error;
@@ -322,7 +321,8 @@ export async function saveAssetTaxonomyOffline(
         : [],
   };
 
-  await db.runAsync(
+ await runDbTask(() =>
+  db.runAsync(
     `
       INSERT OR REPLACE
       INTO offline_asset_taxonomy (
@@ -337,7 +337,8 @@ export async function saveAssetTaxonomyOffline(
       JSON.stringify(normalized),
       Date.now(),
     ],
-  );
+  ),
+);
 }
 
 export async function getAssetTaxonomyOffline():
@@ -406,15 +407,15 @@ export async function clearAssetTaxonomyOffline():
   Promise<void> {
   await initAssetGalleryStorage();
 
-  await db.runAsync(
+ await runDbTask(() =>
+  db.runAsync(
     `
       DELETE FROM offline_asset_taxonomy
       WHERE id = ?;
     `,
-    [
-      TAXONOMY_CACHE_ID,
-    ],
-  );
+    [TAXONOMY_CACHE_ID],
+  ),
+);
 }
 
 export async function hasAssetTaxonomyOffline():
@@ -768,19 +769,19 @@ export async function markOfflineAssetUsed(
         new Date().toISOString(),
     };
 
-    await db.runAsync(
-      `
-        UPDATE offline_assets
-        SET data = ?
-        WHERE id = ?;
-      `,
-      [
-        JSON.stringify(
-          updatedAsset,
-        ),
-        normalizedId,
-      ],
-    );
+   await runDbTask(() =>
+  db.runAsync(
+    `
+      UPDATE offline_assets
+      SET data = ?
+      WHERE id = ?;
+    `,
+    [
+      JSON.stringify(updatedAsset),
+      normalizedId,
+    ],
+  ),
+);
   } catch (error) {
     console.warn(
       "[AssetGalleryOffline] Could not mark asset used",
