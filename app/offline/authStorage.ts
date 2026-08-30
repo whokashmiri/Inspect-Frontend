@@ -1,7 +1,7 @@
 
 //offline/authStorage.ts
 import * as SecureStore from "expo-secure-store";
-import * as SQLite from "expo-sqlite";
+
 import { runDbTask } from "./dbQueue";
 import {
   CachedCompany,
@@ -9,7 +9,10 @@ import {
   OfflineSessionMeta,
 } from "./types";
 
-const db = SQLite.openDatabaseSync("offline-queue.db");
+import {
+  offlineDb as db,
+  configureOfflineDb,
+} from "./database";
 
 const KEYS = {
   accessToken: "auth.accessToken",
@@ -22,36 +25,80 @@ const OFFLINE_AUTH_DAYS = 14;
 
 let initialized = false;
 
-export async function initAuthStorage() {
-  if (initialized) return;
+let initializationPromise:
+  | Promise<void>
+  | null = null;
 
-  await db.execAsync(`
-    CREATE TABLE IF NOT EXISTS offline_user (
-      id TEXT PRIMARY KEY NOT NULL,
-      data TEXT NOT NULL,
-      updatedAt INTEGER NOT NULL
-    );
+export function initAuthStorage():
+  Promise<void> {
+  if (initialized) {
+    return Promise.resolve();
+  }
 
-    CREATE TABLE IF NOT EXISTS offline_companies (
-      id TEXT PRIMARY KEY NOT NULL,
-      userId TEXT NOT NULL,
-      data TEXT NOT NULL,
-      updatedAt INTEGER NOT NULL
-    );
+  if (initializationPromise) {
+    return initializationPromise;
+  }
 
-    CREATE TABLE IF NOT EXISTS offline_selected_company (
-      userId TEXT PRIMARY KEY NOT NULL,
-      companyId TEXT NOT NULL,
-      selectedAt INTEGER NOT NULL
-    );
+  initializationPromise =
+    (async () => {
+      /*
+       * Configure shared SQLite connection first.
+       *
+       * Important:
+       * configureOfflineDb() must happen BEFORE
+       * runDbTask() to avoid nested queue calls.
+       */
+      await configureOfflineDb();
 
-    CREATE INDEX IF NOT EXISTS idx_offline_companies_userId
-    ON offline_companies(userId);
-  `);
+      await runDbTask(async () => {
+        if (initialized) {
+          return;
+        }
 
-  initialized = true;
+        try {
+          await db.execAsync(`
+            CREATE TABLE IF NOT EXISTS offline_user (
+              id TEXT PRIMARY KEY NOT NULL,
+              data TEXT NOT NULL,
+              updatedAt INTEGER NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS offline_companies (
+              id TEXT PRIMARY KEY NOT NULL,
+              userId TEXT NOT NULL,
+              data TEXT NOT NULL,
+              updatedAt INTEGER NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS offline_selected_company (
+              userId TEXT PRIMARY KEY NOT NULL,
+              companyId TEXT NOT NULL,
+              selectedAt INTEGER NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_offline_companies_userId
+            ON offline_companies(userId);
+          `);
+
+          initialized = true;
+        } catch (error) {
+          initialized = false;
+
+          console.error(
+            "Auth storage init failed:",
+            error,
+          );
+
+          throw error;
+        }
+      });
+    })().catch((error) => {
+      initializationPromise = null;
+      throw error;
+    });
+
+  return initializationPromise;
 }
-
 export async function saveTokens(accessToken: string, refreshToken?: string | null) {
   await SecureStore.setItemAsync(KEYS.accessToken, accessToken);
 
