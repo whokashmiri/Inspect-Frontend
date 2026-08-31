@@ -25,8 +25,9 @@ export async function configureOfflineDb() {
     return configurationPromise;
   }
 
-  configurationPromise =
-    (async () => {
+ configurationPromise =
+  (async () => {
+    try {
       await offlineDb.execAsync(`
         PRAGMA journal_mode = WAL;
         PRAGMA busy_timeout = 5000;
@@ -34,9 +35,23 @@ export async function configureOfflineDb() {
       `);
 
       configured = true;
-    })().finally(() => {
-      configurationPromise = null;
-    });
+
+      console.log(
+        "[OfflineDB] configured",
+      );
+    } catch (error) {
+      configured = false;
+
+      console.error(
+        "[OfflineDB] configuration failed",
+        error,
+      );
+
+      throw error;
+    }
+  })().finally(() => {
+    configurationPromise = null;
+  });
 
   return configurationPromise;
 }
