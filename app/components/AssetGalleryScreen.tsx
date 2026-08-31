@@ -25,15 +25,21 @@ import {
   AssetTypeItem,
   AssetNameItem,
 } from "../../api/assetCategory.api";
-import { AssetImageItem, AssetItem, projectContentApi } from "../../api/api";
+import { AssetImageItem } from "../../api/api";
 
 import {
   getAssetTaxonomyOffline,
-  getOfflineRecentAssets,
-  markOfflineAssetUsed,
   saveAssetTaxonomyOffline,
   useIsOnline,
 } from "../offline";
+
+import {
+  RecentAssetEntry,
+  createRecentKey,
+  createPendingRecentAsset,
+  getRecentAssets,
+  touchSavedRecentAsset,
+} from "../offline/assetRecentStorage";
 
 import { isManualOfflineMode } from "../offline/connectivityMode";
 
@@ -48,6 +54,15 @@ export type PickedAssetCategory = {
 
   nameId: string;
   name: string;
+
+  /*
+   * Present when this selection participates
+   * in the Recent flow.
+   *
+   * CreateAssetWizardModal will receive this
+   * and complete/discard Recent later.
+   */
+  recentKey?: string;
 };
 
 type AssetGalleryScreenProps = {
@@ -142,15 +157,20 @@ const getAvatarColor = (name?: string | null) => {
   return AVATAR_COLORS[value % AVATAR_COLORS.length];
 };
 
-const recentAssetToPick = (asset: AssetItem): PickedAssetCategory => ({
+const recentAssetToPick = (asset: RecentAssetEntry): PickedAssetCategory => ({
   categoryId: asset.categoryId || "unknown",
+
   category: asset.category || "Unknown",
 
   typeId: asset.typeId || "unknown",
+
   type: asset.type || "Unknown",
 
   nameId: asset.nameId || "unknown",
+
   name: asset.name || "Unknown",
+
+  recentKey: asset.recentKey,
 });
 
 const getTaxonomyAssetImageUrl = (_item: AssetNameItem): string | null => {
@@ -168,59 +188,63 @@ const isImageMedia = (item?: AssetImageItem | null) => {
   return item.mediaType !== "video";
 };
 
-const getRecentAssetMainImageUrl = (asset: AssetItem): string | null => {
+const getRecentAssetMainImageUrl = (asset: RecentAssetEntry): string | null => {
   const images = asset.images;
 
-  if (!images) return null;
-
-  if (Array.isArray(images)) {
-    const firstImage = images.find(
-      (item) => isImageMedia(item) && getMediaUrl(item),
-    );
-    return getMediaUrl(firstImage);
+  if (!images) {
+    return null;
   }
 
-  if (isImageMedia(images.main)) {
-    return getMediaUrl(images.main);
+  if (!isImageMedia(images.main)) {
+    return null;
   }
 
-  const fallback = [
+  return getMediaUrl(images.main);
+};
+
+const getRecentAssetImages = (asset: RecentAssetEntry): RecentViewerItem[] => {
+  const images = asset.images;
+
+  if (!images) {
+    return [];
+  }
+
+  /*
+   * Main MUST stay first.
+   *
+   * The viewer therefore always opens
+   * on the main image.
+   */
+  const source: AssetImageItem[] = [
+    images.main,
     images.details,
     images.brand,
     images.plate,
     images.odometer,
+
     ...(Array.isArray(images.other) ? images.other : []),
-  ].find((item) => isImageMedia(item) && getMediaUrl(item));
-
-  return getMediaUrl(fallback);
-};
-
-const getRecentAssetImages = (asset: AssetItem): RecentViewerItem[] => {
-  const images = asset.images;
-
-  const source: AssetImageItem[] = Array.isArray(images)
-    ? images
-    : [
-        images?.main,
-        images?.details,
-        images?.brand,
-        images?.plate,
-        images?.odometer,
-        ...(Array.isArray(images?.other) ? images.other : []),
-      ].filter((item): item is AssetImageItem => Boolean(item));
+  ].filter((item): item is AssetImageItem => Boolean(item));
 
   const seen = new Set<string>();
+
   const result: RecentViewerItem[] = [];
 
   source.forEach((item, index) => {
-    if (!isImageMedia(item)) return;
+    if (!isImageMedia(item)) {
+      return;
+    }
 
     const url = getMediaUrl(item);
-    if (!url || seen.has(url)) return;
+
+    if (!url || seen.has(url)) {
+      return;
+    }
 
     seen.add(url);
+
     result.push({
-      key: item.id || item.publicId || `${asset.id}-${index}-${url}`,
+      key: item.id || item.publicId || `${asset.recentKey}-${index}-${url}`,
+
       url,
     });
   });
@@ -345,32 +369,27 @@ export default function AssetGalleryScreen({
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [recentAssets, setRecentAssets] = useState<AssetItem[]>([]);
+  const [recentAssets, setRecentAssets] = useState<RecentAssetEntry[]>([]);
 
   const [recentExpanded, setRecentExpanded] = useState(true);
 
   const [suggestedExpanded, setSuggestedExpanded] = useState(true);
 
-  const [recentPage, setRecentPage] = useState(1);
-
   const [recentTotal, setRecentTotal] = useState(0);
-
-  const [recentHasMore, setRecentHasMore] = useState(false);
-
-  const [recentLoadingMore, setRecentLoadingMore] = useState(false);
+  const [recentVisibleCount, setRecentVisibleCount] =
+    useState(RECENT_PAGE_SIZE);
 
   const [selectedRecentAssetId, setSelectedRecentAssetId] = useState<
     string | null
   >(null);
 
   const [editingRecentAsset, setEditingRecentAsset] =
-    useState<AssetItem | null>(null);
+    useState<RecentAssetEntry | null>(null);
 
   const [creatingTaxonomy, setCreatingTaxonomy] = useState(false);
 
-  const [recentViewerAsset, setRecentViewerAsset] = useState<AssetItem | null>(
-    null,
-  );
+  const [recentViewerAsset, setRecentViewerAsset] =
+    useState<RecentAssetEntry | null>(null);
   const [recentViewerIndex, setRecentViewerIndex] = useState(0);
 
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
@@ -627,10 +646,8 @@ export default function AssetGalleryScreen({
     setRecentExpanded(true);
     setSuggestedExpanded(true);
 
-    setRecentPage(1);
     setRecentTotal(0);
-    setRecentHasMore(false);
-    setRecentLoadingMore(false);
+    setRecentVisibleCount(RECENT_PAGE_SIZE);
     setEditingRecentAsset(null);
     setCreatingTaxonomy(false);
   };
@@ -745,120 +762,25 @@ export default function AssetGalleryScreen({
     return text.length > 0 && text !== "unknown";
   };
 
-  const hasMainImage = (asset: AssetItem) => {
-    const images = asset.images;
-
-    if (!images) return false;
-
-    if (Array.isArray(images)) {
-      return false;
-    }
-
-    return !!getMediaUrl(images.main);
-  };
-
-  const filterRecentAssets = (assets: AssetItem[]) => {
-    return assets.filter(
-      (item) =>
-        item.assetType === "other" &&
-        isValidTaxonomyValue(item.category) &&
-        isValidTaxonomyValue(item.type) &&
-        hasMainImage(item),
-    );
-  };
-
   const loadRecentAssets = async () => {
     if (!projectId) {
       setRecentAssets([]);
-      setRecentPage(1);
       setRecentTotal(0);
-      setRecentHasMore(false);
 
       return;
     }
 
     try {
-      // ---------------------------------------------------------
-      // OFFLINE
-      // ---------------------------------------------------------
+      const assets = await getRecentAssets(projectId);
 
-      if (shouldUseOffline) {
-        /*
-         * Offline storage currently accepts a limit,
-         * not page/limit.
-         *
-         * Initial offline page = first RECENT_PAGE_SIZE.
-         */
-        const assets = await getOfflineRecentAssets(
-          projectId,
-          RECENT_PAGE_SIZE,
-        );
+      setRecentAssets(assets);
 
-        const filtered = filterRecentAssets(assets);
-
-        setRecentAssets(filtered);
-
-        setRecentPage(1);
-
-        /*
-         * We don't know the complete offline total yet.
-         * If storage returned a full page, allow Load More.
-         */
-        setRecentHasMore(assets.length >= RECENT_PAGE_SIZE);
-
-        setRecentTotal(filtered.length);
-
-        return;
-      }
-
-      // ---------------------------------------------------------
-      // ONLINE
-      // ---------------------------------------------------------
-
-      try {
-        const result = await projectContentApi.getRecentAssets(
-          projectId,
-          1,
-          RECENT_PAGE_SIZE,
-        );
-
-        const filtered = filterRecentAssets(result.assets || []);
-
-        setRecentAssets(filtered);
-
-        setRecentPage(result.page ?? 1);
-
-        setRecentTotal(result.total ?? 0);
-
-        setRecentHasMore(result.hasMore === true);
-      } catch (onlineError) {
-        console.warn(
-          "[AssetGallery] Online recent load failed. Using offline recent assets.",
-          onlineError,
-        );
-
-        const offlineAssets = await getOfflineRecentAssets(
-          projectId,
-          RECENT_PAGE_SIZE,
-        );
-
-        const filtered = filterRecentAssets(offlineAssets);
-
-        setRecentAssets(filtered);
-
-        setRecentPage(1);
-
-        setRecentTotal(filtered.length);
-
-        setRecentHasMore(offlineAssets.length >= RECENT_PAGE_SIZE);
-      }
-    } catch (err) {
-      console.warn("[AssetGallery] Could not load recent assets", err);
+      setRecentTotal(assets.length);
+    } catch (error) {
+      console.warn("[AssetGallery] Could not load local recent assets", error);
 
       setRecentAssets([]);
-      setRecentPage(1);
       setRecentTotal(0);
-      setRecentHasMore(false);
     }
   };
   const refreshAll = async () => {
@@ -896,87 +818,17 @@ export default function AssetGalleryScreen({
 
   // const recentHasMore = recentVisibleCount < filteredRecentAssets.length;
 
-  const loadMoreRecent = async () => {
-    if (!projectId || recentLoadingMore || !recentHasMore) {
-      return;
-    }
-
-    const nextPage = recentPage + 1;
-
-    try {
-      setRecentLoadingMore(true);
-
-      // ---------------------------------------------------------
-      // OFFLINE
-      // ---------------------------------------------------------
-
-      if (shouldUseOffline) {
-        /*
-         * Offline helper uses limit rather than page.
-         *
-         * Ask SQLite for:
-         *
-         * page 1 -> 10
-         * page 2 -> 20
-         * page 3 -> 30
-         */
-        const nextLimit = nextPage * RECENT_PAGE_SIZE;
-
-        const assets = await getOfflineRecentAssets(projectId, nextLimit);
-
-        const filtered = filterRecentAssets(assets);
-
-        setRecentAssets(filtered);
-
-        setRecentPage(nextPage);
-
-        setRecentTotal(filtered.length);
-
-        /*
-         * If SQLite returned less than requested,
-         * we've reached the end.
-         */
-        setRecentHasMore(assets.length >= nextLimit);
-
-        return;
-      }
-
-      // ---------------------------------------------------------
-      // ONLINE
-      // ---------------------------------------------------------
-
-      const result = await projectContentApi.getRecentAssets(
-        projectId,
-        nextPage,
-        RECENT_PAGE_SIZE,
-      );
-
-      const incoming = filterRecentAssets(result.assets || []);
-
-      /*
-       * Append page instead of replacing previous pages.
-       *
-       * Guard against duplicate IDs as well.
-       */
-      setRecentAssets((current) => {
-        const existingIds = new Set(current.map((item) => item.id));
-
-        const newAssets = incoming.filter((item) => !existingIds.has(item.id));
-
-        return [...current, ...newAssets];
-      });
-
-      setRecentPage(result.page ?? nextPage);
-
-      setRecentTotal(result.total ?? recentTotal);
-
-      setRecentHasMore(result.hasMore === true);
-    } catch (error) {
-      console.warn("[AssetGallery] Could not load more recent assets", error);
-    } finally {
-      setRecentLoadingMore(false);
-    }
+  const loadMoreRecent = () => {
+    setRecentVisibleCount((current) => current + RECENT_PAGE_SIZE);
   };
+
+  const visibleRecentAssets = useMemo(
+    () => filteredRecentAssets.slice(0, recentVisibleCount),
+    [filteredRecentAssets, recentVisibleCount],
+  );
+
+  const recentHasMore =
+    visibleRecentAssets.length < filteredRecentAssets.length;
 
   const displayedNames = useMemo(() => {
     const query = normalizeText(searchQuery);
@@ -1118,7 +970,7 @@ export default function AssetGalleryScreen({
     setEditingNameText("");
   };
 
-  const handleSelectRecentAsset = (asset: AssetItem) => {
+  const handleSelectRecentAsset = (asset: RecentAssetEntry) => {
     const alreadySelected =
       selectionSource === "recent" && selectedRecentAssetId === asset.id;
 
@@ -1708,7 +1560,7 @@ export default function AssetGalleryScreen({
     setAddAssetModalOpen(true);
   };
 
-  const openRecentAssetEditor = (asset: AssetItem) => {
+  const openRecentAssetEditor = (asset: RecentAssetEntry) => {
     /*
      * Editing is independent from
      * row selection.
@@ -1739,22 +1591,6 @@ export default function AssetGalleryScreen({
       });
     }, 250);
   };
-
-  // const openRecentAssetEditor = (asset: AssetItem) => {
-  //   setAssetEditorMode("recent");
-
-  //   setAddCategoryText(asset.category || "");
-  //   setAddTypeText(asset.type || "");
-  //   setAddAssetNameText(asset.name || "");
-
-  //   setCategoryDropdownOpen(false);
-  //   setTypeDropdownOpen(false);
-  //   setNameDropdownOpen(false);
-
-  //   setFocusedEditorField(null);
-
-  //   setAddAssetModalOpen(true);
-  // };
 
   const selectEditorCategory = (category: AssetCategoryItem) => {
     const changed =
@@ -1789,124 +1625,6 @@ export default function AssetGalleryScreen({
     setAddAssetNameText(name.label);
     setNameDropdownOpen(false);
   };
-
-  // const handleAddCompleteAsset = () => {
-  //   const categoryLabel = addCategoryText.trim();
-  //   const typeLabel = addTypeText.trim();
-  //   const assetLabel = addAssetNameText.trim();
-
-  //   if (!categoryLabel || !typeLabel || !assetLabel) {
-  //     return;
-  //   }
-
-  //   // RECENT ASSET
-  //   // Category + Type must stay exactly the same.
-  //   // Only the asset name can be changed.
-
-  //   if (assetEditorMode === "recent" && selectedRecentAsset) {
-  //     const newNameId = createLocalId("name");
-
-  //     const newName: AssetNameItem = {
-  //       id: newNameId,
-  //       typeId: selectedRecentAsset.typeId || "unknown",
-  //       label: assetLabel,
-  //     };
-
-  //     setNames((prev) => [newName, ...prev]);
-
-  //     setSelectionSource("taxonomy");
-  //     setSelectedRecentAssetId(null);
-
-  //     setSelectedCategoryId(selectedRecentAsset.categoryId || "unknown");
-
-  //     setSelectedTypeId(selectedRecentAsset.typeId || "unknown");
-
-  //     setSelectedNameId(newNameId);
-
-  //     setFeaturedNameIds((prev) =>
-  //       prev.includes(newNameId) ? prev : [newNameId, ...prev].slice(0, 10),
-  //     );
-
-  //     finishWithAsset({
-  //       categoryId: selectedRecentAsset.categoryId || "unknown",
-
-  //       category: selectedRecentAsset.category || categoryLabel,
-
-  //       typeId: selectedRecentAsset.typeId || "unknown",
-
-  //       type: selectedRecentAsset.type || typeLabel,
-
-  //       nameId: newNameId,
-
-  //       name: assetLabel,
-  //     });
-
-  //     closeAssetEditor();
-
-  //     return;
-  //   }
-
-  //   // NORMAL ADD ASSET FLOW
-  //   // Category, Type and Name can all be created/changed.
-
-  //   let category = categories.find(
-  //     (item) => normalizeText(item.label) === normalizeText(categoryLabel),
-  //   );
-
-  //   if (!category) {
-  //     category = {
-  //       id: createLocalId("category"),
-  //       label: categoryLabel,
-  //     };
-
-  //     setCategories((prev) => [category!, ...prev]);
-  //   }
-
-  //   let type = types.find(
-  //     (item) =>
-  //       item.categoryId === category!.id &&
-  //       normalizeText(item.label) === normalizeText(typeLabel),
-  //   );
-
-  //   if (!type) {
-  //     type = {
-  //       id: createLocalId("type"),
-  //       categoryId: category.id,
-  //       label: typeLabel,
-  //     };
-
-  //     setTypes((prev) => [type!, ...prev]);
-  //   }
-
-  //   let name = names.find(
-  //     (item) =>
-  //       item.typeId === type!.id &&
-  //       normalizeText(item.label) === normalizeText(assetLabel),
-  //   );
-
-  //   if (!name) {
-  //     name = {
-  //       id: createLocalId("name"),
-  //       typeId: type.id,
-  //       label: assetLabel,
-  //     };
-
-  //     setNames((prev) => [name!, ...prev]);
-  //   }
-
-  //   setSelectionSource("taxonomy");
-  //   setSelectedRecentAssetId(null);
-
-  //   setSelectedCategoryId(category.id);
-  //   setSelectedTypeId(type.id);
-  //   setSelectedNameId(name.id);
-
-  //   setFeaturedNameIds((prev) =>
-  //     prev.includes(name!.id) ? prev : [name!.id, ...prev].slice(0, 10),
-  //   );
-
-  //   closeAssetEditor();
-  // };
 
   const handleAddCompleteAsset = async () => {
     const categoryLabel = addCategoryText.trim();
@@ -2010,37 +1728,6 @@ export default function AssetGalleryScreen({
     }
   };
 
-  // const handleEditorAddCategory = () => {
-  //   const label = addCategoryText.trim();
-  //   if (!label) return;
-
-  //   const existing = categories.find(
-  //     (item) => normalizeText(item.label) === normalizeText(label),
-  //   );
-
-  //   if (existing) {
-  //     selectEditorCategory(existing);
-  //     setCategoryDropdownOpen(false);
-  //     setTypeDropdownOpen(true);
-  //     return;
-  //   }
-
-  //   const category: AssetCategoryItem = {
-  //     id: createLocalId("category"),
-  //     label,
-  //   };
-
-  //   setCategories((prev) => [category, ...prev]);
-
-  //   setAddCategoryText(category.label);
-  //   setAddTypeText("");
-  //   setAddAssetNameText("");
-
-  //   setCategoryDropdownOpen(false);
-  //   setTypeDropdownOpen(true);
-  //   setNameDropdownOpen(false);
-  // };
-
   const handleEditorAddCategory = async () => {
     const label = addCategoryText.trim();
 
@@ -2074,39 +1761,6 @@ export default function AssetGalleryScreen({
       setCreatingTaxonomy(false);
     }
   };
-  // const handleEditorAddType = () => {
-  //   if (!editorSelectedCategory) return;
-
-  //   const label = addTypeText.trim();
-  //   if (!label) return;
-
-  //   const existing = types.find(
-  //     (item) =>
-  //       item.categoryId === editorSelectedCategory.id &&
-  //       normalizeText(item.label) === normalizeText(label),
-  //   );
-
-  //   if (existing) {
-  //     selectEditorType(existing);
-  //     setTypeDropdownOpen(false);
-  //     setNameDropdownOpen(true);
-  //     return;
-  //   }
-
-  //   const type: AssetTypeItem = {
-  //     id: createLocalId("type"),
-  //     categoryId: editorSelectedCategory.id,
-  //     label,
-  //   };
-
-  //   setTypes((prev) => [type, ...prev]);
-
-  //   setAddTypeText(type.label);
-  //   setAddAssetNameText("");
-
-  //   setTypeDropdownOpen(false);
-  //   setNameDropdownOpen(true);
-  // };
 
   const handleEditorAddType = async () => {
     if (!editorSelectedCategory || creatingTaxonomy) {
@@ -2144,34 +1798,6 @@ export default function AssetGalleryScreen({
       setCreatingTaxonomy(false);
     }
   };
-  // const handleEditorAddName = () => {
-  //   if (!editorSelectedType) return;
-
-  //   const label = addAssetNameText.trim();
-  //   if (!label) return;
-
-  //   const existing = names.find(
-  //     (item) =>
-  //       item.typeId === editorSelectedType.id &&
-  //       normalizeText(item.label) === normalizeText(label),
-  //   );
-
-  //   if (existing) {
-  //     setAddAssetNameText(existing.label);
-  //     setNameDropdownOpen(false);
-  //     return;
-  //   }
-
-  //   const name: AssetNameItem = {
-  //     id: createLocalId("name"),
-  //     typeId: editorSelectedType.id,
-  //     label,
-  //   };
-
-  //   setNames((prev) => [name, ...prev]);
-  //   setAddAssetNameText(name.label);
-  //   setNameDropdownOpen(false);
-  // };
 
   const handleEditorAddName = async () => {
     if (!editorSelectedType || creatingTaxonomy) {
@@ -2204,34 +1830,27 @@ export default function AssetGalleryScreen({
     onClose();
   };
 
-  const handleUseRecentAsset = (asset: AssetItem) => {
+  const handleUseRecentAsset = (asset: RecentAssetEntry) => {
     if (projectId) {
-      if (shouldUseOffline) {
-        void markOfflineAssetUsed(asset.id).catch((err) => {
-          console.warn(
-            "[AssetGallery] Could not mark offline recent asset used",
-            err,
-          );
-        });
-      } else {
-        void projectContentApi
-          .markAssetUsed(projectId, asset.id)
-          .catch(async (err) => {
-            console.warn(
-              "[AssetGallery] Could not mark recent asset used online",
-              err,
-            );
+      /*
+       * Move saved Recent to the top.
+       *
+       * Do not touch DB.
+       */
+      void touchSavedRecentAsset(projectId, asset.recentKey).catch((error) => {
+        console.warn("[AssetGallery] Could not update recent usage", error);
+      });
 
-            try {
-              await markOfflineAssetUsed(asset.id);
-            } catch (offlineError) {
-              console.warn(
-                "[AssetGallery] Could not mark recent asset used offline either",
-                offlineError,
-              );
-            }
-          });
-      }
+      const updated = {
+        ...asset,
+        usedAt: Date.now(),
+      };
+
+      setRecentAssets((current) => [
+        updated,
+
+        ...current.filter((item) => item.recentKey !== asset.recentKey),
+      ]);
     }
 
     finishWithAsset(recentAssetToPick(asset));
@@ -2239,23 +1858,122 @@ export default function AssetGalleryScreen({
 
   const handleUseTaxonomyName = (item: AssetNameItem) => {
     const type = types.find((typeItem) => typeItem.id === item.typeId);
-    if (!type) return;
+
+    if (!type) {
+      return;
+    }
 
     const category = categories.find(
       (categoryItem) => categoryItem.id === type.categoryId,
     );
-    if (!category) return;
 
-    finishWithAsset({
+    if (!category) {
+      return;
+    }
+
+    const picked: PickedAssetCategory = {
       categoryId: category.id,
+
       category: category.label,
+
       typeId: type.id,
+
       type: type.label,
+
       nameId: item.id,
+
+      name: item.label,
+    };
+
+    /*
+     * No project means we cannot scope
+     * Recent correctly.
+     */
+    if (!projectId) {
+      finishWithAsset(picked);
+
+      return;
+    }
+
+    const recentKey = createRecentKey({
+      projectId,
+
+      categoryId: category.id,
+
+      typeId: type.id,
+
+      nameId: item.id,
+    });
+
+    /*
+     * If this taxonomy selection is already
+     * a completed Recent asset, don't replace
+     * its images with an empty pending row.
+     */
+    const existing = recentAssets.find(
+      (recent) => recent.recentKey === recentKey,
+    );
+
+    if (existing && existing.status === "saved") {
+      const updated = {
+        ...existing,
+        usedAt: Date.now(),
+      };
+
+      setRecentAssets((current) => [
+        updated,
+
+        ...current.filter((recent) => recent.recentKey !== recentKey),
+      ]);
+
+      void touchSavedRecentAsset(projectId, recentKey);
+
+      finishWithAsset({
+        ...picked,
+        recentKey,
+      });
+
+      return;
+    }
+
+    /*
+     * First use:
+     *
+     * create temporary row immediately.
+     * It intentionally has NO image yet.
+     */
+    const pending = createPendingRecentAsset({
+      projectId,
+
+      categoryId: category.id,
+
+      category: category.label,
+
+      typeId: type.id,
+
+      type: type.label,
+
+      nameId: item.id,
+
       name: item.label,
     });
-  };
 
+    setRecentAssets((current) => [
+      pending,
+
+      ...current.filter((recent) => recent.recentKey !== pending.recentKey),
+    ]);
+
+    setRecentTotal((current) => current + (existing ? 0 : 1));
+
+    /*
+     * Send recentKey to the wizard.
+     */
+    finishWithAsset({
+      ...picked,
+      recentKey: pending.recentKey,
+    });
+  };
   const handleContinue = () => {
     finishWithAsset(UNKNOWN_ASSET);
   };
@@ -2314,7 +2032,7 @@ export default function AssetGalleryScreen({
     [recentViewerAsset],
   );
 
-  const openRecentImages = (asset: AssetItem) => {
+  const openRecentImages = (asset: RecentAssetEntry) => {
     const images = getRecentAssetImages(asset);
     if (!images.length) return;
 
@@ -2322,7 +2040,7 @@ export default function AssetGalleryScreen({
     setRecentViewerAsset(asset);
   };
 
-  const renderRecentAsset = (item: AssetItem) => {
+  const renderRecentAsset = (item: RecentAssetEntry) => {
     const selected =
       selectionSource === "recent" && selectedRecentAssetId === item.id;
 
@@ -2358,6 +2076,9 @@ export default function AssetGalleryScreen({
           <Text style={styles.recentMeta} numberOfLines={1}>
             {item.type || "Unknown"} • {item.category || "Unknown"}
           </Text>
+          {/* {item.status === "pending" && (
+            <Text style={styles.recentPendingText}>Waiting for asset save</Text>
+          )} */}
         </View>
 
         {imageCount > 0 && (
@@ -2705,39 +2426,24 @@ export default function AssetGalleryScreen({
                           {recentExpanded && (
                             <>
                               <View style={styles.recentList}>
-                                {filterRecentAssets(recentAssets).map(
-                                  renderRecentAsset,
-                                )}
+                                {visibleRecentAssets.map(renderRecentAsset)}
                               </View>
 
                               {recentHasMore && (
                                 <TouchableOpacity
-                                  style={[
-                                    styles.loadMoreRecentButton,
-
-                                    recentLoadingMore && styles.buttonDisabled,
-                                  ]}
+                                  style={styles.loadMoreRecentButton}
                                   activeOpacity={0.82}
-                                  disabled={recentLoadingMore}
-                                  onPress={() => void loadMoreRecent()}
+                                  onPress={loadMoreRecent}
                                 >
-                                  {recentLoadingMore ? (
-                                    <Text style={styles.loadMoreRecentText}>
-                                      Loading...
-                                    </Text>
-                                  ) : (
-                                    <>
-                                      <Text style={styles.loadMoreRecentText}>
-                                        Load more
-                                      </Text>
+                                  <Text style={styles.loadMoreRecentText}>
+                                    Load more
+                                  </Text>
 
-                                      <Ionicons
-                                        name="chevron-down"
-                                        size={13}
-                                        color={ACC}
-                                      />
-                                    </>
-                                  )}
+                                  <Ionicons
+                                    name="chevron-down"
+                                    size={13}
+                                    color={ACC}
+                                  />
                                 </TouchableOpacity>
                               )}
                             </>
@@ -5240,5 +4946,12 @@ const styles = StyleSheet.create({
     color: ACC,
     fontSize: 9,
     fontWeight: "800",
+  },
+  recentPendingText: {
+    color: MUTED,
+    fontSize: 7,
+    lineHeight: 9,
+    marginTop: 1,
+    fontWeight: "600",
   },
 });
