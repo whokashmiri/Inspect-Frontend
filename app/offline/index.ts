@@ -24,9 +24,6 @@ export {
   getAssetTaxonomyOffline,
   clearAssetTaxonomyOffline,
   hasAssetTaxonomyOffline,
-  getOfflineRecentAssets,
-  markOfflineAssetUsed,
-  getOfflineAssetGalleryData,
 } from "./assetGalleryStorage";
 
 export {
@@ -76,6 +73,9 @@ export async function initOfflineSupport() {
   await initStorage();
 
   await initAssetGalleryStorage();
+  console.log(
+  "[AssetGalleryOffline] reading taxonomy",
+);
 
   await initAuthStorage();
 
