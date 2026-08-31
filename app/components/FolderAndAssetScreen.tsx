@@ -23,6 +23,10 @@ import { useTranslation } from "react-i18next"; // ← i18n
 import { useAuth } from "../../api/AuthContext";
 import ImageViewer from "react-native-image-zoom-viewer";
 import { VideoView, useVideoPlayer } from "expo-video";
+import {
+  completePendingRecentAsset,
+  discardPendingRecentAsset,
+} from "../offline/assetRecentStorage";
 
 import {
   useWindowDimensions,
@@ -64,11 +68,15 @@ import {
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 
 import { useConnectivity } from "../components/connectivity/ConnectivityContext";
+import type { OfflineResult } from "../offline/types";
 
 type RouteParams = {
   projectId: string;
   projectName: string;
   offlineMode?: boolean;
+};
+type AssetSaveContext = {
+  recentKey?: string;
 };
 
 type FolderPathItem = {
@@ -80,6 +88,17 @@ type Props = {
   route: {
     params: RouteParams;
   };
+};
+
+type CreateAssetOnlineResult = {
+  asset: AssetItem;
+  message?: string;
+};
+
+const isOfflineResult = (
+  result: CreateAssetOnlineResult | OfflineResult,
+): result is OfflineResult => {
+  return "offline" in result && result.offline === true;
 };
 
 const NUM_COLUMNS = 2;
@@ -116,6 +135,10 @@ export default function FolderAndAssetScreen({ route }: Props) {
   const [createAssetInitialData, setCreateAssetInitialData] = useState<
     Partial<AssetDraft> | undefined
   >(undefined);
+
+  const [createAssetRecentKey, setCreateAssetRecentKey] = useState<
+    string | null
+  >(null);
 
   const [assetGalleryVisible, setAssetGalleryVisible] = useState(false);
 
@@ -1518,7 +1541,10 @@ export default function FolderAndAssetScreen({ route }: Props) {
     return Math.floor(numberValue);
   };
 
-  const createAssetAsync = async (draft: AssetDraft) => {
+  const createAssetAsync = async (
+    draft: AssetDraft,
+    context?: AssetSaveContext,
+  ) => {
     const clientMutationId =
       (draft as any).clientMutationId ||
       `asset_${projectId}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
@@ -1647,7 +1673,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
         updatedAt: new Date().toISOString(),
       };
 
-      const result = await safeApiCall(
+      const result = await safeApiCall<CreateAssetOnlineResult>(
         () => projectContentApi.createAsset(payload),
         payload,
         { type: "createAsset", projectId },
@@ -1661,7 +1687,10 @@ export default function FolderAndAssetScreen({ route }: Props) {
         setAssets((prev) =>
           prev.map((asset) =>
             asset.id === clientMutationId
-              ? { ...normalizedOptimisticAsset, id: localId }
+              ? {
+                  ...normalizedOptimisticAsset,
+                  id: localId,
+                }
               : asset,
           ),
         );
@@ -1681,9 +1710,16 @@ export default function FolderAndAssetScreen({ route }: Props) {
             id: localId,
           });
         }
+
         await loadProjectAssetLocations();
         await loadProjectConditions();
+
+        if (context?.recentKey) {
+          discardPendingRecentAsset(projectId, context.recentKey);
+        }
+
         showSnackbar(result.message, "info");
+
         return;
       }
 
@@ -1693,6 +1729,13 @@ export default function FolderAndAssetScreen({ route }: Props) {
         ),
       );
 
+      if (context?.recentKey) {
+        await completePendingRecentAsset({
+          projectId,
+          recentKey: context.recentKey,
+          images: normalizeAssetImages(result.asset.images),
+        });
+      }
       setUnsyncedAssetIds((prev) =>
         prev.filter((id) => id !== clientMutationId),
       );
@@ -1709,9 +1752,9 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
       showSnackbar(t("folderAssetScreen.snackbar.assetCreated"), "success");
     } catch (error: any) {
-      setUploadingAssetIds((prev) =>
-        prev.filter((id) => id !== clientMutationId),
-      );
+      if (context?.recentKey) {
+        discardPendingRecentAsset(projectId, context.recentKey);
+      }
 
       showSnackbar(
         error?.message || t("folderAssetScreen.snackbar.saveFailed"),
@@ -1720,7 +1763,10 @@ export default function FolderAndAssetScreen({ route }: Props) {
     }
   };
 
-  const saveAndCreateNextAsset = async (draft: AssetDraft) => {
+  const saveAndCreateNextAsset = async (
+    draft: AssetDraft,
+    context?: AssetSaveContext,
+  ) => {
     const proceed = await askWorkMode();
 
     if (!proceed) {
@@ -1738,6 +1784,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
      */
     setEditingAsset(null);
     setAutoOpenCameraForEdit(false);
+    setCreateAssetRecentKey(null);
 
     setCreateAssetInitialData(buildNewAssetInitialData(category));
 
@@ -1747,7 +1794,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
     setPendingAssetSaveCount((count) => count + 1);
 
-    void createAssetAsync(draft)
+    void createAssetAsync(draft, context)
       .catch((error: any) => {
         showSnackbar(
           error?.message || t("folderAssetScreen.snackbar.saveFailed"),
@@ -1910,6 +1957,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
   const submitAssetInBackground = async (
     draft: AssetDraft,
     isEdit: boolean,
+    context?: AssetSaveContext,
   ) => {
     const proceed = await askWorkMode();
 
@@ -1925,7 +1973,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
       if (isEdit) {
         await updateAssetAsync(draft);
       } else {
-        await createAssetAsync(draft);
+        await createAssetAsync(draft, context);
       }
     } catch (error: any) {
       showSnackbar(
@@ -2518,6 +2566,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
   };
 
   const openCreateAssetByCategory = (category: "Vehicle" | "Other") => {
+    setCreateAssetRecentKey(null);
     Keyboard.dismiss();
 
     setEditingAsset(null);
@@ -2537,6 +2586,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
   const handleAssetGalleryPick = (selection: PickedAssetCategory) => {
     Keyboard.dismiss();
 
+    setCreateAssetRecentKey(selection.recentKey ?? null);
     setAutoOpenCameraForEdit(false);
 
     const taxonomyData = buildAssetCategoryInitialData(selection);
@@ -3794,10 +3844,13 @@ export default function FolderAndAssetScreen({ route }: Props) {
           <CreateAssetWizardModal
             firstInputRef={assetWizardInputRef}
             projectId={projectId}
+            initialRecentKey={editingAsset ? null : createAssetRecentKey}
             disableAssetName={!!editingAsset && !canEditAssetName}
             visible={assetModalVisible}
             onClose={closeAssetModal}
-            onSubmit={(draft) => submitAssetInBackground(draft, !!editingAsset)}
+            onSubmit={(draft, context) =>
+              submitAssetInBackground(draft, !!editingAsset, context)
+            }
             onSaveAndCreate={saveAndCreateNextAsset}
             onSaveAndNext={saveAndEditNextAsset}
             mode={editingAsset ? "edit" : "create"}
