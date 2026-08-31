@@ -49,6 +49,10 @@ type PhotoSlot =
   | "other"
   | null;
 
+type AssetSaveContext = {
+  recentKey?: string;
+};
+
 const DEFAULT_CONDITIONS = [
   "New",
   "Excellent",
@@ -76,10 +80,14 @@ const translateCondition = (value: string, t: (k: string) => string) => {
 type Props = {
   visible: boolean;
   onClose: () => void;
-  onSubmit: (draft: AssetDraft) => Promise<void> | void;
+  onSubmit: (
+    draft: AssetDraft,
+    context?: AssetSaveContext,
+  ) => Promise<void> | void;
   projectId?: string;
   mode?: "create" | "edit";
   initialData?: Partial<AssetDraft>;
+  initialRecentKey?: string | null;
   disableAssetName?: boolean;
   firstInputRef?: RefObject<TextInput | null>;
 
@@ -90,8 +98,15 @@ type Props = {
     source: "normalizedData" | "newAssetLocation";
   }[];
 
-  onSaveAndNext?: (draft: AssetDraft) => Promise<void> | void;
-  onSaveAndCreate?: (draft: AssetDraft) => Promise<void> | void;
+  onSaveAndNext?: (
+    draft: AssetDraft,
+    context?: AssetSaveContext,
+  ) => Promise<void> | void;
+
+  onSaveAndCreate?: (
+    draft: AssetDraft,
+    context?: AssetSaveContext,
+  ) => Promise<void> | void;
 };
 
 const cleanAssetRawData = (rawData?: Record<string, any> | null) => {
@@ -258,7 +273,7 @@ export default function CreateAssetWizardModal({
   conditionOptions = [],
   autoOpenCamera = false,
   projectId,
-
+  initialRecentKey,
   onSaveAndNext,
   onSaveAndCreate,
 }: Props) {
@@ -319,6 +334,9 @@ export default function CreateAssetWizardModal({
   >({});
 
   const [draft, setDraft] = useState<AssetDraft>(getInitialDraft(initialData));
+  const [activeRecentKey, setActiveRecentKey] = useState<string | null>(
+    initialRecentKey ?? null,
+  );
 
   const [conditionModalOpen, setConditionModalOpen] = useState(false);
   const [projectEmployers, setProjectEmployers] = useState<string[]>([]);
@@ -351,6 +369,7 @@ export default function CreateAssetWizardModal({
       console.log("WIZARD INITIAL BARCODE:", initialData?.code);
 
       setDraft(getInitialDraft(initialData));
+      setActiveRecentKey(initialRecentKey ?? null);
       setNameSelection(undefined);
 
       setImageLoadingMap({});
@@ -383,7 +402,7 @@ export default function CreateAssetWizardModal({
     } else {
       stopVoicePlayback();
     }
-  }, [visible, initialData, autoOpenCamera]);
+  }, [visible, initialData, autoOpenCamera, initialRecentKey]);
 
   useEffect(() => {
     if (!visible || !projectId) {
@@ -762,7 +781,11 @@ export default function CreateAssetWizardModal({
   };
 
   const saveDraftWithAction = async (
-    action?: (draft: AssetDraft) => Promise<void> | void,
+    action?: (
+      draft: AssetDraft,
+      context?: AssetSaveContext,
+    ) => Promise<void> | void,
+
     closeAfterSave = true,
   ) => {
     if (submitting) return;
@@ -807,8 +830,17 @@ export default function CreateAssetWizardModal({
     setSubmitting(true);
 
     try {
-      await (action ? action(cleanDraft) : onSubmit(cleanDraft));
+      const saveContext: AssetSaveContext = {
+        recentKey: activeRecentKey ?? undefined,
+      };
 
+      await (action
+        ? action(cleanDraft, saveContext)
+        : onSubmit(cleanDraft, saveContext));
+
+      if (!closeAfterSave && mode === "create") {
+        setActiveRecentKey(null);
+      }
       if (closeAfterSave) {
         await handleClose();
       } else {
@@ -830,6 +862,7 @@ export default function CreateAssetWizardModal({
   const handleFooterSave = async () => {
     if (mode === "edit") {
       await saveDraftWithAction(onSaveAndNext || onSubmit, false);
+
       return;
     }
 
@@ -1909,6 +1942,7 @@ export default function CreateAssetWizardModal({
         projectId={projectId}
         onClose={() => setAssetGalleryOpen(false)}
         onPickAsset={(selection: PickedAssetCategory) => {
+          setActiveRecentKey(selection.recentKey ?? null);
           setDraft(
             (prev) =>
               ({
