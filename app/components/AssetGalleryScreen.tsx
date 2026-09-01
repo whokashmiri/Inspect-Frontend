@@ -471,14 +471,18 @@ export default function AssetGalleryScreen({
     return types.filter((item) => item.categoryId === selectedCategoryId);
   }, [types, selectedCategoryId]);
 
-  const getTypeForName = (name: AssetNameItem) =>
-    types.find((item) => item.id === name.typeId) ?? null;
+  const getTypeForName = (name: AssetNameItem) => {
+    return typeById.get(name.typeId) ?? null;
+  };
 
   const getCategoryForName = (name: AssetNameItem) => {
-    const type = getTypeForName(name);
-    if (!type) return null;
+    const type = typeById.get(name.typeId);
 
-    return categories.find((item) => item.id === type.categoryId) ?? null;
+    if (!type) {
+      return null;
+    }
+
+    return categoryById.get(type.categoryId) ?? null;
   };
 
   const createCategoryValue = async (
@@ -638,7 +642,7 @@ export default function AssetGalleryScreen({
     setRecentExpanded(true);
     setSuggestedExpanded(true);
 
-    setRecentTotal(0);
+    // setRecentTotal(0);
     setRecentVisibleCount(RECENT_PAGE_SIZE);
     setEditingRecentAsset(null);
     setCreatingTaxonomy(false);
@@ -707,7 +711,7 @@ export default function AssetGalleryScreen({
          * Keep the latest successful server taxonomy
          * available for offline usage.
          */
-        await saveAssetTaxonomyOffline({
+        void saveAssetTaxonomyOffline({
           categories: result?.categories ?? [],
 
           types: result?.types ?? [],
@@ -792,6 +796,14 @@ export default function AssetGalleryScreen({
     void Promise.all([loadData(), loadRecentAssets()]);
   }, [visible, projectId, shouldUseOffline]);
 
+  const typeById = useMemo(() => {
+    return new Map(types.map((item) => [item.id, item]));
+  }, [types]);
+
+  const categoryById = useMemo(() => {
+    return new Map(categories.map((item) => [item.id, item]));
+  }, [categories]);
+
   const filteredRecentAssets = useMemo(() => {
     const query = normalizeText(searchQuery);
 
@@ -842,10 +854,9 @@ export default function AssetGalleryScreen({
       if (favoritesOnly && !favoriteNameIds.has(item.id)) return false;
       if (!query) return true;
 
-      const type = types.find((typeItem) => typeItem.id === item.typeId);
-      const category = type
-        ? categories.find((categoryItem) => categoryItem.id === type.categoryId)
-        : null;
+      const type = typeById.get(item.typeId);
+
+      const category = type ? categoryById.get(type.categoryId) : null;
 
       return (
         normalizeText(item.label).includes(query) ||
@@ -872,6 +883,8 @@ export default function AssetGalleryScreen({
     favoritesOnly,
     favoriteNameIds,
     featuredNameIds,
+    typeById,
+    categoryById,
   ]);
 
   const clearCategoryFilter = () => {
@@ -2276,6 +2289,11 @@ export default function AssetGalleryScreen({
                 <FlatList
                   ref={mainListRef}
                   data={suggestedExpanded ? displayedNames : []}
+                  initialNumToRender={12}
+                  maxToRenderPerBatch={10}
+                  updateCellsBatchingPeriod={40}
+                  windowSize={7}
+                  removeClippedSubviews={Platform.OS === "android"}
                   keyExtractor={(item) => item.id}
                   keyboardShouldPersistTaps="handled"
                   showsVerticalScrollIndicator={false}
