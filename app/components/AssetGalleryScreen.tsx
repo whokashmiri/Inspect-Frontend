@@ -54,14 +54,6 @@ export type PickedAssetCategory = {
 
   nameId: string;
   name: string;
-
-  /*
-   * Present when this selection participates
-   * in the Recent flow.
-   *
-   * CreateAssetWizardModal will receive this
-   * and complete/discard Recent later.
-   */
   recentKey?: string;
 };
 
@@ -679,10 +671,7 @@ export default function AssetGalleryScreen({
       } else {
         setLoading(true);
       }
-
-      // ---------------------------------------------------------
       // OFFLINE / MANUAL OFFLINE
-      // ---------------------------------------------------------
 
       if (shouldUseOffline) {
         const cached = await getAssetTaxonomyOffline();
@@ -815,8 +804,6 @@ export default function AssetGalleryScreen({
         normalizeText(item.category).includes(query),
     );
   }, [recentAssets, searchQuery]);
-
-  // const recentHasMore = recentVisibleCount < filteredRecentAssets.length;
 
   const loadMoreRecent = () => {
     setRecentVisibleCount((current) => current + RECENT_PAGE_SIZE);
@@ -1155,34 +1142,6 @@ export default function AssetGalleryScreen({
     });
   };
 
-  // const handleAddCategory = () => {
-  //   const label = newCategoryText.trim();
-  //   if (!label) return;
-
-  //   const existing = categories.find(
-  //     (item) => normalizeText(item.label) === normalizeText(label),
-  //   );
-
-  //   if (existing) {
-  //     selectCategory(existing);
-  //     return;
-  //   }
-
-  //   const category: AssetCategoryItem = {
-  //     id: createLocalId("category"),
-  //     label,
-  //   };
-
-  //   setCategories((prev) => [category, ...prev]);
-  //   setSelectionSource("taxonomy");
-  //   setSelectedRecentAssetId(null);
-  //   setSelectedCategoryId(category.id);
-  //   setSelectedTypeId(null);
-  //   setSelectedNameId(null);
-  //   setNewCategoryText("");
-  //   setShowAddCategory(false);
-  // };
-
   const handleAddCategory = async () => {
     const label = newCategoryText.trim();
 
@@ -1247,36 +1206,6 @@ export default function AssetGalleryScreen({
     setEditingCategoryId(null);
     setEditingCategoryText("");
   };
-
-  // const handleAddType = () => {
-  //   if (!selectedCategoryId) return;
-
-  //   const label = newTypeText.trim();
-  //   if (!label) return;
-
-  //   const existing = availableTypes.find(
-  //     (item) => normalizeText(item.label) === normalizeText(label),
-  //   );
-
-  //   if (existing) {
-  //     selectType(existing);
-  //     return;
-  //   }
-
-  //   const type: AssetTypeItem = {
-  //     id: createLocalId("type"),
-  //     categoryId: selectedCategoryId,
-  //     label,
-  //   };
-
-  //   setTypes((prev) => [type, ...prev]);
-  //   setSelectionSource("taxonomy");
-  //   setSelectedRecentAssetId(null);
-  //   setSelectedTypeId(type.id);
-  //   setSelectedNameId(null);
-  //   setNewTypeText("");
-  //   setShowAddType(false);
-  // };
 
   const handleAddType = async () => {
     if (!selectedCategoryId || creatingTaxonomy) {
@@ -4473,8 +4402,6 @@ const styles = StyleSheet.create({
     fontSize: 9.5,
     fontWeight: "800",
   },
-
-  // Unified Asset editor
 
   editorInputWrap: {
     minHeight: 42,
