@@ -1254,14 +1254,6 @@ export default function AssetGalleryScreen({
       setNewTypeText("");
       setShowAddType(false);
 
-      /*
-       * Type is done.
-       *
-       * There is currently no separate
-       * Name picker, so continue into the
-       * Add Asset modal with Category +
-       * Type already filled.
-       */
       const category = categories.find(
         (item) => item.id === selectedCategoryId,
       );
@@ -3015,7 +3007,7 @@ export default function AssetGalleryScreen({
           <KeyboardAvoidingView
             style={styles.addModalKeyboardWrap}
             behavior={Platform.OS === "ios" ? "padding" : undefined}
-            keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
+            keyboardVerticalOffset={Platform.OS === "ios" ? 20 : 20}
           >
             <TouchableWithoutFeedback onPress={closeAssetEditor}>
               <View style={styles.addModalOverlay}>
@@ -3392,7 +3384,7 @@ export default function AssetGalleryScreen({
                                 addModalScrollRef.current?.scrollToEnd({
                                   animated: true,
                                 });
-                              }, 200);
+                              }, 250);
                             }}
                             onBlur={() => {
                               setFocusedEditorField((current) =>
@@ -3501,11 +3493,6 @@ export default function AssetGalleryScreen({
                         )}
                       </View>
 
-                      <Text style={styles.editorHint}>
-                        If a typed value does not exist, it is added locally for
-                        this flow.
-                      </Text>
-
                       <View style={styles.addModalActions}>
                         <TouchableOpacity
                           style={styles.addModalCancel}
@@ -3539,9 +3526,7 @@ export default function AssetGalleryScreen({
                             color="#fff"
                           />
                           <Text style={styles.addModalSaveText}>
-                            {assetEditorMode === "recent"
-                              ? "Create New"
-                              : "Add / Select"}
+                            {assetEditorMode === "recent" ? "Save" : "Save"}
                           </Text>
                         </TouchableOpacity>
                       </View>
@@ -3763,6 +3748,7 @@ const styles = StyleSheet.create({
 
   addModalScrollContent: {
     flexGrow: 1,
+    paddingBottom: 40,
   },
 
   searchBox: {
@@ -4455,14 +4441,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  editorHint: {
-    color: MUTED,
-    fontSize: 8,
-    lineHeight: 12,
-    marginTop: -2,
-    marginBottom: 10,
-  },
-
   addModalKeyboardWrap: {
     flex: 1,
   },
@@ -4472,6 +4450,8 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(30,35,52,0.34)",
     justifyContent: "center",
     paddingHorizontal: 18,
+    paddingTop: 20,
+    paddingBottom: 120,
   },
 
   addModalCard: {
@@ -4481,7 +4461,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderRadius: 18,
     padding: 16,
-    maxHeight: "85%",
+    maxHeight: "78%",
   },
 
   addModalHeader: {
@@ -4532,6 +4512,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     marginTop: 4,
+    paddingBottom: 30,
   },
 
   addModalCancel: {
