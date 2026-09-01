@@ -15,6 +15,7 @@ import {
   TouchableWithoutFeedback,
   useWindowDimensions,
   View,
+  Keyboard,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -1084,14 +1085,14 @@ export default function AssetGalleryScreen({
     favoriteTypeIds,
   ]);
 
-  const handleCategoryAction = () => {
+  const handleCategoryAction = async () => {
     if (focusedEditorField === "category") {
-      if (addCategoryText.trim()) {
-        handleEditorAddCategory();
+      if (!addCategoryText.trim() || creatingTaxonomy) {
+        return;
       }
 
-      categoryInputRef.current?.blur();
-      setFocusedEditorField(null);
+      await handleEditorAddCategory();
+
       return;
     }
 
@@ -1106,19 +1107,24 @@ export default function AssetGalleryScreen({
     });
   };
 
-  const handleTypeAction = () => {
+  const handleTypeAction = async () => {
     if (!editorSelectedCategory) {
-      categoryInputRef.current?.focus();
       setFocusedEditorField("category");
+
+      requestAnimationFrame(() => {
+        categoryInputRef.current?.focus();
+      });
+
       return;
     }
+
     if (focusedEditorField === "type") {
-      if (addTypeText.trim()) {
-        handleEditorAddType();
+      if (!addTypeText.trim() || creatingTaxonomy) {
+        return;
       }
 
-      typeInputRef.current?.blur();
-      setFocusedEditorField(null);
+      await handleEditorAddType();
+
       return;
     }
 
@@ -1132,15 +1138,18 @@ export default function AssetGalleryScreen({
       typeInputRef.current?.focus();
     });
   };
+  const handleNameAction = async () => {
+    if (!editorSelectedType) {
+      return;
+    }
 
-  const handleNameAction = () => {
     if (focusedEditorField === "name") {
-      if (addAssetNameText.trim()) {
-        handleEditorAddName();
+      if (!addAssetNameText.trim() || creatingTaxonomy) {
+        return;
       }
 
-      nameInputRef.current?.blur();
-      setFocusedEditorField(null);
+      await handleEditorAddName();
+
       return;
     }
 
@@ -1477,6 +1486,7 @@ export default function AssetGalleryScreen({
   };
 
   const openAddAssetModal = () => {
+    Keyboard.dismiss();
     setAssetEditorMode("add");
 
     setAddCategoryText(
@@ -1756,11 +1766,13 @@ export default function AssetGalleryScreen({
       const name = await createNameValue(editorSelectedType.id, label);
 
       setAddAssetNameText(name.label);
-
       setNameDropdownOpen(false);
 
       setFocusedEditorField(null);
-      nameInputRef.current?.blur();
+
+      requestAnimationFrame(() => {
+        nameInputRef.current?.blur();
+      });
     } catch (error) {
       console.warn("[AssetGallery] Could not create name", error);
     } finally {
@@ -3002,7 +3014,7 @@ export default function AssetGalleryScreen({
         >
           <KeyboardAvoidingView
             style={styles.addModalKeyboardWrap}
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
             keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
           >
             <TouchableWithoutFeedback onPress={closeAssetEditor}>
@@ -3012,7 +3024,9 @@ export default function AssetGalleryScreen({
                     <ScrollView
                       ref={addModalScrollRef}
                       keyboardShouldPersistTaps="handled"
-                      keyboardDismissMode="interactive"
+                      keyboardDismissMode={
+                        Platform.OS === "ios" ? "interactive" : "none"
+                      }
                       showsVerticalScrollIndicator={false}
                       contentContainerStyle={styles.addModalScrollContent}
                     >
@@ -3133,30 +3147,6 @@ export default function AssetGalleryScreen({
                             </>
                           )}
                           <View style={styles.editorDivider} />
-
-                          <TouchableOpacity
-                            style={styles.editorChevronButton}
-                            onPress={() => {
-                              categoryInputRef.current?.blur();
-                              setFocusedEditorField(null);
-
-                              setTypeDropdownOpen(false);
-                              setNameDropdownOpen(false);
-
-                              setCategoryDropdownOpen((previous) => !previous);
-                            }}
-                            hitSlop={6}
-                          >
-                            <Ionicons
-                              name={
-                                categoryDropdownOpen
-                                  ? "chevron-up"
-                                  : "chevron-down"
-                              }
-                              size={15}
-                              color={MUTED}
-                            />
-                          </TouchableOpacity>
                         </View>
 
                         {assetEditorMode !== "recent" &&
@@ -3250,11 +3240,9 @@ export default function AssetGalleryScreen({
                             style={styles.editorInput}
                             returnKeyType="done"
                             onSubmitEditing={() => {
-                              if (addTypeText.trim()) {
-                                handleEditorAddType();
+                              if (addAssetNameText.trim()) {
+                                void handleEditorAddName();
                               }
-
-                              setFocusedEditorField(null);
                             }}
                           />
                           {assetEditorMode !== "recent" && (
