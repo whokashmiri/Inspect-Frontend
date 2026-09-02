@@ -24,7 +24,7 @@ import { useAuth } from "../../api/AuthContext";
 import ImageViewer from "react-native-image-zoom-viewer";
 import { VideoView, useVideoPlayer } from "expo-video";
 import {
-  completePendingRecentAsset,
+  finalizeRecentAsset,
   discardPendingRecentAsset,
 } from "../offline/assetRecentStorage";
 
@@ -1684,14 +1684,14 @@ export default function FolderAndAssetScreen({ route }: Props) {
       if ("offline" in result) {
         const localId = result.localId;
 
+        const localAsset: AssetItem = {
+          ...normalizedOptimisticAsset,
+          id: localId,
+        };
+
         setAssets((prev) =>
           prev.map((asset) =>
-            asset.id === clientMutationId
-              ? {
-                  ...normalizedOptimisticAsset,
-                  id: localId,
-                }
-              : asset,
+            asset.id === clientMutationId ? localAsset : asset,
           ),
         );
 
@@ -1705,18 +1705,27 @@ export default function FolderAndAssetScreen({ route }: Props) {
         );
 
         if (downloadedOffline) {
-          await upsertOfflineAsset({
-            ...normalizedOptimisticAsset,
-            id: localId,
+          await upsertOfflineAsset(localAsset);
+        }
+
+        /*
+         * OFFLINE IS ALREADY A SUCCESSFUL SAVE
+         * for the user's current workflow.
+         *
+         * Do not wait for server synchronization.
+         */
+        if (context?.recentKey) {
+          await finalizeRecentAsset({
+            projectId,
+
+            recentKey: context.recentKey,
+
+            images: normalizeAssetImages(localAsset.images),
           });
         }
 
         await loadProjectAssetLocations();
         await loadProjectConditions();
-
-        if (context?.recentKey) {
-          discardPendingRecentAsset(projectId, context.recentKey);
-        }
 
         showSnackbar(result.message, "info");
 
@@ -1730,9 +1739,11 @@ export default function FolderAndAssetScreen({ route }: Props) {
       );
 
       if (context?.recentKey) {
-        await completePendingRecentAsset({
+        await finalizeRecentAsset({
           projectId,
+
           recentKey: context.recentKey,
+
           images: normalizeAssetImages(result.asset.images),
         });
       }
@@ -1809,6 +1820,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
   const updateAssetAsync = async (
     draft: AssetDraft,
     assetToUpdate: AssetItem | null = editingAsset,
+    context?: AssetSaveContext,
   ) => {
     if (!assetToUpdate) return;
 
@@ -1893,59 +1905,116 @@ export default function FolderAndAssetScreen({ route }: Props) {
     );
     await refreshPendingCount();
     if ("offline" in result) {
+      const existingOfflineAsset = downloadedOffline
+        ? ((await getOfflineAssetById(targetAsset.id)) ?? targetAsset)
+        : targetAsset;
+
+      const updatedOfflineAsset: AssetItem = {
+        ...existingOfflineAsset,
+
+        name: draft.name,
+
+        client_code:
+          (draft as any).client_code?.trim() ||
+          existingOfflineAsset.client_code ||
+          null,
+
+        employer:
+          (draft as any).employer?.trim() ||
+          existingOfflineAsset.employer ||
+          null,
+
+        val_tech_id: existingOfflineAsset.val_tech_id ?? null,
+
+        quantity: safeQuantity,
+
+        categoryId: isVehicle ? null : (draft.categoryId ?? null),
+
+        category: isVehicle ? null : (draft.category ?? null),
+
+        typeId: isVehicle ? null : (draft.typeId ?? null),
+
+        type: isVehicle ? null : (draft.type ?? null),
+
+        nameId: isVehicle ? null : (draft.nameId ?? null),
+
+        normalizedData,
+        newAssetLocation,
+        rawData: finalRawData,
+
+        hasNotes: notesText.length > 0,
+
+        notes: notesText || null,
+
+        condition,
+
+        code: draft.code ?? existingOfflineAsset.code ?? null,
+
+        assetType: normalizedAssetType,
+
+        brand: isVehicle ? draft.brand || null : null,
+
+        model: isVehicle ? draft.model || null : null,
+
+        manufactureYear: isVehicle ? draft.manufactureYear || null : null,
+
+        kilometersDriven: isVehicle ? draft.kilometersDriven || null : null,
+
+        isDone: draft.isDone ?? existingOfflineAsset.isDone,
+
+        isPresent: draft.isPresent ?? existingOfflineAsset.isPresent,
+
+        updatedAt: new Date().toISOString(),
+
+        images: normalizeAssetImages(draft.images),
+
+        voiceNotes: normalizeLocalMedia(draft.voiceNotes || []),
+      };
+
+      /*
+       * Update the current UI immediately too.
+       */
+      setAssets((prev) =>
+        prev.map((asset) =>
+          asset.id === targetAsset.id ? updatedOfflineAsset : asset,
+        ),
+      );
+
       if (downloadedOffline) {
-        const existingOfflineAsset =
-          (await getOfflineAssetById(targetAsset.id)) ?? targetAsset;
-        const updatedOfflineAsset: AssetItem = {
-          ...existingOfflineAsset,
-          name: draft.name,
-          client_code:
-            (draft as any).client_code?.trim() ||
-            existingOfflineAsset.client_code ||
-            null,
-
-          employer:
-            (draft as any).employer?.trim() ||
-            existingOfflineAsset.employer ||
-            null,
-
-          val_tech_id: existingOfflineAsset.val_tech_id ?? null,
-          quantity: safeQuantity,
-          categoryId: isVehicle ? null : (draft.categoryId ?? null),
-
-          category: isVehicle ? null : (draft.category ?? null),
-
-          typeId: isVehicle ? null : (draft.typeId ?? null),
-
-          type: isVehicle ? null : (draft.type ?? null),
-
-          nameId: isVehicle ? null : (draft.nameId ?? null),
-
-          normalizedData,
-          newAssetLocation,
-          rawData: finalRawData,
-          hasNotes: notesText.length > 0,
-          notes: notesText || null,
-          condition,
-          code: draft.code ?? existingOfflineAsset.code ?? null,
-          assetType: normalizedAssetType,
-          brand: isVehicle ? draft.brand || null : null,
-          model: isVehicle ? draft.model || null : null,
-
-          manufactureYear: isVehicle ? draft.manufactureYear || null : null,
-          kilometersDriven: isVehicle ? draft.kilometersDriven || null : null,
-          isDone: draft.isDone ?? existingOfflineAsset.isDone,
-          isPresent: draft.isPresent ?? existingOfflineAsset.isPresent,
-          updatedAt: new Date().toISOString(),
-
-          images: normalizeAssetImages(draft.images),
-          voiceNotes: normalizeLocalMedia(draft.voiceNotes || []),
-        };
         await upsertOfflineAsset(updatedOfflineAsset);
       }
+
+      /*
+       * Same Recent behavior as online.
+       */
+      if (context?.recentKey) {
+        await finalizeRecentAsset({
+          projectId,
+
+          recentKey: context.recentKey,
+
+          images: normalizeAssetImages(updatedOfflineAsset.images),
+        });
+      }
+
+      await loadProjectAssetLocations();
+      await loadProjectConditions();
+
       showSnackbar(result.message, "info");
     } else {
-      if (downloadedOffline) await upsertOfflineAsset(result.asset);
+      if (downloadedOffline) {
+        await upsertOfflineAsset(result.asset);
+      }
+      if (context?.recentKey) {
+        await finalizeRecentAsset({
+          projectId,
+
+          recentKey: context.recentKey,
+
+          images: normalizeAssetImages(result.asset.images),
+        });
+      }
+
       await loadProjectAssetLocations();
       await loadProjectConditions();
       showSnackbar(t("folderAssetScreen.snackbar.assetUpdated"), "success");
@@ -1971,7 +2040,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
     try {
       if (isEdit) {
-        await updateAssetAsync(draft);
+        await updateAssetAsync(draft, editingAsset, context);
       } else {
         await createAssetAsync(draft, context);
       }
@@ -1986,6 +2055,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
   };
   const openEditAsset = (asset: AssetItem) => {
     Keyboard.dismiss();
+    setCreateAssetRecentKey(null);
 
     setAssetGalleryVisible(false);
     setAssetCategoryModalVisible(false);
@@ -2020,6 +2090,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
     setEditingAsset(null);
     setCreateAssetInitialData(undefined);
+    setCreateAssetRecentKey(null);
 
     setAutoOpenCameraForEdit(false);
   };
@@ -2056,7 +2127,10 @@ export default function FolderAndAssetScreen({ route }: Props) {
     return filtered;
   }, [assets, filter, searchQuery]);
 
-  const saveAndEditNextAsset = async (draft: AssetDraft) => {
+  const saveAndEditNextAsset = async (
+    draft: AssetDraft,
+    context?: AssetSaveContext,
+  ) => {
     if (!editingAsset) return;
 
     const currentAsset = editingAsset;
@@ -2082,7 +2156,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
         setPendingAssetSaveCount((count) => count + 1);
 
-        void updateAssetAsync(draft, currentAsset)
+        void updateAssetAsync(draft, currentAsset, context)
           .catch((error: any) => {
             showSnackbar(
               error?.message || t("folderAssetScreen.snackbar.saveFailed"),
@@ -2124,6 +2198,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
       } as Partial<AssetDraft>);
 
       setEditingAsset(nextAsset);
+      setCreateAssetRecentKey(null);
 
       setAutoOpenCameraForEdit(false);
 
@@ -2133,7 +2208,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
       setPendingAssetSaveCount((count) => count + 1);
 
-      void updateAssetAsync(draft, currentAsset)
+      void updateAssetAsync(draft, currentAsset, context)
         .catch((error: any) => {
           showSnackbar(
             error?.message || t("folderAssetScreen.snackbar.saveFailed"),
@@ -3844,7 +3919,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
           <CreateAssetWizardModal
             firstInputRef={assetWizardInputRef}
             projectId={projectId}
-            initialRecentKey={editingAsset ? null : createAssetRecentKey}
+            initialRecentKey={createAssetRecentKey}
             disableAssetName={!!editingAsset && !canEditAssetName}
             visible={assetModalVisible}
             onClose={closeAssetModal}
