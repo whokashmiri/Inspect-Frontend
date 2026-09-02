@@ -808,9 +808,21 @@ export default function AssetGalleryScreen({
   const filteredRecentAssets = useMemo(() => {
     const query = normalizeText(searchQuery);
 
-    if (!query) return recentAssets;
+    /*
+     * Defensive UI rule:
+     *
+     * Recent is never rendered unless it is
+     * saved and has a valid MAIN image.
+     */
+    const validRecent = recentAssets.filter(
+      (item) => item.status === "saved" && !!getRecentAssetMainImageUrl(item),
+    );
 
-    return recentAssets.filter(
+    if (!query) {
+      return validRecent;
+    }
+
+    return validRecent.filter(
       (item) =>
         normalizeText(item.name).includes(query) ||
         normalizeText(item.type).includes(query) ||
@@ -1904,17 +1916,18 @@ export default function AssetGalleryScreen({
       name: item.label,
     });
 
-    setRecentAssets((current) => [
-      pending,
-
-      ...current.filter((recent) => recent.recentKey !== pending.recentKey),
-    ]);
-
-    setRecentTotal((current) => current + (existing ? 0 : 1));
-
     /*
-     * Send recentKey to the wizard.
+     * Pending is workflow state only.
+     *
+     * Do not display it in Recent until
+     * the asset itself has successfully saved
+     * with a valid MAIN image.
      */
+    finishWithAsset({
+      ...picked,
+      recentKey: pending.recentKey,
+    });
+
     finishWithAsset({
       ...picked,
       recentKey: pending.recentKey,

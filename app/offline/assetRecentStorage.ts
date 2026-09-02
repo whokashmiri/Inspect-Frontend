@@ -174,56 +174,9 @@ async function writeSavedRecent(
 export async function getRecentAssets(
   projectId: string,
 ): Promise<RecentAssetEntry[]> {
-  const saved =
-    await readSavedRecent(
-      projectId,
-    );
-
-  const pending =
-    pendingRecentByProject.get(
-      projectId,
-    ) ?? [];
-
-  /*
-   * Pending takes precedence over the same key,
-   * although normally the same taxonomy item
-   * should not be pending if already saved.
-   */
-  const map =
-    new Map<
-      string,
-      RecentAssetEntry
-    >();
-
-  for (const item of saved) {
-    map.set(
-      item.recentKey,
-      item,
-    );
-  }
-
-  for (const item of pending) {
-    map.set(
-      item.recentKey,
-      item,
-    );
-  }
-
-  return Array.from(
-    map.values(),
-  ).sort(
-    (a, b) =>
-      Number(b.usedAt || 0) -
-      Number(a.usedAt || 0),
-  );
+  return readSavedRecent(projectId);
 }
 
-/*
- * Called when the user presses Use on
- * a Suggested taxonomy item.
- *
- * This does NOT write AsyncStorage yet.
- */
 export function createPendingRecentAsset({
   projectId,
   categoryId,
@@ -392,6 +345,105 @@ export async function completePendingRecentAsset({
   return completed;
 }
 
+
+export async function finalizeRecentAsset({
+  projectId,
+  recentKey,
+  images,
+}: {
+  projectId: string;
+  recentKey: string;
+  images?: RecentAssetImages | null;
+}): Promise<RecentAssetEntry | null> {
+  const pending =
+    pendingRecentByProject.get(
+      projectId,
+    ) ?? [];
+
+  const pendingEntry =
+    pending.find(
+      (item) =>
+        item.recentKey === recentKey,
+    ) ?? null;
+
+  const saved =
+    await readSavedRecent(
+      projectId,
+    );
+
+  const savedEntry =
+    saved.find(
+      (item) =>
+        item.recentKey === recentKey,
+    ) ?? null;
+
+  /*
+   * We can finalize either:
+   *
+   * 1. a newly-created pending Recent
+   * 2. an already-saved Recent being reused/edited
+   */
+  const source =
+    pendingEntry ??
+    savedEntry;
+
+  if (!source) {
+    return null;
+  }
+
+  /*
+   * Main image is mandatory.
+   *
+   * If the asset was previously in Recent
+   * and its main image was removed during edit,
+   * remove the Recent entry too.
+   */
+  if (!hasMainImage(images)) {
+    discardPendingRecentAsset(
+      projectId,
+      recentKey,
+    );
+
+    await writeSavedRecent(
+      projectId,
+      saved.filter(
+        (item) =>
+          item.recentKey !== recentKey,
+      ),
+    );
+
+    return null;
+  }
+
+  const completed: RecentAssetEntry = {
+    ...source,
+
+    images: images ?? null,
+
+    usedAt: Date.now(),
+
+    status: "saved",
+  };
+
+  await writeSavedRecent(
+    projectId,
+    [
+      completed,
+
+      ...saved.filter(
+        (item) =>
+          item.recentKey !== recentKey,
+      ),
+    ],
+  );
+
+  discardPendingRecentAsset(
+    projectId,
+    recentKey,
+  );
+
+  return completed;
+}
 export function discardPendingRecentAsset(
   projectId: string,
   recentKey: string,
