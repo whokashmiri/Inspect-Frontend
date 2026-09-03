@@ -14,6 +14,32 @@ let transactionsInitializationPromise:
   | Promise<void>
   | null = null;
 
+
+export async function clearAllOfflineTransactions(): Promise<void> {
+  await initTransactionsOfflineDb();
+  await initInspectionSyncQueue();
+
+  await runTransactionsDbTask(
+    async () => {
+      await db.withTransactionAsync(
+        async () => {
+          await db.runAsync(
+            `DELETE FROM pending_inspection_sync;`,
+          );
+
+          await db.runAsync(
+            `DELETE FROM offline_transactions;`,
+          );
+        },
+      );
+    },
+  );
+
+  console.log(
+    "✅ Offline transactions cleared",
+  );
+}
+
 export function initTransactionsOfflineDb():
   Promise<void> {
   if (transactionsInitialized) {
@@ -379,6 +405,37 @@ export async function savePendingInspectionSync({
     },
   );
 }
+
+export async function clearAllTransactionMedia(): Promise<void> {
+  try {
+    const baseDir =
+      `${FileSystem.documentDirectory}transactions-media/`;
+
+    const info =
+      await FileSystem.getInfoAsync(
+        baseDir,
+      );
+
+    if (info.exists) {
+      await FileSystem.deleteAsync(
+        baseDir,
+        {
+          idempotent: true,
+        },
+      );
+    }
+
+    console.log(
+      "✅ Transaction media cleared",
+    );
+  } catch (error) {
+    console.warn(
+      "[Transactions] Failed to clear media",
+      error,
+    );
+  }
+}
+
 export async function saveLocalInspectionMedia(
   transactionId: string,
   media: any[]

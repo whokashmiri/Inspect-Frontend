@@ -1732,12 +1732,13 @@ export default function FolderAndAssetScreen({ route }: Props) {
         return;
       }
 
-      setAssets((prev) =>
-        prev.map((asset) =>
-          asset.id === clientMutationId ? result.asset : asset,
+      setAssets((prev) => [
+        result.asset,
+        ...prev.filter(
+          (asset) =>
+            asset.id !== clientMutationId && asset.id !== result.asset.id,
         ),
-      );
-
+      ]);
       if (context?.recentKey) {
         await finalizeRecentAsset({
           projectId,
@@ -1829,104 +1830,61 @@ export default function FolderAndAssetScreen({ route }: Props) {
     setUploadingAssetIds((prev) =>
       prev.includes(targetAsset.id) ? prev : [...prev, targetAsset.id],
     );
-    const allImages = normalizeAssetImages(draft.images);
-    const allVoiceNotes = normalizeLocalMedia(draft.voiceNotes || []);
-    const normalizedAssetType = normalizeAssetType(draft.assetType as any);
-    const isVehicle = normalizedAssetType === "vehicle";
 
-    const rawData = cleanAssetRawData((draft as any).rawData);
+    try {
+      const allImages = normalizeAssetImages(draft.images);
 
-    const condition = normalizeConditionValue(draft.condition);
+      const allVoiceNotes = normalizeLocalMedia(draft.voiceNotes || []);
 
-    const safeQuantity = isVehicle
-      ? 1
-      : normalizeAssetQuantity((draft as any).quantity ?? 1);
+      const normalizedAssetType = normalizeAssetType(draft.assetType as any);
 
-    const normalizedData =
-      !isVehicle &&
-      draft.normalizedData &&
-      typeof draft.normalizedData === "object"
-        ? { ...draft.normalizedData }
-        : {};
+      const isVehicle = normalizedAssetType === "vehicle";
 
-    const newAssetLocation = isVehicle
-      ? null
-      : draft.newAssetLocation?.trim() || null;
+      const rawData = cleanAssetRawData((draft as any).rawData);
 
-    const finalRawData = rawData;
+      const condition = normalizeConditionValue(draft.condition);
 
-    const notesText = String(draft.notes || "").trim();
+      const safeQuantity = isVehicle
+        ? 1
+        : normalizeAssetQuantity((draft as any).quantity ?? 1);
 
-    const payload = {
-      assetId: targetAsset.id,
-      projectId,
-      name: draft.name,
+      const normalizedData =
+        !isVehicle &&
+        draft.normalizedData &&
+        typeof draft.normalizedData === "object"
+          ? {
+              ...draft.normalizedData,
+            }
+          : {};
 
-      client_code: (draft as any).client_code?.trim() || null,
+      const newAssetLocation = isVehicle
+        ? null
+        : draft.newAssetLocation?.trim() || null;
 
-      employer: (draft as any).employer?.trim() || null,
+      const finalRawData = rawData;
 
-      images: allImages,
-      voiceNotes: allVoiceNotes,
+      const notesText = String(draft.notes || "").trim();
 
-      condition,
-      code: draft.code || null,
-      assetType: normalizedAssetType,
+      const payload = {
+        assetId: targetAsset.id,
 
-      categoryId: isVehicle ? null : (draft.categoryId ?? null),
-
-      category: isVehicle ? null : (draft.category ?? null),
-
-      typeId: isVehicle ? null : (draft.typeId ?? null),
-
-      type: isVehicle ? null : (draft.type ?? null),
-
-      nameId: isVehicle ? null : (draft.nameId ?? null),
-
-      normalizedData,
-      newAssetLocation,
-      quantity: safeQuantity,
-      rawData: finalRawData,
-
-      brand: isVehicle ? draft.brand || null : null,
-      model: isVehicle ? draft.model || null : null,
-      manufactureYear: isVehicle ? draft.manufactureYear || null : null,
-      kilometersDriven: isVehicle ? draft.kilometersDriven || null : null,
-
-      notes: notesText || null,
-
-      isDone: draft.isDone ?? false,
-      isPresent: draft.isPresent ?? true,
-    };
-    const result = await safeApiCall(
-      () => projectContentApi.updateAsset(payload),
-      payload,
-      { type: "updateAsset", projectId },
-    );
-    await refreshPendingCount();
-    if ("offline" in result) {
-      const existingOfflineAsset = downloadedOffline
-        ? ((await getOfflineAssetById(targetAsset.id)) ?? targetAsset)
-        : targetAsset;
-
-      const updatedOfflineAsset: AssetItem = {
-        ...existingOfflineAsset,
+        projectId,
 
         name: draft.name,
 
-        client_code:
-          (draft as any).client_code?.trim() ||
-          existingOfflineAsset.client_code ||
-          null,
+        client_code: (draft as any).client_code?.trim() || null,
 
-        employer:
-          (draft as any).employer?.trim() ||
-          existingOfflineAsset.employer ||
-          null,
+        employer: (draft as any).employer?.trim() || null,
 
-        val_tech_id: existingOfflineAsset.val_tech_id ?? null,
+        images: allImages,
 
-        quantity: safeQuantity,
+        voiceNotes: allVoiceNotes,
+
+        condition,
+
+        code: draft.code || null,
+
+        assetType: normalizedAssetType,
 
         categoryId: isVehicle ? null : (draft.categoryId ?? null),
 
@@ -1939,18 +1897,12 @@ export default function FolderAndAssetScreen({ route }: Props) {
         nameId: isVehicle ? null : (draft.nameId ?? null),
 
         normalizedData,
+
         newAssetLocation,
+
+        quantity: safeQuantity,
+
         rawData: finalRawData,
-
-        hasNotes: notesText.length > 0,
-
-        notes: notesText || null,
-
-        condition,
-
-        code: draft.code ?? existingOfflineAsset.code ?? null,
-
-        assetType: normalizedAssetType,
 
         brand: isVehicle ? draft.brand || null : null,
 
@@ -1960,32 +1912,188 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
         kilometersDriven: isVehicle ? draft.kilometersDriven || null : null,
 
-        isDone: draft.isDone ?? existingOfflineAsset.isDone,
+        notes: notesText || null,
 
-        isPresent: draft.isPresent ?? existingOfflineAsset.isPresent,
+        isDone: draft.isDone ?? false,
 
-        updatedAt: new Date().toISOString(),
+        isPresent: draft.isPresent ?? true,
+      };
 
-        images: normalizeAssetImages(draft.images),
+      const result = await safeApiCall(
+        () => projectContentApi.updateAsset(payload),
 
-        voiceNotes: normalizeLocalMedia(draft.voiceNotes || []),
+        payload,
+
+        {
+          type: "updateAsset",
+          projectId,
+        },
+      );
+
+      await refreshPendingCount();
+
+      // =========================================================
+      // OFFLINE UPDATE
+      // =========================================================
+      if ("offline" in result) {
+        const existingOfflineAsset = downloadedOffline
+          ? ((await getOfflineAssetById(targetAsset.id)) ?? targetAsset)
+          : targetAsset;
+
+        const updatedOfflineAsset: AssetItem = {
+          ...existingOfflineAsset,
+
+          name: draft.name,
+
+          client_code:
+            (draft as any).client_code?.trim() ||
+            existingOfflineAsset.client_code ||
+            null,
+
+          employer:
+            (draft as any).employer?.trim() ||
+            existingOfflineAsset.employer ||
+            null,
+
+          val_tech_id: existingOfflineAsset.val_tech_id ?? null,
+
+          quantity: safeQuantity,
+
+          categoryId: isVehicle ? null : (draft.categoryId ?? null),
+
+          category: isVehicle ? null : (draft.category ?? null),
+
+          typeId: isVehicle ? null : (draft.typeId ?? null),
+
+          type: isVehicle ? null : (draft.type ?? null),
+
+          nameId: isVehicle ? null : (draft.nameId ?? null),
+
+          normalizedData,
+
+          newAssetLocation,
+
+          rawData: finalRawData,
+
+          hasNotes: notesText.length > 0,
+
+          notes: notesText || null,
+
+          condition,
+
+          code: draft.code ?? existingOfflineAsset.code ?? null,
+
+          assetType: normalizedAssetType,
+
+          brand: isVehicle ? draft.brand || null : null,
+
+          model: isVehicle ? draft.model || null : null,
+
+          manufactureYear: isVehicle ? draft.manufactureYear || null : null,
+
+          kilometersDriven: isVehicle ? draft.kilometersDriven || null : null,
+
+          isDone: draft.isDone ?? existingOfflineAsset.isDone,
+
+          isPresent: draft.isPresent ?? existingOfflineAsset.isPresent,
+
+          /*
+           * Critical:
+           * updated asset becomes newest.
+           */
+          updatedAt: new Date().toISOString(),
+
+          images: allImages,
+
+          voiceNotes: allVoiceNotes,
+        };
+
+        /*
+         * Move edited asset to TOP immediately.
+         */
+        setAssets((prev) => [
+          updatedOfflineAsset,
+
+          ...prev.filter((asset) => asset.id !== targetAsset.id),
+        ]);
+
+        /*
+         * Persist the same ordering timestamp
+         * into offline SQLite.
+         */
+        if (downloadedOffline) {
+          await upsertOfflineAsset(updatedOfflineAsset);
+        }
+
+        /*
+         * Finalize Recent if this update came
+         * through AssetGallery selection.
+         */
+        if (context?.recentKey) {
+          await finalizeRecentAsset({
+            projectId,
+
+            recentKey: context.recentKey,
+
+            images: normalizeAssetImages(updatedOfflineAsset.images),
+          });
+        }
+
+        await loadProjectAssetLocations();
+        await loadProjectConditions();
+
+        showSnackbar(result.message, "info");
+
+        /*
+         * IMPORTANT:
+         * Do not call loadContents() here.
+         *
+         * We already have the correct local
+         * object at the top of the list.
+         */
+        return;
+      }
+
+      // =========================================================
+      // ONLINE UPDATE
+      // =========================================================
+
+      const updatedOnlineAsset: AssetItem = {
+        ...result.asset,
+
+        /*
+         * Normally backend/Mongoose timestamps
+         * should provide updatedAt.
+         *
+         * Fallback protects immediate UI ordering
+         * if the response temporarily lacks it.
+         */
+        updatedAt: result.asset.updatedAt || new Date().toISOString(),
       };
 
       /*
-       * Update the current UI immediately too.
+       * Move edited ONLINE asset to TOP immediately.
        */
-      setAssets((prev) =>
-        prev.map((asset) =>
-          asset.id === targetAsset.id ? updatedOfflineAsset : asset,
-        ),
-      );
+      setAssets((prev) => [
+        updatedOnlineAsset,
 
+        ...prev.filter(
+          (asset) =>
+            asset.id !== targetAsset.id && asset.id !== updatedOnlineAsset.id,
+        ),
+      ]);
+
+      /*
+       * If this project is downloaded,
+       * keep the offline snapshot identical
+       * to the server response.
+       */
       if (downloadedOffline) {
-        await upsertOfflineAsset(updatedOfflineAsset);
+        await upsertOfflineAsset(updatedOnlineAsset);
       }
 
       /*
-       * Same Recent behavior as online.
+       * Same Recent behavior.
        */
       if (context?.recentKey) {
         await finalizeRecentAsset({
@@ -1993,34 +2101,37 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
           recentKey: context.recentKey,
 
-          images: normalizeAssetImages(updatedOfflineAsset.images),
+          images: normalizeAssetImages(updatedOnlineAsset.images),
         });
       }
 
       await loadProjectAssetLocations();
       await loadProjectConditions();
 
-      showSnackbar(result.message, "info");
-    } else {
-      if (downloadedOffline) {
-        await upsertOfflineAsset(result.asset);
-      }
-      if (context?.recentKey) {
-        await finalizeRecentAsset({
-          projectId,
-
-          recentKey: context.recentKey,
-
-          images: normalizeAssetImages(result.asset.images),
-        });
-      }
-
-      await loadProjectAssetLocations();
-      await loadProjectConditions();
       showSnackbar(t("folderAssetScreen.snackbar.assetUpdated"), "success");
+
+      /*
+       * You can reload online contents.
+       *
+       * BUT backend listContents MUST return:
+       *
+       * updatedAt DESC
+       *
+       * otherwise this reload will undo
+       * the UI ordering.
+       */
+      await loadContents(currentFolderId, {
+        showSkeleton: true,
+      });
+    } catch (error) {
+      console.error("[updateAssetAsync] failed", error);
+
+      throw error;
+    } finally {
+      setUploadingAssetIds((prev) =>
+        prev.filter((id) => id !== targetAsset.id),
+      );
     }
-    setUploadingAssetIds((prev) => prev.filter((id) => id !== targetAsset.id));
-    await loadContents(currentFolderId, { showSkeleton: true });
   };
 
   const submitAssetInBackground = async (

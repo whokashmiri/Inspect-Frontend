@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+
 import type {
   AssetImageItem,
 } from "../../api/api";
@@ -500,4 +501,36 @@ export async function touchSavedRecentAsset(
       ),
     ],
   );
+}
+
+
+export async function clearAllRecentAssets(): Promise<void> {
+  try {
+    const keys =
+      await AsyncStorage.getAllKeys();
+
+    const recentKeys =
+      keys.filter((key) =>
+        key.startsWith(
+          "asset-gallery-recent:",
+        ),
+      );
+
+    if (recentKeys.length > 0) {
+      await AsyncStorage.removeMany(
+        recentKeys,
+      );
+    }
+
+    pendingRecentByProject.clear();
+
+    console.log(
+      "✅ Asset recent storage cleared",
+    );
+  } catch (error) {
+    console.warn(
+      "[RecentAssets] Failed to clear recent storage",
+      error,
+    );
+  }
 }

@@ -48,13 +48,36 @@ export default function LoginScreen() {
   // ── Submit ────────────────────────────────────────────────────────────────
   async function handleLogin() {
     if (!validate()) return;
+
+    const phone = `+966${username.trim()}`;
+
+    console.log("[LOGIN] starting", {
+      phone,
+    });
+
     setLoading(true);
+
     try {
-      await login("+966" + username.trim(), password);
-      // Navigation is handled by the root layout based on auth state
-    } catch (err) {
+      console.log("[LOGIN] calling AuthContext.login");
+
+      await login(phone, password);
+
+      console.log("[LOGIN] success");
+    } catch (err: any) {
+      console.error("[LOGIN] failed:", err);
+
+      console.error("[LOGIN] details:", {
+        name: err?.name,
+        message: err?.message,
+        status: err?.status,
+        response: err?.response,
+        stack: err?.stack,
+      });
+
       const msg =
-        err instanceof ApiError ? err.message : t("common.somethingWentWrong");
+        err instanceof ApiError
+          ? err.message
+          : err?.message || t("common.somethingWentWrong");
 
       Alert.alert(t("login.failedTitle"), msg);
     } finally {

@@ -10,6 +10,21 @@ const OFFLINE_MEDIA_DIR =
     "offline-media",
   );
 
+
+  export async function clearAllOfflineMediaFiles(): Promise<void> {
+  try {
+    if (OFFLINE_MEDIA_DIR.exists) {
+      OFFLINE_MEDIA_DIR.delete();
+    }
+
+    console.log("✅ Offline asset media cleared");
+  } catch (error) {
+    console.warn(
+      "[OfflineMedia] Failed to clear offline media directory",
+      error,
+    );
+  }
+}
 type AssetMediaInput = {
   uri?: string;
   url?: string;

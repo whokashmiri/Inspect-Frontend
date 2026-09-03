@@ -4,9 +4,9 @@ import * as SecureStore from "expo-secure-store";
 import { File as ExpoFile, Paths as ExpoPaths } from "expo-file-system";
 
 // ─── Config ────────────────────────────────────────────────────────────────
-// export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://api.167.71.231.64.nip.io/api/v1";
+export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://api.167.71.231.64.nip.io/api/v1";
 
-export const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
+// export const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
 // console.log("[API BASE URL]", BASE_URL);
 
@@ -318,16 +318,59 @@ export const authApi = {
     ),
 };
 
-export async function loginAndSave(username: string, password: string) {
-  const res = await authApi.login({ username, password });
+export async function loginAndSave(
+  username: string,
+  password: string,
+) {
+  console.log("[loginAndSave] start", {
+    username,
+    baseUrl: process.env.EXPO_PUBLIC_API_URL,
+  });
 
-  await tokenStore.setToken(res.tokens.accessToken);
+  try {
+    console.log("[loginAndSave] calling authApi.login");
 
-  if (res.tokens.refreshToken) {
-    await tokenStore.setRefreshToken(res.tokens.refreshToken);
+    const res = await authApi.login({
+      username,
+      password,
+    });
+
+    console.log("[loginAndSave] authApi.login success", {
+      userId: res?.user?.id,
+      hasAccessToken: !!res?.tokens?.accessToken,
+      hasRefreshToken: !!res?.tokens?.refreshToken,
+    });
+
+    console.log("[loginAndSave] saving access token");
+
+    await tokenStore.setToken(
+      res.tokens.accessToken,
+    );
+
+    console.log("[loginAndSave] access token saved");
+
+    if (res.tokens.refreshToken) {
+      console.log("[loginAndSave] saving refresh token");
+
+      await tokenStore.setRefreshToken(
+        res.tokens.refreshToken,
+      );
+
+      console.log("[loginAndSave] refresh token saved");
+    }
+
+    return res;
+  } catch (error: any) {
+    console.error("[loginAndSave] failed", {
+      name: error?.name,
+      message: error?.message,
+      status: error?.status,
+      response: error?.response,
+      baseUrl: process.env.EXPO_PUBLIC_API_URL,
+    });
+
+    throw error;
   }
-
-  return res;
 }
 
 export async function setSignupPasswordAndSave(payload: {

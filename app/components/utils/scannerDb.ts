@@ -3,6 +3,23 @@ import { ExtractedScanResult } from "./scanTypes";
 
 const db = SQLite.openDatabaseSync("offline_scanner.db");
 
+
+export function clearAllScans(): void {
+  try {
+    initScannerDb();
+
+    db.runSync(
+      `DELETE FROM scans;`,
+    );
+
+    console.log("✅ Offline scanner history cleared");
+  } catch (error) {
+    console.warn(
+      "[ScannerDB] Failed to clear scans",
+      error,
+    );
+  }
+}
 export function initScannerDb() {
   db.execSync(`
     CREATE TABLE IF NOT EXISTS scans (

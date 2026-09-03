@@ -57,19 +57,63 @@ export function initStorage(): Promise<void> {
         // CREATE TABLE / ALTER TABLE /
         // migration code here unchanged.
 
-        await db.execAsync(`
-          CREATE TABLE IF NOT EXISTS pending_queue (
-            id TEXT PRIMARY KEY NOT NULL,
-            type TEXT NOT NULL,
-            payload TEXT NOT NULL,
-            projectId TEXT,
-            localMediaUris TEXT,
-            createdAt INTEGER NOT NULL,
-            status TEXT NOT NULL DEFAULT 'pending',
-            retryCount INTEGER NOT NULL DEFAULT 0,
-            lastAttempt INTEGER
-          );
-        `);
+await db.execAsync(`
+  CREATE TABLE IF NOT EXISTS pending_queue (
+    id TEXT PRIMARY KEY NOT NULL,
+    type TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    projectId TEXT,
+    localMediaUris TEXT,
+    createdAt INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    retryCount INTEGER NOT NULL DEFAULT 0,
+    lastAttempt INTEGER
+  );
+
+  CREATE TABLE IF NOT EXISTS offline_projects (
+    id TEXT PRIMARY KEY NOT NULL,
+    companyId TEXT,
+    userId TEXT,
+    data TEXT NOT NULL,
+    downloadedAt INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS offline_folders (
+    id TEXT PRIMARY KEY NOT NULL,
+    projectId TEXT NOT NULL,
+    parentId TEXT,
+    data TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS offline_assets (
+    id TEXT PRIMARY KEY NOT NULL,
+    projectId TEXT NOT NULL,
+    folderId TEXT,
+    data TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS project_sync_state (
+    projectId TEXT PRIMARY KEY NOT NULL,
+    syncVersion INTEGER NOT NULL DEFAULT 0,
+    needsSync INTEGER NOT NULL DEFAULT 0,
+    lastSyncAt TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_offline_folders_projectId
+  ON offline_folders(projectId);
+
+  CREATE INDEX IF NOT EXISTS idx_offline_folders_parentId
+  ON offline_folders(parentId);
+
+  CREATE INDEX IF NOT EXISTS idx_offline_assets_projectId
+  ON offline_assets(projectId);
+
+  CREATE INDEX IF NOT EXISTS idx_offline_assets_folderId
+  ON offline_assets(folderId);
+
+  CREATE INDEX IF NOT EXISTS idx_pending_queue_projectId
+  ON pending_queue(projectId);
+`);
 
         // ...keep the rest of your existing init code...
 
@@ -892,6 +936,24 @@ export async function clearOfflineProjectContents(projectId: string): Promise<vo
   });
 }
 
+export async function clearAllOfflineData(): Promise<void> {
+  await initStorage();
+
+  await runDbTask(async () => {
+    await db.withTransactionAsync(async () => {
+      await db.runAsync(`DELETE FROM pending_queue;`);
+
+      await db.runAsync(`DELETE FROM offline_assets;`);
+      await db.runAsync(`DELETE FROM offline_folders;`);
+      await db.runAsync(`DELETE FROM offline_projects;`);
+
+      await db.runAsync(`DELETE FROM project_sync_state;`);
+    });
+  });
+
+  console.log("✅ Main offline project data cleared");
+}
+
 export async function clearOfflineProject(projectId: string): Promise<void> {
   await initStorage();
  await runDbTask(async ()=> {
@@ -959,12 +1021,20 @@ export async function getOfflineContents(
     );
   }
 
- return {
-  folders: folderRows.map((row) => JSON.parse(row.data)),
-  assets: assetRows.map((row) => normalizeOfflineAsset(JSON.parse(row.data))),
-};
-}
+  const assets = assetRows
+    .map((row) => normalizeOfflineAsset(JSON.parse(row.data)))
+    .sort((a, b) => {
+      const aTime = new Date(a.updatedAt || a.createdAt || 0).getTime();
+      const bTime = new Date(b.updatedAt || b.createdAt || 0).getTime();
 
+      return bTime - aTime;
+    });
+
+  return {
+    folders: folderRows.map((row) => JSON.parse(row.data)),
+    assets,
+  };
+}
 export async function getAllDownloadedProjects(): Promise<any[]> {
   await initStorage();
 
