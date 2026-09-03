@@ -337,8 +337,8 @@ export async function clearOfflineAuthState() {
   await clearTokens();
   await clearSessionMeta();
   await clearCachedUser();
-  await clearSelectedCompany(cachedUser?.id);
-  await clearCachedCompanies(cachedUser?.id);
+  await clearSelectedCompany();
+await clearCachedCompanies();
 }
 
 export async function saveLanguagePreference(language: "ar" | "en") {
