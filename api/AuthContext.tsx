@@ -15,6 +15,7 @@ import {
   User,
   projectApi,
 } from "./api";
+import { clearAllLocalUserData } from "../app/offline";
 
 import {
   connectProjectSocket,
@@ -279,33 +280,75 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [bootstrap]);
 
   const login = useCallback(async (username: string, password: string) => {
-    const res = await loginAndSave(username, password);
-
-    const fetchedCompanies = await fetchCompaniesOnline();
-    const companies = normalizeCompanies(res.user, fetchedCompanies);
-    const selectedCompanyId = getDefaultCompanyId(res.user, companies);
-
-    await cacheAuthenticatedSession({
-      user: res.user,
-      accessToken: res.tokens.accessToken,
-      refreshToken: res.tokens.refreshToken ?? null,
-      companies,
-      selectedCompanyId,
+    console.log("[AUTH] login started", {
+      username,
     });
 
-    setState({
-      user: res.user,
-      isLoading: false,
-      isAuthenticated: true,
-      isOnline: true,
-      authMode: "online",
-      companies,
-      selectedCompanyId,
-    });
+    try {
+      console.log("[AUTH] calling loginAndSave");
 
-    startProjectAutoSync(selectedCompanyId).catch((error) => {
-      console.log("[login-sync] failed", error);
-    });
+      const res = await loginAndSave(username, password);
+
+      console.log("[AUTH] loginAndSave success", {
+        userId: res?.user?.id,
+        hasAccessToken: !!res?.tokens?.accessToken,
+        hasRefreshToken: !!res?.tokens?.refreshToken,
+      });
+
+      console.log("[AUTH] fetching companies");
+
+      const fetchedCompanies = await fetchCompaniesOnline();
+
+      console.log("[AUTH] companies fetched", fetchedCompanies?.length);
+
+      const companies = normalizeCompanies(res.user, fetchedCompanies);
+
+      const selectedCompanyId = getDefaultCompanyId(res.user, companies);
+
+      console.log("[AUTH] caching session", {
+        selectedCompanyId,
+      });
+
+      await cacheAuthenticatedSession({
+        user: res.user,
+
+        accessToken: res.tokens.accessToken,
+
+        refreshToken: res.tokens.refreshToken ?? null,
+
+        companies,
+
+        selectedCompanyId,
+      });
+
+      console.log("[AUTH] session cached");
+
+      setState({
+        user: res.user,
+        isLoading: false,
+        isAuthenticated: true,
+        isOnline: true,
+        authMode: "online",
+        companies,
+        selectedCompanyId,
+      });
+
+      console.log("[AUTH] state authenticated");
+
+      startProjectAutoSync(selectedCompanyId).catch((error) => {
+        console.log("[login-sync] failed", error);
+      });
+    } catch (error: any) {
+      console.error("[AUTH] login failed", {
+        name: error?.name,
+        message: error?.message,
+        status: error?.status,
+        response: error?.response,
+        stack: error?.stack,
+      });
+
+      throw error;
+    }
   }, []);
 
   const completeSignup = useCallback(
@@ -342,7 +385,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log("[signup-sync] failed", error);
       });
     },
-    []
+    [],
   );
 
   const refreshSession = useCallback(async () => {
@@ -364,25 +407,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log("[company-sync] failed", error);
       });
     },
-    [state.user]
+    [state.user],
   );
 
   const logout = useCallback(async () => {
-    const net = await NetInfo.fetch();
-    const isOnline = !!net.isConnected && !!net.isInternetReachable;
+    let isOnline = false;
 
     try {
-      if (isOnline) {
-        await authApi.logout();
-      }
+      const net = await NetInfo.fetch();
+
+      isOnline = !!net.isConnected && !!net.isInternetReachable;
     } catch {
-      // continue local logout anyway
+      isOnline = false;
     }
 
     disconnectProjectSocket();
 
-    await tokenStore.clear();
-    await clearOfflineAuthState();
+    /*
+     * Start remote logout while token still exists,
+     * but NEVER await it.
+     */
+    if (isOnline) {
+      void authApi.logout().catch((error) => {
+        console.warn("[Logout] Remote logout failed", error);
+      });
+    }
+
+    /*
+     * Local logout is authoritative.
+     */
+    await clearAllLocalUserData();
 
     setState({
       user: null,
