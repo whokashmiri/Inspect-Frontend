@@ -37,6 +37,23 @@ const PROJECT_WORK_MODES_KEY = "project_work_modes";
 
 export type ProjectWorkMode = "online" | "offline";
 
+export async function clearConnectivityStorage(): Promise<void> {
+  try {
+    await AsyncStorage.removeMany([STORAGE_KEY, PROJECT_WORK_MODES_KEY]);
+
+    /*
+     * Also reset the runtime singleton,
+     * otherwise the app can remain in manual
+     * offline mode until restart.
+     */
+    setRuntimeManualOfflineMode(false);
+
+    console.log("✅ Connectivity settings cleared");
+  } catch (error) {
+    console.warn("[Connectivity] Failed to clear settings", error);
+  }
+}
+
 type ProjectWorkModeMap = Record<string, ProjectWorkMode>;
 
 type ConnectivityContextValue = {
