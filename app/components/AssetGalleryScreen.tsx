@@ -689,9 +689,7 @@ export default function AssetGalleryScreen({
           setNames([]);
           setFeaturedNameIds([]);
 
-          setError(
-            "Asset suggestions are not available offline yet. Download the project while online first.",
-          );
+          setError(t("assetCategory.errorOfflineUnavailable"));
 
           return;
         }
@@ -744,7 +742,7 @@ export default function AssetGalleryScreen({
     } catch (err: any) {
       console.error("[Asset Category Load Error]", err);
 
-      setError(err?.message || "Could not load asset categories.");
+      setError(err?.message || t("assetCategory.errorLoadFailed"));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -1940,14 +1938,15 @@ export default function AssetGalleryScreen({
   };
 
   const assetListTitle = useMemo(() => {
-    if (searchQuery.trim()) return "Search Results";
-    if (favoritesOnly) return "Favorites";
+    if (searchQuery.trim()) return t("assetCategory.searchResults");
+
+    if (favoritesOnly) return t("assetCategory.favorites");
 
     if (selectionSource !== "recent" && (selectedCategory || selectedType)) {
-      return "Assets";
+      return t("assetCategory.assets");
     }
 
-    return "Suggested Assets";
+    return t("assetCategory.suggestedAssets");
   }, [
     searchQuery,
     favoritesOnly,
@@ -1959,33 +1958,42 @@ export default function AssetGalleryScreen({
   const assetListSubtitle = useMemo(() => {
     if (searchQuery.trim()) {
       if (selectionSource !== "recent" && selectedType) {
-        return `Matching ${selectedType.label}`;
+        return t("assetCategory.matchingType", {
+          type: selectedType.label,
+        });
       }
 
       if (selectionSource !== "recent" && selectedCategory) {
-        return `Matching ${selectedCategory.label}`;
+        return t("assetCategory.matchingCategory", {
+          category: selectedCategory.label,
+        });
       }
 
-      return "Matching assets from all categories";
+      return t("assetCategory.matchingAll");
     }
 
-    if (favoritesOnly) return "Your favorite assets";
+    if (favoritesOnly) {
+      return t("assetCategory.favoritesSubtitle");
+    }
 
     if (selectionSource !== "recent" && selectedType) {
       return `${selectedType.label} • ${selectedCategory?.label || ""}`;
     }
 
     if (selectionSource !== "recent" && selectedCategory) {
-      return `${selectedCategory.label} • All types`;
+      return t("assetCategory.allTypes", {
+        category: selectedCategory.label,
+      });
     }
 
-    return "Select one or search all available assets";
+    return t("assetCategory.selectOrSearch");
   }, [
     searchQuery,
     favoritesOnly,
     selectionSource,
     selectedType,
     selectedCategory,
+    t,
   ]);
 
   const recentViewerImages = useMemo(
@@ -2074,7 +2082,9 @@ export default function AssetGalleryScreen({
             }}
             activeOpacity={0.85}
           >
-            <Text style={styles.rowUseButtonText}>Use</Text>
+            <Text style={styles.rowUseButtonText}>
+              {t("assetCategory.use")}
+            </Text>
           </TouchableOpacity>
         ) : (
           <View style={styles.selectionIcon}>
@@ -2108,11 +2118,11 @@ export default function AssetGalleryScreen({
               </TouchableOpacity>
 
               <View style={styles.headerText}>
-                <Text style={styles.title}>Select Asset</Text>
+                <Text style={styles.title}>{t("assetCategory.title")}</Text>
                 <Text style={styles.subtitle}>
                   {shouldUseOffline
-                    ? "Choose or customize the asset • Offline"
-                    : "Choose or customize the asset"}
+                    ? t("assetCategory.subtitleOffline")
+                    : t("assetCategory.subtitle")}
                 </Text>
               </View>
 
@@ -2126,7 +2136,9 @@ export default function AssetGalleryScreen({
                   style={styles.clearButton}
                   onPress={clearSelection}
                 >
-                  <Text style={styles.clearButtonText}>Clear</Text>
+                  <Text style={styles.clearButtonText}>
+                    {t("assetCategory.clear")}
+                  </Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -2142,7 +2154,9 @@ export default function AssetGalleryScreen({
                 <Text style={styles.errorText}>{error}</Text>
 
                 <TouchableOpacity onPress={() => void refreshAll()}>
-                  <Text style={styles.retryText}>Retry</Text>
+                  <Text style={styles.retryText}>
+                    {t("assetCategory.retry")}
+                  </Text>
                 </TouchableOpacity>
               </View>
             ) : (
@@ -2150,7 +2164,9 @@ export default function AssetGalleryScreen({
                 {/* Category + Type filters */}
                 <View style={styles.filterRow}>
                   <View style={styles.filterColumn}>
-                    <Text style={styles.filterLabel}>Category</Text>
+                    <Text style={styles.filterLabel}>
+                      {t("assetCategory.category")}
+                    </Text>
 
                     <View style={styles.dropdown}>
                       <TouchableOpacity
@@ -2161,8 +2177,9 @@ export default function AssetGalleryScreen({
 
                         <Text style={styles.dropdownText} numberOfLines={1}>
                           {selectionSource === "recent"
-                            ? "All categories"
-                            : selectedCategory?.label || "All categories"}
+                            ? t("assetCategory.allCategories")
+                            : selectedCategory?.label ||
+                              t("assetCategory.allCategories")}
                         </Text>
 
                         <Ionicons name="chevron-down" size={13} color={MUTED} />
@@ -2188,7 +2205,9 @@ export default function AssetGalleryScreen({
                   </View>
 
                   <View style={styles.filterColumn}>
-                    <Text style={styles.filterLabel}>Type</Text>
+                    <Text style={styles.filterLabel}>
+                      {t("assetCategory.type")}
+                    </Text>
 
                     <View
                       style={[
@@ -2225,8 +2244,9 @@ export default function AssetGalleryScreen({
                           numberOfLines={1}
                         >
                           {selectionSource === "recent"
-                            ? "All types"
-                            : selectedType?.label || "All types"}
+                            ? t("assetCategory.allTypes")
+                            : selectedType?.label ||
+                              t("assetCategory.allTypes")}
                         </Text>
 
                         <Ionicons
@@ -2276,7 +2296,7 @@ export default function AssetGalleryScreen({
                           // setRecentVisibleCount(RECENT_PAGE_SIZE);
                         }
                       }}
-                      placeholder="Search assets or recent..."
+                      placeholder={t("assetCategory.searchPlaceholder")}
                       placeholderTextColor="#999EAE"
                       style={styles.searchInput}
                       returnKeyType="search"
@@ -2359,7 +2379,9 @@ export default function AssetGalleryScreen({
                                 color={MUTED}
                               />
 
-                              <Text style={styles.recentTitle}>Recent</Text>
+                              <Text style={styles.recentTitle}>
+                                {t("assetCategory.recent")}
+                              </Text>
 
                               <View style={styles.sectionCountBadge}>
                                 <Text style={styles.sectionCountText}>
@@ -2371,7 +2393,7 @@ export default function AssetGalleryScreen({
                             <View style={styles.sectionHeaderRight}>
                               {recentExpanded && (
                                 <Text style={styles.recentHint}>
-                                  Tap image to view photos
+                                  {t("assetCategory.recentHint")}
                                 </Text>
                               )}
 
@@ -2402,7 +2424,7 @@ export default function AssetGalleryScreen({
                                   onPress={loadMoreRecent}
                                 >
                                   <Text style={styles.loadMoreRecentText}>
-                                    Load more
+                                    {t("assetCategory.loadMore")}
                                   </Text>
 
                                   <Ionicons
@@ -2468,7 +2490,9 @@ export default function AssetGalleryScreen({
                         >
                           <Ionicons name="add" size={15} color={ACC} />
 
-                          <Text style={styles.addNameButtonText}>Add</Text>
+                          <Text style={styles.addNameButtonText}>
+                            {t("assetCategory.add")}
+                          </Text>
                         </TouchableOpacity>
                       </View>
                     </>
@@ -2488,12 +2512,12 @@ export default function AssetGalleryScreen({
 
                         <Text style={styles.emptyTitle}>
                           {favoritesOnly
-                            ? "No favorite assets"
-                            : "No matching assets"}
+                            ? t("assetCategory.noFavoriteAssets")
+                            : t("assetCategory.noMatchingAssets")}
                         </Text>
 
                         <Text style={styles.emptyText}>
-                          Try another search or choose a category and type.
+                          {t("assetCategory.tryAnotherSearch")}
                         </Text>
                       </View>
                     ) : null
@@ -2659,16 +2683,19 @@ export default function AssetGalleryScreen({
                   >
                     <View style={styles.continueTextWrap}>
                       <Text style={styles.continueButtonText} numberOfLines={1}>
-                        Unknown Asset
+                        {t("assetCategory.unknownAsset")}
                       </Text>
 
                       <Text style={styles.continueSubText} numberOfLines={1}>
-                        Use only when the asset is not identified
+                        {t("assetCategory.unknownAssetHint")}
                       </Text>
                     </View>
 
                     <View style={styles.continueAction}>
-                      <Text style={styles.continueActionText}>Use Unknown</Text>
+                      <Text style={styles.continueActionText}>
+                        {" "}
+                        {t("assetCategory.useUnknown")}
+                      </Text>
                       <Ionicons name="arrow-forward" size={16} color="#fff" />
                     </View>
                   </TouchableOpacity>
@@ -2706,7 +2733,7 @@ export default function AssetGalleryScreen({
 
                   <Text style={styles.pickerSubtitle} numberOfLines={1}>
                     {pickerMode === "category"
-                      ? "Choose, favorite, edit or add a category"
+                      ? t("assetCategory.pickerSubtitleCategory")
                       : selectedCategory?.label || ""}
                   </Text>
                 </View>
@@ -2727,8 +2754,8 @@ export default function AssetGalleryScreen({
                   onChangeText={setPickerSearch}
                   placeholder={
                     pickerMode === "category"
-                      ? "Search categories..."
-                      : "Search types..."
+                      ? t("assetCategory.searchCategories")
+                      : t("assetCategory.searchTypes")
                   }
                   placeholderTextColor={MUTED}
                   style={styles.pickerSearchInput}
@@ -2772,11 +2799,11 @@ export default function AssetGalleryScreen({
                 <Text style={styles.inlineAddToggleText}>
                   {pickerMode === "category"
                     ? showAddCategory
-                      ? "Cancel"
-                      : "Add category"
+                      ? t("assetCategory.cancel")
+                      : t("assetCategory.addCategory")
                     : showAddType
-                      ? "Cancel"
-                      : "Add type"}
+                      ? t("assetCategory.cancel")
+                      : t("assetCategory.addType")}
                 </Text>
               </TouchableOpacity>
 
@@ -2789,7 +2816,7 @@ export default function AssetGalleryScreen({
                   <TextInput
                     value={newCategoryText}
                     onChangeText={setNewCategoryText}
-                    placeholder="New category"
+                    placeholder={t("assetCategory.newCategory")}
                     placeholderTextColor={MUTED}
                     style={styles.inlinePickerInput}
                     autoFocus
@@ -2821,7 +2848,7 @@ export default function AssetGalleryScreen({
                   <TextInput
                     value={newTypeText}
                     onChangeText={setNewTypeText}
-                    placeholder="New type"
+                    placeholder={t("assetCategory.newType")}
                     placeholderTextColor={MUTED}
                     style={styles.inlinePickerInput}
                     autoFocus
@@ -2851,7 +2878,7 @@ export default function AssetGalleryScreen({
                 ListEmptyComponent={
                   <View style={styles.pickerEmpty}>
                     <Text style={styles.pickerEmptyText}>
-                      No matching{" "}
+                      {t("assetCategory.noMatchingCategories")}{" "}
                       {pickerMode === "category" ? "categories" : "types"}
                     </Text>
                   </View>
@@ -3041,13 +3068,13 @@ export default function AssetGalleryScreen({
                         <View style={{ flex: 1 }}>
                           <Text style={styles.addModalTitle}>
                             {assetEditorMode === "recent"
-                              ? "Create from Recent"
-                              : "Add Asset"}
+                              ? t("assetCategory.createFromRecent")
+                              : t("assetCategory.addAsset")}
                           </Text>
                           <Text style={styles.addModalSubtitle}>
                             {assetEditorMode === "recent"
-                              ? "Creates a new asset selection. The Recent database record is not edited."
-                              : "Select an existing value or type a new Category, Type and Asset name."}
+                              ? t("assetCategory.createFromRecentSubtitle")
+                              : t("assetCategory.addAssetSubtitle")}
                           </Text>
                         </View>
 
@@ -3060,7 +3087,9 @@ export default function AssetGalleryScreen({
                       </View>
 
                       <View style={styles.addModalField}>
-                        <Text style={styles.addModalLabel}>Category</Text>
+                        <Text style={styles.addModalLabel}>
+                          {t("assetCategory.category")}
+                        </Text>
 
                         <View
                           style={[
@@ -3096,7 +3125,7 @@ export default function AssetGalleryScreen({
                               setTypeDropdownOpen(false);
                               setNameDropdownOpen(false);
                             }}
-                            placeholder="Select or add category"
+                            placeholder={t("assetCategory.selectOrAddCategory")}
                             placeholderTextColor={MUTED}
                             style={[
                               styles.editorInput,
@@ -3191,7 +3220,7 @@ export default function AssetGalleryScreen({
                               ) : (
                                 <View style={styles.editorDropdownEmpty}>
                                   <Text style={styles.editorDropdownEmptyText}>
-                                    No categories found
+                                    {t("assetCategory.noCategoriesFound")}
                                   </Text>
                                 </View>
                               )}
@@ -3199,7 +3228,9 @@ export default function AssetGalleryScreen({
                           )}
                       </View>
                       <View style={styles.addModalField}>
-                        <Text style={styles.addModalLabel}>Type</Text>
+                        <Text style={styles.addModalLabel}>
+                          {t("assetCategory.type")}
+                        </Text>
 
                         <View
                           style={[
@@ -3240,8 +3271,8 @@ export default function AssetGalleryScreen({
                             }}
                             placeholder={
                               editorSelectedCategory
-                                ? "Select or add type"
-                                : "Select category first"
+                                ? t("assetCategory.selectOrAddType")
+                                : t("assetCategory.selectCategoryFirst")
                             }
                             placeholderTextColor={MUTED}
                             style={styles.editorInput}
@@ -3363,7 +3394,7 @@ export default function AssetGalleryScreen({
                               ) : (
                                 <View style={styles.editorDropdownEmpty}>
                                   <Text style={styles.editorDropdownEmptyText}>
-                                    No types found
+                                    {t("assetCategory.noTypesFound")}
                                   </Text>
                                 </View>
                               )}
@@ -3371,7 +3402,10 @@ export default function AssetGalleryScreen({
                           )}
                       </View>
                       <View style={styles.addModalField}>
-                        <Text style={styles.addModalLabel}>Asset name</Text>
+                        <Text style={styles.addModalLabel}>
+                          {" "}
+                          {t("assetCategory.assetName")}
+                        </Text>
 
                         <View
                           style={[
@@ -3409,8 +3443,8 @@ export default function AssetGalleryScreen({
                             onChangeText={setAddAssetNameText}
                             placeholder={
                               editorSelectedType
-                                ? "Select or add asset name"
-                                : "Select type first"
+                                ? t("assetCategory.selectOrAddAssetName")
+                                : t("assetCategory.selectTypeFirst")
                             }
                             placeholderTextColor={MUTED}
                             style={styles.editorInput}
@@ -3500,7 +3534,7 @@ export default function AssetGalleryScreen({
                             ) : (
                               <View style={styles.editorDropdownEmpty}>
                                 <Text style={styles.editorDropdownEmptyText}>
-                                  No asset names found
+                                  {t("assetCategory.noAssetNamesFound")}
                                 </Text>
                               </View>
                             )}
@@ -3541,7 +3575,9 @@ export default function AssetGalleryScreen({
                             color="#fff"
                           />
                           <Text style={styles.addModalSaveText}>
-                            {assetEditorMode === "recent" ? "Save" : "Save"}
+                            {assetEditorMode === "recent"
+                              ? t("assetCategory.save")
+                              : t("assetCategory.save")}
                           </Text>
                         </TouchableOpacity>
                       </View>
@@ -3587,7 +3623,7 @@ export default function AssetGalleryScreen({
               />
             ) : (
               <Text style={styles.viewerTitle} numberOfLines={1}>
-                {recentViewerAsset?.name || t("assetImages.title")}
+                {recentViewerAsset?.name || t("assetCategory.title")}
               </Text>
             )}
 
@@ -3595,7 +3631,7 @@ export default function AssetGalleryScreen({
               <View>
                 <View style={styles.viewerEmpty}>
                   <Text style={styles.viewerEmptyText}>
-                    {t("assetImages.noImages")}
+                    {t("assetCategory.noImages")}
                   </Text>
                 </View>
                 <Text style={styles.viewerCounter}>
