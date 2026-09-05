@@ -237,6 +237,11 @@
     }
   },
 
+    "assetImages": {
+    "title": "صور الأصل",
+    "noImages": "لا توجد صور"
+  },
+
   "asset": 
 
   {
@@ -260,7 +265,12 @@
     "conditionNew": "New",
     "conditionUsed": "Used",
     "conditionDamaged": "Damaged",
-    "assetType": "Location",
+    "assetType": "AssetType",
+    "location": "Location",
+    "locationExample": "e.g. Main Building / Floor 3 / HR",
+    "employer": "Employer",
+    "addEmployer": "Add Employer",
+    "searchOrAddEmployer": "Search or add employer",
     "quantity": "Quantity",
     "assetPhotos": "Asset photos {{count}}",
     "editAssetType": "Edit asset type",

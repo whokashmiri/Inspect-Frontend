@@ -539,7 +539,7 @@ export default function OtherAssetForm({
     <>
       <View style={styles.otherAssetControls}>
         <View style={{ width: "100%" }}>
-          <Text style={styles.fieldLabel}>Location</Text>
+          <Text style={styles.fieldLabel}>{t("asset.location")}</Text>
 
           <View style={styles.assetTypeInputLikeWrap}>
             <TouchableOpacity
@@ -800,7 +800,7 @@ export default function OtherAssetForm({
             marginTop: 1,
           }}
         >
-          <Text style={styles.fieldLabel}>Employer</Text>
+          <Text style={styles.fieldLabel}>{t("asset.employer")}</Text>
 
           <View style={styles.assetTypeInputLikeWrap}>
             <TouchableOpacity
@@ -855,7 +855,7 @@ export default function OtherAssetForm({
                 <TextInput
                   value={employerSearchText}
                   onChangeText={setEmployerSearchText}
-                  placeholder="Search or add employer"
+                  placeholder={t("asset.searchOrAddEmployer")}
                   placeholderTextColor="#767B91"
                   style={styles.locationSearchInput}
                   autoCorrect={false}
@@ -1461,10 +1461,10 @@ export default function OtherAssetForm({
                 </View>
 
                 <View style={{ padding: 14 }}>
-                  <Text style={styles.fieldLabel}>Location</Text>
+                  <Text style={styles.fieldLabel}>{t("asset.location")}</Text>
 
                   <TextInput
-                    placeholder="e.g. Main Building / Floor 3 / HR"
+                    placeholder={t("asset.locationExample")}
                     placeholderTextColor="#767B91"
                     value={newLocationText}
                     onChangeText={setNewLocationText}
@@ -1533,7 +1533,9 @@ export default function OtherAssetForm({
             <TouchableWithoutFeedback onPress={() => {}}>
               <View style={styles.addTypeModalCard}>
                 <View style={styles.vehicleSelectHeader}>
-                  <Text style={styles.vehicleSelectTitle}>Add Employer</Text>
+                  <Text style={styles.vehicleSelectTitle}>
+                    {t("asset.addEmployer")}
+                  </Text>
 
                   <TouchableOpacity
                     onPress={() => {
@@ -1553,7 +1555,7 @@ export default function OtherAssetForm({
                     padding: 14,
                   }}
                 >
-                  <Text style={styles.fieldLabel}>Employer</Text>
+                  <Text style={styles.fieldLabel}>{t("asset.employer")}</Text>
 
                   <TextInput
                     placeholder="Enter employer"

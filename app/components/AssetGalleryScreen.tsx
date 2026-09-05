@@ -17,6 +17,7 @@ import {
   View,
   Keyboard,
 } from "react-native";
+import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -348,6 +349,7 @@ export default function AssetGalleryScreen({
   projectId,
 }: AssetGalleryScreenProps) {
   const insets = useSafeAreaInsets();
+  const { t, i18n } = useTranslation();
   const { width: screenWidth } = useWindowDimensions();
   const isOnline = useIsOnline();
 
@@ -3584,16 +3586,18 @@ export default function AssetGalleryScreen({
                 )}
               />
             ) : (
-              <View style={styles.viewerEmpty}>
-                <Text style={styles.viewerEmptyText}>No images</Text>
-              </View>
+              <Text style={styles.viewerTitle} numberOfLines={1}>
+                {recentViewerAsset?.name || t("assetImages.title")}
+              </Text>
             )}
 
             <View style={styles.viewerTopBar}>
               <View>
-                <Text style={styles.viewerTitle} numberOfLines={1}>
-                  {recentViewerAsset?.name || "Asset images"}
-                </Text>
+                <View style={styles.viewerEmpty}>
+                  <Text style={styles.viewerEmptyText}>
+                    {t("assetImages.noImages")}
+                  </Text>
+                </View>
                 <Text style={styles.viewerCounter}>
                   {recentViewerImages.length
                     ? `${recentViewerIndex + 1} / ${recentViewerImages.length}`

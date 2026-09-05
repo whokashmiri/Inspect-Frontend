@@ -1161,7 +1161,7 @@ export default function CreateAssetWizardModal({
                                   }));
                                 }}
                                 editable={!hasClientCode}
-                                placeholder="Barcode"
+                                placeholder={t("scanner.modes.barcode")}
                                 placeholderTextColor="#767B91"
                                 style={[
                                   styles.assetCodeInput,

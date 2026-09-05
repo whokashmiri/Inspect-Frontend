@@ -236,6 +236,11 @@
       "scrape": "خردة"
     }
   },
+
+  "assetImages": {
+    "title": "Asset images",
+    "noImages": "No images"
+  },
   "asset": {
     "createAsset": "إنشاء أصل",
     "editAsset": "تعديل الأصل",
@@ -257,6 +262,11 @@
     "conditionUsed": "مستخدم",
     "conditionDamaged": "تالف",
     "assetType": "نوع الأصل",
+    "location": "الموقع",
+    "locationExample": "مثال: المبنى الرئيسي / الطابق الثالث / الموارد البشرية",
+     "employer": "جهة العمل",
+  "addEmployer": "إضافة جهة العمل",
+  "searchOrAddEmployer": "ابحث عن جهة عمل أو أضف جهة عمل",
      "quantity": "الكمية",
     "assetPhotos": "صور الأصل {{count}}",
     "editAssetType": "تعديل نوع الأصل",
