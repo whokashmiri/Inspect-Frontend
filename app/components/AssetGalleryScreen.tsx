@@ -699,19 +699,13 @@ export default function AssetGalleryScreen({
         return;
       }
 
-      // ---------------------------------------------------------
       // ONLINE
-      // ---------------------------------------------------------
 
       try {
         const result = await assetCategoryApi.getAll();
 
         applyTaxonomyData(result);
 
-        /*
-         * Keep the latest successful server taxonomy
-         * available for offline usage.
-         */
         void saveAssetTaxonomyOffline({
           categories: result?.categories ?? [],
 
@@ -1379,14 +1373,6 @@ export default function AssetGalleryScreen({
       .slice(0, 6);
   }, [categories, addCategoryText]);
 
-  // const editorSelectedCategory = useMemo(
-  //   () =>
-  //     categories.find(
-  //       (item) => normalizeText(item.label) === normalizeText(addCategoryText),
-  //     ) ?? null,
-  //   [categories, addCategoryText],
-  // );
-
   const editorSelectedCategory = useMemo(() => {
     if (assetEditorMode === "recent" && editingRecentAsset) {
       return (
@@ -1417,18 +1403,6 @@ export default function AssetGalleryScreen({
       .sort((a, b) => a.label.localeCompare(b.label))
       .slice(0, 6);
   }, [types, editorSelectedCategory, addTypeText]);
-
-  // const editorSelectedType = useMemo(
-  //   () =>
-  //     editorSelectedCategory
-  //       ? (types.find(
-  //           (item) =>
-  //             item.categoryId === editorSelectedCategory.id &&
-  //             normalizeText(item.label) === normalizeText(addTypeText),
-  //         ) ?? null)
-  //       : null,
-  //   [types, editorSelectedCategory, addTypeText],
-  // );
 
   const editorSelectedType = useMemo(() => {
     if (assetEditorMode === "recent" && editingRecentAsset) {
@@ -1863,11 +1837,6 @@ export default function AssetGalleryScreen({
       nameId: item.id,
     });
 
-    /*
-     * If this taxonomy selection is already
-     * a completed Recent asset, don't replace
-     * its images with an empty pending row.
-     */
     const existing = recentAssets.find(
       (recent) => recent.recentKey === recentKey,
     );
