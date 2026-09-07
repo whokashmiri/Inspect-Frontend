@@ -357,47 +357,66 @@ export async function finalizeRecentAsset({
   images?: RecentAssetImages | null;
 }): Promise<RecentAssetEntry | null> {
   const pending =
-    pendingRecentByProject.get(
-      projectId,
-    ) ?? [];
+    pendingRecentByProject.get(projectId) ?? [];
 
   const pendingEntry =
     pending.find(
-      (item) =>
-        item.recentKey === recentKey,
+      (item) => item.recentKey === recentKey,
     ) ?? null;
 
   const saved =
-    await readSavedRecent(
-      projectId,
-    );
+    await readSavedRecent(projectId);
 
   const savedEntry =
     saved.find(
-      (item) =>
-        item.recentKey === recentKey,
+      (item) => item.recentKey === recentKey,
     ) ?? null;
 
   /*
-   * We can finalize either:
+   * IMPORTANT:
    *
-   * 1. a newly-created pending Recent
-   * 2. an already-saved Recent being reused/edited
+   * If Recent already exists,
+   * keep the FIRST saved asset and its images.
+   *
+   * Reusing the same Recent row should only
+   * update usedAt and move it to the top.
    */
-  const source =
-    pendingEntry ??
-    savedEntry;
+  if (savedEntry) {
+    const updated: RecentAssetEntry = {
+      ...savedEntry,
+      usedAt: Date.now(),
+    };
 
-  if (!source) {
+    await writeSavedRecent(projectId, [
+      updated,
+
+      ...saved.filter(
+        (item) => item.recentKey !== recentKey,
+      ),
+    ]);
+
+    discardPendingRecentAsset(
+      projectId,
+      recentKey,
+    );
+
+    return updated;
+  }
+
+  /*
+   * No saved Recent exists yet.
+   *
+   * This must be the first asset
+   * creating the Recent entry.
+   */
+  if (!pendingEntry) {
     return null;
   }
 
   /*
-   * Main image is mandatory.
+   * First Recent asset must have a main image.
    *
-   * If the asset was previously in Recent
-   * and its main image was removed during edit,
-   * remove the Recent entry too.
+   * If not, do not create Recent.
    */
   if (!hasMainImage(images)) {
     discardPendingRecentAsset(
@@ -405,19 +424,15 @@ export async function finalizeRecentAsset({
       recentKey,
     );
 
-    await writeSavedRecent(
-      projectId,
-      saved.filter(
-        (item) =>
-          item.recentKey !== recentKey,
-      ),
-    );
-
     return null;
   }
 
+  /*
+   * Save images only ONCE:
+   * from the first asset.
+   */
   const completed: RecentAssetEntry = {
-    ...source,
+    ...pendingEntry,
 
     images: images ?? null,
 
@@ -426,17 +441,13 @@ export async function finalizeRecentAsset({
     status: "saved",
   };
 
-  await writeSavedRecent(
-    projectId,
-    [
-      completed,
+  await writeSavedRecent(projectId, [
+    completed,
 
-      ...saved.filter(
-        (item) =>
-          item.recentKey !== recentKey,
-      ),
-    ],
-  );
+    ...saved.filter(
+      (item) => item.recentKey !== recentKey,
+    ),
+  ]);
 
   discardPendingRecentAsset(
     projectId,
@@ -461,6 +472,27 @@ export function discardPendingRecentAsset(
         item.recentKey !==
         recentKey,
     ),
+  );
+}
+
+export async function deleteRecentAsset(
+  projectId: string,
+  recentKey: string,
+): Promise<void> {
+  const saved = await readSavedRecent(projectId);
+
+  const next = saved.filter(
+    (item) => item.recentKey !== recentKey,
+  );
+
+  await writeSavedRecent(
+    projectId,
+    next,
+  );
+
+  discardPendingRecentAsset(
+    projectId,
+    recentKey,
   );
 }
 
@@ -503,6 +535,18 @@ export async function touchSavedRecentAsset(
   );
 }
 
+
+export async function clearProjectRecentAssets(
+  projectId: string,
+): Promise<void> {
+  await AsyncStorage.removeItem(
+    storageKey(projectId),
+  );
+
+  pendingRecentByProject.delete(
+    projectId,
+  );
+}
 
 export async function clearAllRecentAssets(): Promise<void> {
   try {

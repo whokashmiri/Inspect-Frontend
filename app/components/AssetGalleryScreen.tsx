@@ -41,6 +41,8 @@ import {
   createPendingRecentAsset,
   getRecentAssets,
   touchSavedRecentAsset,
+  deleteRecentAsset,
+  clearProjectRecentAssets,
 } from "../offline/assetRecentStorage";
 
 import { isManualOfflineMode } from "../offline/connectivityMode";
@@ -769,6 +771,65 @@ export default function AssetGalleryScreen({
 
       setRecentAssets([]);
       setRecentTotal(0);
+    }
+  };
+
+  const handleDeleteRecentAsset = async (asset: RecentAssetEntry) => {
+    if (!projectId) {
+      return;
+    }
+
+    try {
+      await deleteRecentAsset(projectId, asset.recentKey);
+
+      setRecentAssets((current) =>
+        current.filter((item) => item.recentKey !== asset.recentKey),
+      );
+
+      setRecentTotal((current) => Math.max(0, current - 1));
+
+      if (selectedRecentAssetId === asset.id) {
+        setSelectedRecentAssetId(null);
+        setSelectionSource(null);
+        setSelectedCategoryId(null);
+        setSelectedTypeId(null);
+        setSelectedNameId(null);
+      }
+
+      if (recentViewerAsset?.recentKey === asset.recentKey) {
+        setRecentViewerAsset(null);
+        setRecentViewerIndex(0);
+      }
+    } catch (error) {
+      console.warn("[AssetGallery] Could not delete recent asset", error);
+    }
+  };
+
+  const handleClearRecentAssets = async () => {
+    if (!projectId) {
+      return;
+    }
+
+    try {
+      await clearProjectRecentAssets(projectId);
+
+      setRecentAssets([]);
+      setRecentTotal(0);
+      setRecentVisibleCount(RECENT_PAGE_SIZE);
+
+      setSelectedRecentAssetId(null);
+
+      if (selectionSource === "recent") {
+        setSelectionSource(null);
+        setSelectedCategoryId(null);
+        setSelectedTypeId(null);
+        setSelectedNameId(null);
+      }
+
+      setRecentViewerAsset(null);
+      setRecentViewerIndex(0);
+    } catch (error) {
+      console.warn("[AssetGallery] Could not clear recent assets", error);
     }
   };
   const refreshAll = async () => {
@@ -1993,12 +2054,12 @@ export default function AssetGalleryScreen({
         activeOpacity={0.82}
       >
         <TouchableOpacity
-          disabled={imageCount === 0}
+          disabled={!mainImageUrl}
           onPress={(event) => {
             event.stopPropagation();
             openRecentImages(item);
           }}
-          activeOpacity={imageCount > 0 ? 0.8 : 1}
+          activeOpacity={mainImageUrl ? 0.8 : 1}
         >
           <AssetAvatar name={item.name} imageUrl={mainImageUrl} small />
         </TouchableOpacity>
@@ -2014,23 +2075,19 @@ export default function AssetGalleryScreen({
           <Text style={styles.recentMeta} numberOfLines={1}>
             {item.type || "Unknown"} • {item.category || "Unknown"}
           </Text>
-          {/* {item.status === "pending" && (
-            <Text style={styles.recentPendingText}>Waiting for asset save</Text>
-          )} */}
         </View>
 
-        {imageCount > 0 && (
-          <TouchableOpacity
-            style={styles.recentImagesButton}
-            onPress={(event) => {
-              event.stopPropagation();
-              openRecentImages(item);
-            }}
-          >
-            <Ionicons name="images-outline" size={14} color={ACC} />
-            <Text style={styles.recentImageCount}>{imageCount}</Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          style={styles.rowDeleteButton}
+          onPress={(event) => {
+            event.stopPropagation();
+
+            void handleDeleteRecentAsset(item);
+          }}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="trash-outline" size={13} color="#B45353" />
+        </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.rowEditButton}
@@ -2361,9 +2418,24 @@ export default function AssetGalleryScreen({
 
                             <View style={styles.sectionHeaderRight}>
                               {recentExpanded && (
-                                <Text style={styles.recentHint}>
-                                  {t("assetCategory.recentHint")}
-                                </Text>
+                                <TouchableOpacity
+                                  style={styles.clearRecentButton}
+                                  onPress={(event) => {
+                                    event.stopPropagation();
+                                    void handleClearRecentAssets();
+                                  }}
+                                  activeOpacity={0.8}
+                                >
+                                  <Ionicons
+                                    name="trash-outline"
+                                    size={12}
+                                    color="#B45353"
+                                  />
+
+                                  <Text style={styles.clearRecentButtonText}>
+                                    Clear all
+                                  </Text>
+                                </TouchableOpacity>
                               )}
 
                               <View style={styles.sectionChevron}>
@@ -3302,29 +3374,6 @@ export default function AssetGalleryScreen({
                           )}
 
                           <View style={styles.editorDivider} />
-
-                          <TouchableOpacity
-                            style={styles.editorChevronButton}
-                            disabled={!editorSelectedCategory}
-                            onPress={() => {
-                              typeInputRef.current?.blur();
-                              setFocusedEditorField(null);
-
-                              setCategoryDropdownOpen(false);
-                              setNameDropdownOpen(false);
-
-                              setTypeDropdownOpen((previous) => !previous);
-                            }}
-                            hitSlop={6}
-                          >
-                            <Ionicons
-                              name={
-                                typeDropdownOpen ? "chevron-up" : "chevron-down"
-                              }
-                              size={15}
-                              color={editorSelectedCategory ? MUTED : "#B8BCC8"}
-                            />
-                          </TouchableOpacity>
                         </View>
 
                         {assetEditorMode !== "recent" &&
@@ -3935,6 +3984,32 @@ const styles = StyleSheet.create({
     fontSize: 7.5,
     lineHeight: 10,
     marginTop: 1,
+  },
+  clearRecentButton: {
+    height: 27,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    backgroundColor: "#FDF2F2",
+  },
+
+  clearRecentButtonText: {
+    color: "#B45353",
+    fontSize: 8,
+    fontWeight: "800",
+  },
+
+  rowDeleteButton: {
+    width: 31,
+    height: 31,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FDF2F2",
+    marginLeft: 6,
   },
 
   recentImagesButton: {
