@@ -13,6 +13,7 @@ import {
   Switch,
   Image,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import i18n from "../i18n/i18n";
 import * as Updates from "expo-updates";
@@ -110,6 +111,7 @@ function AppHeaderComponent({
   onCompleteProfile,
 }: AppHeaderProps) {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
 
   const { manualOffline, hasInternet, isSyncing, setManualOffline } =
     useConnectivity();
@@ -341,7 +343,10 @@ function AppHeaderComponent({
       <View
         style={[
           styles.header,
-          { flexDirection: isRTL ? "row-reverse" : "row" },
+          {
+            flexDirection: isRTL ? "row-reverse" : "row",
+            paddingTop: Math.max(insets.top + 3, 18),
+          },
         ]}
       >
         <View
@@ -365,16 +370,16 @@ function AppHeaderComponent({
         </View>
 
         {isAuthenticated ? (
-          <View style={styles.connectivitySection}>
-            <View
-              style={[
-                styles.connectivityBadge,
-                {
-                  backgroundColor: connectivityStatus.backgroundColor,
-                  borderColor: connectivityStatus.borderColor,
-                },
-              ]}
-            >
+          <View
+            style={[
+              styles.connectivityBadge,
+              {
+                backgroundColor: connectivityStatus.backgroundColor,
+                borderColor: connectivityStatus.borderColor,
+              },
+            ]}
+          >
+            <View style={styles.connectivityStatusContent}>
               {isSyncing && !manualOffline ? (
                 <ActivityIndicator size={11} color={connectivityStatus.color} />
               ) : (
@@ -392,6 +397,7 @@ function AppHeaderComponent({
                     color: connectivityStatus.color,
                   },
                 ]}
+                numberOfLines={1}
               >
                 {connectivityStatus.label}
               </Text>
@@ -666,41 +672,68 @@ export const AppHeader = memo(AppHeaderComponent);
 const styles = StyleSheet.create({
   header: {
     backgroundColor: "#ffffff",
+
     borderBottomWidth: 1,
     borderBottomColor: BORDER,
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
 
-  connectivitySection: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+
+    minHeight: 64,
+
+    gap: 8,
+
+    elevation: 3,
+
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+
+    zIndex: 100,
   },
 
   connectivityBadge: {
-    minHeight: 30,
-    maxWidth: 92,
-    paddingHorizontal: 8,
+    height: 34,
+    minWidth: 100,
+    maxWidth: 112,
+
+    paddingLeft: 8,
+    paddingRight: 1,
+
     borderRadius: 10,
     borderWidth: 1,
+
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "space-between",
+
+    flexShrink: 1,
+  },
+
+  connectivityStatusContent: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
+    flexShrink: 1,
   },
 
   connectivityText: {
     fontSize: 9,
     fontWeight: "700",
+    flexShrink: 1,
   },
 
   connectivitySwitch: {
-    transform: [{ scaleX: 0.72 }, { scaleY: 0.72 }],
+    transform: [{ scaleX: 0.55 }, { scaleY: 0.55 }],
+    marginLeft: -8,
+    marginRight: -8,
   },
 
   menuButton: {
@@ -762,7 +795,10 @@ const styles = StyleSheet.create({
   brandRow: {
     flexDirection: "row",
     alignItems: "center",
+
     flex: 1,
+    minWidth: 0,
+    flexShrink: 1,
   },
   logoMark: {
     width: 30,
@@ -780,10 +816,10 @@ const styles = StyleSheet.create({
     backgroundColor: SOFT,
   },
   companyName: {
-    fontSize: 16,
-    fontWeight: "400",
+    fontSize: 15,
+    fontWeight: "500",
     color: TEXT,
-    letterSpacing: -0.5,
+    letterSpacing: -0.4,
   },
 
   version: {
