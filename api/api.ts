@@ -350,7 +350,7 @@ export async function loginAndSave(
     console.log("[loginAndSave] access token saved");
 
     if (res.tokens.refreshToken) {
-      console.log("[loginAndSave] saving refresh token");
+      
 
       await tokenStore.setRefreshToken(
         res.tokens.refreshToken,
