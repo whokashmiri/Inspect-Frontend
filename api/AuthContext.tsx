@@ -129,9 +129,7 @@ async function startProjectAutoSync(companyId?: string | null) {
     await connectProjectSocket(projectIds);
     await registerProjectBackgroundSync();
 
-    syncAssignedProjects(projects).catch((error) => {
-      console.log("[project-auto-sync] failed", error);
-    });
+    syncAssignedProjects(projects).catch((error) => {});
   } catch (error) {
     console.log("[project-auto-sync] skipped", error);
   }
