@@ -1,5 +1,11 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  ActivityIndicator,
+} from "react-native";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { useFonts } from "expo-font";
@@ -12,7 +18,6 @@ import { Ionicons } from "@expo/vector-icons";
 const ACC = "#2A324B";
 
 const BORDER = "#C7CCDB";
-
 
 export default function InspectionTypeScreen() {
   const { user, isOnline, selectedCompanyId } = useAuth();
@@ -28,40 +33,33 @@ export default function InspectionTypeScreen() {
 
   if (!loaded) return null;
 
-const handleRealEstatePress = async () => {
-  // console.log("AUTH USER:", user);
-  // console.log("SELECTED COMPANY:", selectedCompanyId);
+  const handleRealEstatePress = async () => {
+    if (downloading) return;
 
-  if (downloading) return;
+    try {
+      setDownloading(true);
 
-  try {
-    setDownloading(true);
-
-    if (isOnline) {
-      const res = await transactionApi.downloadCompany({
-        page: 1,
-        limit: 10,
-      });
-
-    
+      if (isOnline) {
+        const res = await transactionApi.downloadCompany({
+          page: 1,
+          limit: 10,
+        });
+      }
+      router.push("/inspection/PropertyInspectionForm");
+      // router.push("/inspection/TransactionsScreen");
+    } catch (error) {
+      // console.log("Download transactions failed:", error);
+      // router.push("/inspection/TransactionsScreen");
+      router.push("/inspection/PropertyInspectionForm");
+    } finally {
+      setDownloading(false);
     }
- router.push("/inspection/PropertyInspectionForm");
-    // router.push("/inspection/TransactionsScreen");
-  } catch (error) {
-    // console.log("Download transactions failed:", error);
-    // router.push("/inspection/TransactionsScreen");
-     router.push("/inspection/PropertyInspectionForm");
-  } finally {
-    setDownloading(false);
-  }
-};
+  };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}> {t("inspectionType.title")}</Text>
-      <Text style={styles.subtitle}>
-        {t("inspectionType.subtitle")}
-      </Text>
+      <Text style={styles.subtitle}>{t("inspectionType.subtitle")}</Text>
 
       <Pressable
         style={[styles.button, downloading && styles.disabledButton]}
@@ -88,7 +86,7 @@ const handleRealEstatePress = async () => {
         </Text>
       </Pressable>
 
-         {/* <Pressable
+      {/* <Pressable
       onPress={() => router.push("/home")}
       style={styles.backBtn}
      
@@ -115,29 +113,27 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
-  
-backBtn: {
-  position: "absolute",
+  backBtn: {
+    position: "absolute",
 
-  left: 15,
-  top: "50%",
-  transform: [{ translateY: 250 }],
+    left: 15,
+    top: "50%",
+    transform: [{ translateY: 250 }],
 
-  width: 36,
-  height: 36,
-  borderRadius: 18,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
 
-  backgroundColor: "#f4f2f2",
-  borderWidth: 1,
-  borderColor: BORDER,
+    backgroundColor: "#f4f2f2",
+    borderWidth: 1,
+    borderColor: BORDER,
 
-  alignItems: "center",
-  justifyContent: "center",
+    alignItems: "center",
+    justifyContent: "center",
 
-  zIndex: 999,
-  elevation: 999,
-},
-
+    zIndex: 999,
+    elevation: 999,
+  },
 
   subtitle: {
     fontSize: 16,
@@ -167,8 +163,8 @@ backBtn: {
   },
 
   disabledButton: {
-  opacity: 0.7,
-},
+    opacity: 0.7,
+  },
   secondaryButtonText: {
     color: "#2A324B",
   },

@@ -130,9 +130,7 @@ async function startProjectAutoSync(companyId?: string | null) {
     await registerProjectBackgroundSync();
 
     syncAssignedProjects(projects).catch((error) => {});
-  } catch (error) {
-    console.log("[project-auto-sync] skipped", error);
-  }
+  } catch (error) {}
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {

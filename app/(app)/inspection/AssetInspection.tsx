@@ -18,8 +18,6 @@ import {
   Keyboard,
 } from "react-native";
 
-
-
 import { VideoView, useVideoPlayer } from "expo-video";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
@@ -41,21 +39,16 @@ const BORDER = "#C7CCDB";
 const TEXT = "#2A324B";
 const MUTED = "#767B91";
 
- function MediaVideoPlayer({ uri }: { uri: string }) {
-   const player = useVideoPlayer(uri, (player) => {
-     player.loop = false;
-     player.play();
-   });
- 
-   return (
-     <VideoView
-       player={player}
-       style={styles.videoPlayer}
-       nativeControls
-     />
-   );
- }
+function MediaVideoPlayer({ uri }: { uri: string }) {
+  const player = useVideoPlayer(uri, (player) => {
+    player.loop = false;
+    player.play();
+  });
 
+  return (
+    <VideoView player={player} style={styles.videoPlayer} nativeControls />
+  );
+}
 
 function optimiseCloudinaryUrl(uri: string | undefined | null): string {
   if (!uri) return "";
@@ -128,9 +121,9 @@ export default function AssetInspection() {
 
   const [activeTab, setActiveTab] = useState<TabType>("details");
 
- const [mediaViewerVisible, setMediaViewerVisible] = useState(false);
-const [viewerMedia, setViewerMedia] = useState<any[]>([]);
-const [activeMediaIndex, setActiveMediaIndex] = useState(0);
+  const [mediaViewerVisible, setMediaViewerVisible] = useState(false);
+  const [viewerMedia, setViewerMedia] = useState<any[]>([]);
+  const [activeMediaIndex, setActiveMediaIndex] = useState(0);
 
   const [snackbar, setSnackbar] = useState("");
   // Notes modal state
@@ -146,8 +139,6 @@ const [activeMediaIndex, setActiveMediaIndex] = useState(0);
   }>();
 
   const transactionId = params.transactionId || "";
-
-;
 
   const propertyType =
     transactionDetails?.evalData?.propertyType ||
@@ -191,16 +182,12 @@ const [activeMediaIndex, setActiveMediaIndex] = useState(0);
 
   const flatListRef = useRef<FlatList>(null);
 
-
   const notesInputRef = useRef<TextInput>(null);
-
 
   const showSnackbar = (message: string) => {
     setSnackbar(message);
     setTimeout(() => setSnackbar(""), 2800);
   };
-
- 
 
   useEffect(() => {
     if (!transactionId) return;
@@ -221,7 +208,10 @@ const [activeMediaIndex, setActiveMediaIndex] = useState(0);
               await saveOfflineTransaction(transaction);
             }
           } catch (error) {
-            console.log("Online transaction load failed, using offline:", error);
+            console.log(
+              "Online transaction load failed, using offline:",
+              error,
+            );
             transaction = await getOfflineTransactionById(transactionId);
           }
         } else {
@@ -229,7 +219,10 @@ const [activeMediaIndex, setActiveMediaIndex] = useState(0);
         }
 
         if (!transaction) {
-          Alert.alert("Offline unavailable", "This transaction is not downloaded yet.");
+          Alert.alert(
+            "Offline unavailable",
+            "This transaction is not downloaded yet.",
+          );
           return;
         }
 
@@ -254,9 +247,10 @@ const [activeMediaIndex, setActiveMediaIndex] = useState(0);
         }
 
         setBuildingCompletion(
-          building.completionPct !== null && building.completionPct !== undefined
+          building.completionPct !== null &&
+            building.completionPct !== undefined
             ? String(building.completionPct)
-            : ""
+            : "",
         );
 
         setOtherBuildingCondition(building.otherText || "");
@@ -276,7 +270,8 @@ const [activeMediaIndex, setActiveMediaIndex] = useState(0);
           next.sanitaryDrainage = !!services.sanitaryDrainage;
           next.telephoneLine = !!services.telephoneLine;
           next.waterMeters =
-            services.waterMetersCount !== null && services.waterMetersCount !== undefined;
+            services.waterMetersCount !== null &&
+            services.waterMetersCount !== undefined;
           next.electricityMeters =
             services.electricityMetersCount !== null &&
             services.electricityMetersCount !== undefined;
@@ -284,25 +279,30 @@ const [activeMediaIndex, setActiveMediaIndex] = useState(0);
         });
 
         setElectricityUnits(
-          services.electricityUnits !== null && services.electricityUnits !== undefined
+          services.electricityUnits !== null &&
+            services.electricityUnits !== undefined
             ? String(services.electricityUnits)
-            : ""
+            : "",
         );
         setWaterMetersCount(
-          services.waterMetersCount !== null && services.waterMetersCount !== undefined
+          services.waterMetersCount !== null &&
+            services.waterMetersCount !== undefined
             ? String(services.waterMetersCount)
-            : ""
+            : "",
         );
         setElectricityMetersCount(
           services.electricityMetersCount !== null &&
             services.electricityMetersCount !== undefined
             ? String(services.electricityMetersCount)
-            : ""
+            : "",
         );
 
-        setMedia(dedupeMedia(Array.isArray(transaction?.media) ? transaction.media : []));
+        setMedia(
+          dedupeMedia(
+            Array.isArray(transaction?.media) ? transaction.media : [],
+          ),
+        );
       } catch (error: any) {
-        console.log("LOAD TRANSACTION ERROR:", error);
         Alert.alert("Error", error?.message || "Failed to load transaction.");
       } finally {
         setLoading(false);
@@ -312,23 +312,28 @@ const [activeMediaIndex, setActiveMediaIndex] = useState(0);
     loadTransaction();
   }, [transactionId]);
 
- 
-
   const toggle = (key: string) => {
     setChecked((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   const selectedEnvironment = useMemo(() => {
-    return ENVIRONMENT_OPTIONS.filter(([key]) => checked[key]).map(([key]) => key);
+    return ENVIRONMENT_OPTIONS.filter(([key]) => checked[key]).map(
+      ([key]) => key,
+    );
   }, [checked]);
 
   const getBuildingStatus = () => {
     switch (buildingCondition) {
-      case "underConstruction": return "Under Construction";
-      case "used": return "Used";
-      case "new": return "New";
-      case "other": return "Other";
-      default: return "";
+      case "underConstruction":
+        return "Under Construction";
+      case "used":
+        return "Used";
+      case "new":
+        return "New";
+      case "other":
+        return "Other";
+      default:
+        return "";
     }
   };
 
@@ -337,15 +342,15 @@ const [activeMediaIndex, setActiveMediaIndex] = useState(0);
     setCameraOpen(true);
   };
 
-const openPreview = (index: number) => {
-  setViewerMedia(media);
-  setActiveMediaIndex(index);
-  setMediaViewerVisible(true);
-};
+  const openPreview = (index: number) => {
+    setViewerMedia(media);
+    setActiveMediaIndex(index);
+    setMediaViewerVisible(true);
+  };
 
-const closeMediaViewer = () => {
-  setMediaViewerVisible(false);
-};
+  const closeMediaViewer = () => {
+    setMediaViewerVisible(false);
+  };
   const makeLocalMediaId = () =>
     `local_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
@@ -360,7 +365,7 @@ const closeMediaViewer = () => {
         item?.uri ||
         item?.localId ||
         index ||
-        ""
+        "",
     );
 
   const pickMedia = async () => {
@@ -401,7 +406,6 @@ const closeMediaViewer = () => {
     setMedia((prev) => dedupeMedia([...prev, ...selected]));
   };
 
-
   const removeMedia = (index: number) => {
     setMedia((prev) => prev.filter((_, i) => i !== index));
   };
@@ -412,8 +416,8 @@ const closeMediaViewer = () => {
     const list = Array.isArray(capturedMedia)
       ? capturedMedia
       : capturedMedia
-      ? [capturedMedia]
-      : [];
+        ? [capturedMedia]
+        : [];
 
     const validList = list.filter((item: any) => {
       const rawUri = item?.uri || item?.path || item?.localUri;
@@ -430,7 +434,9 @@ const closeMediaViewer = () => {
         item.path?.endsWith?.(".mp4");
 
       const rawUri = item.uri || item.path || item.localUri;
-      const finalUri = rawUri?.startsWith?.("file://") ? rawUri : `file://${rawUri}`;
+      const finalUri = rawUri?.startsWith?.("file://")
+        ? rawUri
+        : `file://${rawUri}`;
 
       return {
         localId: makeLocalMediaId(),
@@ -458,7 +464,7 @@ const closeMediaViewer = () => {
     }
 
     setMedia((prev) =>
-      dedupeMedia([...(Array.isArray(prev) ? prev : []), ...mapped])
+      dedupeMedia([...(Array.isArray(prev) ? prev : []), ...mapped]),
     );
     setCameraOpen(false);
   };
@@ -477,14 +483,14 @@ const closeMediaViewer = () => {
   };
 
   // Open notes modal — seed draft with current notes
-const openNotesModal = () => {
-  setDraftNotes(inspectionNotes || "");
-  setNotesModalVisible(true);
+  const openNotesModal = () => {
+    setDraftNotes(inspectionNotes || "");
+    setNotesModalVisible(true);
 
-  setTimeout(() => {
-    notesInputRef.current?.focus();
-  }, 300);
-};
+    setTimeout(() => {
+      notesInputRef.current?.focus();
+    }, 300);
+  };
 
   const saveNotes = () => {
     setInspectionNotes(draftNotes);
@@ -510,7 +516,8 @@ const openNotesModal = () => {
         buildingCondition: {
           status: getBuildingStatus(),
           completionPct: buildingCompletion ? Number(buildingCompletion) : null,
-          otherText: buildingCondition === "other" ? otherBuildingCondition : "",
+          otherText:
+            buildingCondition === "other" ? otherBuildingCondition : "",
         },
         surroundingEnvironment: selectedEnvironment,
         availableServices: {
@@ -519,7 +526,9 @@ const openNotesModal = () => {
           sanitaryDrainage: checked.sanitaryDrainage,
           telephoneLine: checked.telephoneLine,
           waterMetersCount:
-            checked.waterMeters && waterMetersCount ? Number(waterMetersCount) : null,
+            checked.waterMeters && waterMetersCount
+              ? Number(waterMetersCount)
+              : null,
           electricityMetersCount:
             checked.electricityMeters && electricityMetersCount
               ? Number(electricityMetersCount)
@@ -529,7 +538,7 @@ const openNotesModal = () => {
 
       const localOnlyMedia = dedupeMedia(media).filter(isUploadableLocalMedia);
       const savedLocalMedia = dedupeMedia(
-        await saveLocalInspectionMedia(transactionId, localOnlyMedia)
+        await saveLocalInspectionMedia(transactionId, localOnlyMedia),
       ).filter(isUploadableLocalMedia);
 
       const queuedSavedLocalMedia = savedLocalMedia.map((item: any) => ({
@@ -558,7 +567,7 @@ const openNotesModal = () => {
             queuedForUpload: true,
             uploadedAt: null,
           };
-        })
+        }),
       );
 
       const net = await NetInfo.fetch();
@@ -617,7 +626,10 @@ const openNotesModal = () => {
   }: any) => {
     try {
       const safeMedia = Array.isArray(savedLocalMedia) ? savedLocalMedia : [];
-      await transactionApi.updateInspectionData(transactionId, inspectionPayload);
+      await transactionApi.updateInspectionData(
+        transactionId,
+        inspectionPayload,
+      );
 
       const uploadMedia = dedupeMedia(safeMedia).filter((m: any) => {
         return (
@@ -676,7 +688,6 @@ const openNotesModal = () => {
             </Pressable>
             <View style={styles.headerTextWrap}>
               <Text style={styles.title}>{t("assetInspection.title")}</Text>
-              
             </View>
           </View>
 
@@ -686,7 +697,12 @@ const openNotesModal = () => {
               style={[styles.tab, activeTab === "details" && styles.tabActive]}
               onPress={() => setActiveTab("details")}
             >
-              <Text style={[styles.tabText, activeTab === "details" && styles.tabTextActive]}>
+              <Text
+                style={[
+                  styles.tabText,
+                  activeTab === "details" && styles.tabTextActive,
+                ]}
+              >
                 Details
               </Text>
             </Pressable>
@@ -694,7 +710,12 @@ const openNotesModal = () => {
               style={[styles.tab, activeTab === "media" && styles.tabActive]}
               onPress={() => setActiveTab("media")}
             >
-              <Text style={[styles.tabText, activeTab === "media" && styles.tabTextActive]}>
+              <Text
+                style={[
+                  styles.tabText,
+                  activeTab === "media" && styles.tabTextActive,
+                ]}
+              >
                 Images & Videos
               </Text>
               {media.length > 0 && (
@@ -714,7 +735,9 @@ const openNotesModal = () => {
               <>
                 <Section title="Property Type">
                   <View style={styles.readOnlyBox}>
-                    <Text style={styles.readOnlyLabel}>Type of Real Estate : </Text>
+                    <Text style={styles.readOnlyLabel}>
+                      Type of Real Estate :{" "}
+                    </Text>
                     <Text style={styles.readOnlyValue}>{propertyType}</Text>
                   </View>
                 </Section>
@@ -725,7 +748,9 @@ const openNotesModal = () => {
                       <RadioRow
                         label={t("assetInspection.underConstruction")}
                         selected={buildingCondition === "underConstruction"}
-                        onPress={() => setBuildingCondition("underConstruction")}
+                        onPress={() =>
+                          setBuildingCondition("underConstruction")
+                        }
                       />
                       <RadioRow
                         label={t("assetInspection.used")}
@@ -750,7 +775,9 @@ const openNotesModal = () => {
                         <TextInput
                           value={otherBuildingCondition}
                           onChangeText={setOtherBuildingCondition}
-                          placeholder={t("assetInspection.describeOtherCondition")}
+                          placeholder={t(
+                            "assetInspection.describeOtherCondition",
+                          )}
                           placeholderTextColor={MUTED}
                           style={styles.otherInput}
                         />
@@ -771,7 +798,8 @@ const openNotesModal = () => {
                       editable={buildingCondition === "underConstruction"}
                       style={[
                         styles.completionInputSmall,
-                        buildingCondition !== "underConstruction" && styles.disabledInput,
+                        buildingCondition !== "underConstruction" &&
+                          styles.disabledInput,
                       ]}
                     />
                   </View>
@@ -857,7 +885,10 @@ const openNotesModal = () => {
 
                 {/* ── Inspection Notes — button only, opens modal ── */}
                 <Section title="Inspection Notes">
-                  <Pressable onPress={openNotesModal} style={styles.notesToggle}>
+                  <Pressable
+                    onPress={openNotesModal}
+                    style={styles.notesToggle}
+                  >
                     <Text style={styles.notesToggleText}>
                       {inspectionNotes ? "Edit Notes" : "Add Notes"}
                     </Text>
@@ -888,7 +919,10 @@ const openNotesModal = () => {
               <>
                 <Section title="Images & Videos">
                   <View style={styles.mediaActions}>
-                    <Pressable onPress={openCamera} style={styles.mediaActionBtn}>
+                    <Pressable
+                      onPress={openCamera}
+                      style={styles.mediaActionBtn}
+                    >
                       <Text style={styles.mediaActionText}>
                         {t("assetInspection.camera")}
                       </Text>
@@ -898,7 +932,10 @@ const openNotesModal = () => {
                       style={[styles.mediaActionBtn, styles.secondaryActionBtn]}
                     >
                       <Text
-                        style={[styles.mediaActionText, styles.secondaryActionText]}
+                        style={[
+                          styles.mediaActionText,
+                          styles.secondaryActionText,
+                        ]}
                       >
                         {t("assetInspection.gallery")}
                       </Text>
@@ -933,7 +970,11 @@ const openNotesModal = () => {
                               </View>
                             ) : (
                               <Image
-                                source={{ uri: optimiseCloudinaryUrl(item.localUri || item.uri || item.url) }}
+                                source={{
+                                  uri: optimiseCloudinaryUrl(
+                                    item.localUri || item.uri || item.url,
+                                  ),
+                                }}
                                 style={styles.mediaImg}
                               />
                             )}
@@ -954,20 +995,15 @@ const openNotesModal = () => {
                   )}
                 </Section>
 
-
-
                 {/* Save button also available on media tab */}
-        <Pressable
-            onPress={() => setActiveTab("details")}
-            style={[
-              styles.primaryBtn,
-              styles.tabActive,
-        ]}
-        >
-        <Text style={styles.primaryBtnText}>
-          {t("assetInspection.saveContinue")}
-        </Text>
-        </Pressable>
+                <Pressable
+                  onPress={() => setActiveTab("details")}
+                  style={[styles.primaryBtn, styles.tabActive]}
+                >
+                  <Text style={styles.primaryBtnText}>
+                    {t("assetInspection.saveContinue")}
+                  </Text>
+                </Pressable>
               </>
             )}
           </ScrollView>
@@ -983,31 +1019,40 @@ const openNotesModal = () => {
               style={styles.notesModalOverlay}
               behavior={Platform.OS === "ios" ? "padding" : "height"}
             >
-              <Pressable style={styles.notesModalBackdrop} onPress={cancelNotes} />
+              <Pressable
+                style={styles.notesModalBackdrop}
+                onPress={cancelNotes}
+              />
               <View style={styles.notesModalSheet}>
                 {/* Handle bar */}
                 <View style={styles.notesModalHandle} />
 
                 <View style={styles.notesModalHeader}>
                   <Text style={styles.notesModalTitle}>Inspection Notes</Text>
-                  <Pressable onPress={cancelNotes} style={styles.notesModalCloseBtn}>
+                  <Pressable
+                    onPress={cancelNotes}
+                    style={styles.notesModalCloseBtn}
+                  >
                     <Text style={styles.notesModalCloseText}>×</Text>
                   </Pressable>
                 </View>
 
-               <TextInput
-  ref={notesInputRef}
-  value={draftNotes}
-  onChangeText={setDraftNotes}
-  placeholder="Write inspection notes here..."
-  placeholderTextColor={MUTED}
-  multiline
-  textAlignVertical="top"
-  style={styles.notesModalInput}
-/>
+                <TextInput
+                  ref={notesInputRef}
+                  value={draftNotes}
+                  onChangeText={setDraftNotes}
+                  placeholder="Write inspection notes here..."
+                  placeholderTextColor={MUTED}
+                  multiline
+                  textAlignVertical="top"
+                  style={styles.notesModalInput}
+                />
 
                 <View style={styles.notesModalActions}>
-                  <Pressable onPress={cancelNotes} style={styles.notesCancelBtn}>
+                  <Pressable
+                    onPress={cancelNotes}
+                    style={styles.notesCancelBtn}
+                  >
                     <Text style={styles.notesCancelText}>Cancel</Text>
                   </Pressable>
                   <Pressable onPress={saveNotes} style={styles.notesSaveBtn}>
@@ -1018,88 +1063,91 @@ const openNotesModal = () => {
             </KeyboardAvoidingView>
           </Modal>
 
-    
+          {/* ══ MEDIA VIEWER MODAL ══ */}
+          <Modal
+            visible={mediaViewerVisible}
+            transparent={false}
+            animationType="fade"
+            onRequestClose={closeMediaViewer}
+          >
+            <View style={styles.viewerWrap}>
+              <FlatList
+                ref={flatListRef}
+                data={viewerMedia}
+                keyExtractor={(_, index) => `media-${index}`}
+                showsVerticalScrollIndicator={false}
+                pagingEnabled
+                snapToAlignment="start"
+                decelerationRate="fast"
+                getItemLayout={(_data, index) => ({
+                  length: Dimensions.get("window").height,
+                  offset: Dimensions.get("window").height * index,
+                  index,
+                })}
+                onScrollToIndexFailed={(info) => {
+                  setTimeout(() => {
+                    flatListRef.current?.scrollToIndex({
+                      index: Math.min(info.index, viewerMedia.length - 1),
+                      animated: false,
+                    });
+                  }, 100);
+                }}
+                onLayout={() => {
+                  if (
+                    activeMediaIndex > 0 &&
+                    viewerMedia.length > activeMediaIndex
+                  ) {
+                    flatListRef.current?.scrollToIndex({
+                      index: activeMediaIndex,
+                      animated: false,
+                    });
+                  }
+                }}
+                onViewableItemsChanged={({ viewableItems }) => {
+                  if (viewableItems.length > 0) {
+                    setActiveMediaIndex(viewableItems[0].index ?? 0);
+                  }
+                }}
+                viewabilityConfig={{ itemVisiblePercentThreshold: 50 }}
+                renderItem={({ item }) => (
+                  <View
+                    style={{
+                      width: Dimensions.get("window").width,
+                      height: Dimensions.get("window").height,
+                      justifyContent: "center",
+                      alignItems: "center",
+                      backgroundColor: "#000",
+                    }}
+                  >
+                    {item.mediaType === "video" ? (
+                      <MediaVideoPlayer key={item.uri} uri={item.uri} />
+                    ) : (
+                      <Image
+                        source={{ uri: item.localUri || item.uri || item.url }}
+                        style={{
+                          width: Dimensions.get("window").width,
+                          height: Dimensions.get("window").height,
+                        }}
+                        resizeMode="contain"
+                      />
+                    )}
+                  </View>
+                )}
+              />
 
-         {/* ══ MEDIA VIEWER MODAL ══ */}
-<Modal
-  visible={mediaViewerVisible}
-  transparent={false}
-  animationType="fade"
-  onRequestClose={closeMediaViewer}
->
-  <View style={styles.viewerWrap}>
-    <FlatList
-      ref={flatListRef}
-      data={viewerMedia}
-      keyExtractor={(_, index) => `media-${index}`}
-      showsVerticalScrollIndicator={false}
-      pagingEnabled
-      snapToAlignment="start"
-      decelerationRate="fast"
-      getItemLayout={(_data, index) => ({
-        length: Dimensions.get("window").height,
-        offset: Dimensions.get("window").height * index,
-        index,
-      })}
-      onScrollToIndexFailed={(info) => {
-        setTimeout(() => {
-          flatListRef.current?.scrollToIndex({
-            index: Math.min(info.index, viewerMedia.length - 1),
-            animated: false,
-          });
-        }, 100);
-      }}
-      onLayout={() => {
-        if (activeMediaIndex > 0 && viewerMedia.length > activeMediaIndex) {
-          flatListRef.current?.scrollToIndex({
-            index: activeMediaIndex,
-            animated: false,
-          });
-        }
-      }}
-      onViewableItemsChanged={({ viewableItems }) => {
-        if (viewableItems.length > 0) {
-          setActiveMediaIndex(viewableItems[0].index ?? 0);
-        }
-      }}
-      viewabilityConfig={{ itemVisiblePercentThreshold: 50 }}
-      renderItem={({ item }) => (
-        <View style={{
-          width: Dimensions.get("window").width,
-          height: Dimensions.get("window").height,
-          justifyContent: "center",
-          alignItems: "center",
-          backgroundColor: "#000",
-        }}>
-          {item.mediaType === "video" ? (
-            <MediaVideoPlayer key={item.uri} uri={item.uri} />
-          ) : (
-            <Image
-              source={{ uri: item.localUri || item.uri || item.url }}
-              style={{
-                width: Dimensions.get("window").width,
-                height: Dimensions.get("window").height,
-              }}
-              resizeMode="contain"
-            />
-          )}
-        </View>
-      )}
-    />
+              {/* Counter indicator */}
+              <View style={styles.viewerIndicator}>
+                <Text style={styles.viewerIndicatorText}>
+                  {activeMediaIndex + 1} / {viewerMedia.length}
+                </Text>
+              </View>
 
-    {/* Counter indicator */}
-    <View style={styles.viewerIndicator}>
-      <Text style={styles.viewerIndicatorText}>
-        {activeMediaIndex + 1} / {viewerMedia.length}
-      </Text>
-    </View>
-
-    {/* Close button */}
-    <Pressable style={styles.viewerClose} onPress={closeMediaViewer}>
-      <Text style={styles.viewerCloseText}>×</Text>
-    </Pressable>
-  </View>
-</Modal>
+              {/* Close button */}
+              <Pressable style={styles.viewerClose} onPress={closeMediaViewer}>
+                <Text style={styles.viewerCloseText}>×</Text>
+              </Pressable>
+            </View>
+          </Modal>
 
           <AssetCameraModal
             visible={cameraOpen}
@@ -1122,7 +1170,13 @@ const openNotesModal = () => {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -1187,10 +1241,14 @@ function CheckboxGrid({
           onPress={() => toggle(key)}
           style={[styles.gridItem, checked[key] && styles.gridItemActive]}
         >
-          <View style={[styles.smallBox, checked[key] && styles.checkboxActive]}>
+          <View
+            style={[styles.smallBox, checked[key] && styles.checkboxActive]}
+          >
             {checked[key] && <Text style={styles.smallCheck}>✓</Text>}
           </View>
-          <Text style={[styles.gridText, checked[key] && styles.gridTextActive]}>
+          <Text
+            style={[styles.gridText, checked[key] && styles.gridTextActive]}
+          >
             {t(labelKey)}
           </Text>
         </Pressable>
@@ -1274,11 +1332,26 @@ const styles = StyleSheet.create({
     padding: 11,
     marginBottom: 10,
   },
-  sectionTitle: { fontSize: 13.5, fontWeight: "800", color: TEXT, marginBottom: 9 },
+  sectionTitle: {
+    fontSize: 13.5,
+    fontWeight: "800",
+    color: TEXT,
+    marginBottom: 9,
+  },
 
   // Read-only
-  readOnlyBox: { flexDirection: "row", backgroundColor: "#FAFBFC", borderRadius: 12, padding: 5 },
-  readOnlyLabel: { fontSize: 10.5, color: MUTED, fontWeight: "700", marginBottom: 3 },
+  readOnlyBox: {
+    flexDirection: "row",
+    backgroundColor: "#FAFBFC",
+    borderRadius: 12,
+    padding: 5,
+  },
+  readOnlyLabel: {
+    fontSize: 10.5,
+    color: MUTED,
+    fontWeight: "700",
+    marginBottom: 3,
+  },
   readOnlyValue: { fontSize: 10, color: TEXT, fontWeight: "500" },
 
   // Checkbox
@@ -1305,25 +1378,25 @@ const styles = StyleSheet.create({
   checkLabel: { flex: 1, fontSize: 12.5, color: TEXT, fontWeight: "600" },
 
   viewerIndicator: {
-  position: "absolute",
-  bottom: 32,
-  alignSelf: "center",
-  backgroundColor: "rgba(0,0,0,0.5)",
-  paddingHorizontal: 14,
-  paddingVertical: 6,
-  borderRadius: 20,
-},
-viewerIndicatorText: {
-  color: "#fff",
-  fontSize: 13,
-  fontWeight: "700",
-},
+    position: "absolute",
+    bottom: 32,
+    alignSelf: "center",
+    backgroundColor: "rgba(0,0,0,0.5)",
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  viewerIndicatorText: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "700",
+  },
 
-videoPlayer: {
-  width: "100%",
-  height: "100%",
-  backgroundColor: "#000",
-},
+  videoPlayer: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: "#000",
+  },
   // Grid
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
   gridItem: {
@@ -1387,7 +1460,12 @@ videoPlayer: {
     fontSize: 12.5,
     color: TEXT,
   },
-  completionRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
+  completionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 4,
+  },
   completionLabel: { fontSize: 12, fontWeight: "700", color: TEXT },
   completionInputSmall: {
     width: 80,
@@ -1471,7 +1549,6 @@ videoPlayer: {
     backgroundColor: BORDER,
     alignSelf: "center",
     marginBottom: 16,
-    
   },
   notesModalHeader: {
     flexDirection: "row",
@@ -1532,10 +1609,19 @@ videoPlayer: {
     alignItems: "center",
     justifyContent: "center",
   },
-  secondaryActionBtn: { backgroundColor: "#fff", borderWidth: 1, borderColor: ACC },
+  secondaryActionBtn: {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: ACC,
+  },
   mediaActionText: { color: "#fff", fontSize: 12.5, fontWeight: "800" },
   secondaryActionText: { color: ACC },
-  emptyMediaText: { fontSize: 11.5, color: MUTED, marginTop: 8, textAlign: "center" },
+  emptyMediaText: {
+    fontSize: 11.5,
+    color: MUTED,
+    marginTop: 8,
+    textAlign: "center",
+  },
   mediaGrid: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 9 },
   mediaCard: {
     width: "23%",
@@ -1546,7 +1632,12 @@ videoPlayer: {
     position: "relative",
   },
   mediaImg: { width: "100%", height: "100%" },
-  videoBox: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: ACC },
+  videoBox: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: ACC,
+  },
   videoText: { color: "#fff", fontSize: 9, fontWeight: "900" },
   playBadge: {
     position: "absolute",
@@ -1595,12 +1686,26 @@ videoPlayer: {
     alignItems: "center",
     justifyContent: "center",
   },
-  viewerCloseText: { color: "#fff", fontSize: 30, lineHeight: 32, fontWeight: "500" },
+  viewerCloseText: {
+    color: "#fff",
+    fontSize: 30,
+    lineHeight: 32,
+    fontWeight: "500",
+  },
   viewerCount: { color: "#fff", fontSize: 14, fontWeight: "900" },
 
   // Preview
-  previewPage: { backgroundColor: "#000", alignItems: "center", justifyContent: "center" },
-  previewCenter: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center" },
+  previewPage: {
+    backgroundColor: "#000",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  previewCenter: {
+    width: "100%",
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
   // Primary button
   primaryBtn: {
@@ -1632,5 +1737,10 @@ videoPlayer: {
     paddingHorizontal: 16,
     zIndex: 100,
   },
-  snackbarText: { color: "#fff", fontSize: 13, fontWeight: "700", textAlign: "center" },
+  snackbarText: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "700",
+    textAlign: "center",
+  },
 });
