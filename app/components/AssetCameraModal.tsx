@@ -76,12 +76,7 @@ const getLocalFileSizeBytes = async (
     if (info.exists && "size" in info && typeof info.size === "number") {
       return info.size;
     }
-  } catch (error) {
-    console.log("[VIDEO] could not read file size", {
-      uri,
-      error,
-    });
-  }
+  } catch (error) {}
 
   return null;
 };
@@ -421,9 +416,7 @@ export default function AssetCameraModal({
           stoppingRecordingRef.current = true;
           await camera.current?.stopRecording();
         }
-      } catch (error) {
-        console.log("[VIDEO] dismiss stop failed:", error);
-      }
+      } catch (error) {}
     }
 
     recordingStartedAtRef.current = null;
