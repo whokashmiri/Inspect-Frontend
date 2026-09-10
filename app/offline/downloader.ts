@@ -332,16 +332,7 @@ async function collectProjectTree(
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Children
-  // ---------------------------------------------------------------------------
 
-  /*
-   * Keep this sequential.
-   *
-   * It avoids firing a very large number of
-   * folder-content requests simultaneously on mobile.
-   */
   for (
     const folder of
       newFolders
