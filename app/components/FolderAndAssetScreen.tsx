@@ -1467,7 +1467,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
       client_code: (draft as any).client_code?.trim() || null,
 
-      employer: (draft as any).employer?.trim() || null,
+      employer: (draft as any).employer?.trim() || "undefined",
       categoryId: isVehicle ? null : ((draft as any).categoryId ?? null),
       category: isVehicle ? null : ((draft as any).category ?? null),
 
@@ -1488,7 +1488,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
       newAssetLocation: isVehicle
         ? null
-        : draft.newAssetLocation?.trim() || null,
+        : draft.newAssetLocation?.trim() || "Undefined",
       rawData,
 
       projectId,
@@ -1580,7 +1580,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
       const newAssetLocation = isVehicle
         ? null
-        : draft.newAssetLocation?.trim() || null;
+        : draft.newAssetLocation?.trim() || "Undefined";
 
       const finalRawData = rawData;
 
@@ -1592,7 +1592,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
         name: draft.name,
         client_code: (draft as any).client_code?.trim() || null,
 
-        employer: (draft as any).employer?.trim() || null,
+        employer: (draft as any).employer?.trim() || "Undefined ",
         parent: currentFolderId || undefined,
 
         images: allImages,
@@ -1637,7 +1637,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
         folderId: currentFolderId || null,
         client_code: (draft as any).client_code?.trim() || null,
 
-        employer: (draft as any).employer?.trim() || null,
+        employer: (draft as any).employer?.trim() || "Undefined",
 
         condition,
         assetType: normalizedAssetType,
@@ -1859,7 +1859,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
       const newAssetLocation = isVehicle
         ? null
-        : draft.newAssetLocation?.trim() || null;
+        : draft.newAssetLocation?.trim() || "Undefined";
 
       const finalRawData = rawData;
 
@@ -1874,7 +1874,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
         client_code: (draft as any).client_code?.trim() || null,
 
-        employer: (draft as any).employer?.trim() || null,
+        employer: (draft as any).employer?.trim() || "Undefined",
 
         images: allImages,
 
@@ -1953,7 +1953,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
           employer:
             (draft as any).employer?.trim() ||
             existingOfflineAsset.employer ||
-            null,
+            "Undefined",
 
           val_tech_id: existingOfflineAsset.val_tech_id ?? null,
 
@@ -2186,7 +2186,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
         asset.employer ??
         asset.normalizedData?.employer ??
         asset.rawData?.employer ??
-        null,
+        "Undefined",
 
       val_tech_id: asset.val_tech_id ?? null,
     } as any);
@@ -2303,7 +2303,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
           nextAsset.employer ??
           nextAsset.normalizedData?.employer ??
           nextAsset.rawData?.employer ??
-          null,
+          "Undefined",
 
         val_tech_id: nextAsset.val_tech_id ?? null,
       } as Partial<AssetDraft>);
@@ -2612,7 +2612,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
       isDone: true,
       quantity: 1,
       normalizedData: {},
-      newAssetLocation: null,
+      newAssetLocation: "Undefined",
       categoryId: null,
       category: null,
 
@@ -2790,7 +2790,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
           editingAsset.employer ??
           editingAsset.normalizedData?.employer ??
           editingAsset.rawData?.employer ??
-          null,
+          "Undefined",
 
         val_tech_id: editingAsset.val_tech_id ?? null,
         ...taxonomyData,

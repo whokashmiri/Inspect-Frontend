@@ -119,12 +119,12 @@ export function cleanOtherAssetDraft(draft: AssetDraft): AssetDraft {
     assetType: "other",
     client_code: (draft as any).client_code?.trim() || null,
 
-    employer: (draft as any).employer?.trim() || null,
+    employer: (draft as any).employer?.trim() || undefined,
     code: draft.code?.trim() || undefined,
 
     quantity: Math.max(1, finalQuantity),
 
-    newAssetLocation: newAssetLocation || null,
+    newAssetLocation: newAssetLocation || undefined,
 
     brand: undefined,
     model: undefined,
@@ -194,7 +194,7 @@ export default function OtherAssetForm({
     (draft as any).employer ??
       (draft as any).normalizedData?.employer ??
       (draft as any).rawData?.employer ??
-      "",
+      "undefined",
   ).trim();
   const otherPreviewSlots = [
     { key: "main", label: "asset.mainPhoto", icon: "document-text-outline" },
@@ -553,7 +553,7 @@ export default function OtherAssetForm({
               activeOpacity={0.85}
             >
               <Text style={styles.assetTypeInputText} numberOfLines={1}>
-                {selectedLocation || t("common.choose")}
+                {selectedLocation || "Undefined"}
               </Text>
 
               <Ionicons
@@ -815,7 +815,7 @@ export default function OtherAssetForm({
               activeOpacity={0.85}
             >
               <Text style={styles.assetTypeInputText} numberOfLines={1}>
-                {selectedEmployer || t("common.choose")}
+                {selectedEmployer || "Undefined"}
               </Text>
 
               <Ionicons
