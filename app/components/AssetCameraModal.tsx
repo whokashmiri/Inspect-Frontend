@@ -110,6 +110,15 @@ export default function AssetCameraModal({
     },
     { fps: TARGET_VIDEO_FPS },
   ]);
+
+  const photoFormat = useCameraFormat(device, [
+    {
+      photoResolution: {
+        width: 2560,
+        height: 1920,
+      },
+    },
+  ]);
   const insets = useSafeAreaInsets();
   const { hasPermission, requestPermission } = useCameraPermission();
 
@@ -441,21 +450,33 @@ export default function AssetCameraModal({
     setIsCapturing(true);
 
     try {
-      const photo = await camera.current.takePhoto({
+      const captured = await camera.current.takePhoto({
         enableShutterSound: false,
       });
 
+      const uri = captured.path.startsWith("file://")
+        ? captured.path
+        : `file://${captured.path}`;
+
+      const photo = {
+        ...captured,
+        uri,
+        originalUri: uri,
+        mediaType: "photo",
+      };
+
       if (mode === "photos") {
         if (singleCapture) {
-          setIsCapturing(false);
           await finishWithSinglePhoto(photo);
           return;
         }
 
         setPhotos((prev) => [...prev, photo]);
+
         return;
       }
-      const imageUri = `file://${photo.path}`;
+
+      const imageUri = photo.uri;
 
       setLastCapturedScanPath(imageUri);
       setScanError("");
@@ -476,12 +497,12 @@ export default function AssetCameraModal({
         }
 
         setScanText(cleaned);
-      } catch (error) {
+      } catch {
         setScanError(t("camera.extractFailed"));
       } finally {
         setIsProcessingScan(false);
       }
-    } catch (error) {
+    } catch {
       if (mode === "scan") {
         setScanError(t("camera.captureFailed"));
       }
@@ -489,7 +510,6 @@ export default function AssetCameraModal({
       setIsCapturing(false);
     }
   };
-
   const finishWithSinglePhoto = async (photo: any) => {
     if (isCompleting) return;
 
@@ -884,18 +904,7 @@ export default function AssetCameraModal({
     try {
       if (mode === "photos" || mode === "video") {
         const selectedMedia =
-          mode === "video"
-            ? videos
-            : [
-                ...photos.map((item) => ({
-                  ...item,
-                  mediaType: "photo",
-                })),
-                ...videos.map((item) => ({
-                  ...item,
-                  mediaType: "video",
-                })),
-              ];
+          mode === "video" ? videos : [...photos, ...videos];
 
         await Promise.resolve(onDone(selectedMedia));
 
@@ -959,7 +968,7 @@ export default function AssetCameraModal({
             photo
             video
             audio={audioEnabled}
-            format={captureMode === "video" ? videoFormat : undefined}
+            format={captureMode === "video" ? videoFormat : photoFormat}
             fps={
               captureMode === "video" && videoFormat ? recordingFps : undefined
             }
