@@ -281,21 +281,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     try {
-      console.log("[AUTH] calling loginAndSave");
-
       const res = await loginAndSave(username, password);
 
-      console.log("[AUTH] loginAndSave success", {
-        userId: res?.user?.id,
-        hasAccessToken: !!res?.tokens?.accessToken,
-        hasRefreshToken: !!res?.tokens?.refreshToken,
-      });
-
-      console.log("[AUTH] fetching companies");
-
       const fetchedCompanies = await fetchCompaniesOnline();
-
-      console.log("[AUTH] companies fetched", fetchedCompanies?.length);
 
       const companies = normalizeCompanies(res.user, fetchedCompanies);
 
