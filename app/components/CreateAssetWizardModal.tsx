@@ -912,89 +912,141 @@ export default function CreateAssetWizardModal({
     uri.startsWith("https://") ||
     uri.startsWith("//");
 
+  async function mapWithConcurrency<T, R>(
+    items: T[],
+    limit: number,
+    worker: (item: T, index: number) => Promise<R>,
+  ): Promise<R[]> {
+    const results = new Array<R>(items.length);
+
+    let nextIndex = 0;
+
+    const runWorker = async () => {
+      while (true) {
+        const index = nextIndex++;
+
+        if (index >= items.length) {
+          return;
+        }
+
+        results[index] = await worker(items[index], index);
+      }
+    };
+
+    await Promise.all(
+      Array.from(
+        {
+          length: Math.min(limit, items.length),
+        },
+        () => runWorker(),
+      ),
+    );
+
+    return results;
+  }
+
   const processCapturedMedia = async (
     media: any[],
     slot: Exclude<PhotoSlot, null>,
   ): Promise<AssetMediaInput[]> => {
-    const processedMedia: AssetMediaInput[] = [];
+    const results = await mapWithConcurrency(
+      media,
+      2,
+      async (item, index): Promise<AssetMediaInput | null> => {
+        const isVideo =
+          item?.mediaType === "video" ||
+          String(item?.mimeType || item?.type || "").startsWith("video/");
 
-    for (let index = 0; index < media.length; index += 1) {
-      const item = media[index];
+        const originalUri = normalizeLocalUri(
+          item?.uri || item?.path || item?.localUri,
+        );
 
-      const isVideo =
-        item?.mediaType === "video" ||
-        String(item?.mimeType || item?.type || "").startsWith("video/");
-
-      const originalUri = normalizeLocalUri(
-        item?.path || item?.uri || item?.localUri,
-      );
-
-      if (!originalUri) {
-        continue;
-      }
-
-      if (isVideo) {
-        processedMedia.push({
-          uri: originalUri,
-          name:
-            item?.name || item?.fileName || `video_${Date.now()}_${index}.mp4`,
-          type: item?.mimeType || item?.type || "video/mp4",
-          mimeType: item?.mimeType || item?.type || "video/mp4",
-          mediaType: "video",
-          duration: item?.duration,
-          thumbnailUrl: item?.thumbnailUrl,
-        } as AssetMediaInput);
-
-        continue;
-      }
-
-      const sourceMimeType = String(
-        item?.mimeType || item?.type || "image/jpeg",
-      ).toLowerCase();
-
-      let finalUri = originalUri;
-      let wasCompressed = false;
-
-      if (!isRemoteUri(originalUri)) {
-        try {
-          const compressedUri = await compressAssetImage(originalUri, slot);
-
-          if (compressedUri) {
-            finalUri = compressedUri;
-            wasCompressed = compressedUri !== originalUri;
-          }
-        } catch (error) {
-          console.error("Image compression failed:", error);
+        if (!originalUri) {
+          return null;
         }
-      }
 
-      const finalMimeType = wasCompressed
-        ? "image/jpeg"
-        : sourceMimeType.startsWith("image/")
-          ? sourceMimeType
-          : "image/jpeg";
+        if (isVideo) {
+          return {
+            uri: originalUri,
 
-      const extension = wasCompressed
-        ? "jpg"
-        : finalMimeType.includes("png")
-          ? "png"
-          : finalMimeType.includes("heic") || finalMimeType.includes("heif")
-            ? "heic"
-            : "jpg";
-      processedMedia.push({
-        uri: finalUri,
-        name: `photo_${Date.now()}_${index}.${extension}`,
-        type: finalMimeType,
-        mimeType: finalMimeType,
-        mediaType: "image",
-        originalUri,
-        compressed: wasCompressed,
-      } as AssetMediaInput);
-    }
+            name:
+              item?.name ||
+              item?.fileName ||
+              `video_${Date.now()}_${index}.mp4`,
 
-    return processedMedia;
+            type: item?.mimeType || item?.type || "video/mp4",
+
+            mimeType: item?.mimeType || item?.type || "video/mp4",
+
+            mediaType: "video",
+
+            duration: item?.duration,
+
+            thumbnailUrl: item?.thumbnailUrl,
+          } as AssetMediaInput;
+        }
+
+        const sourceMimeType = String(
+          item?.mimeType || item?.type || "image/jpeg",
+        ).toLowerCase();
+
+        let finalUri = originalUri;
+
+        let wasCompressed = false;
+
+        if (!isRemoteUri(originalUri)) {
+          try {
+            const compressedUri = await compressAssetImage(
+              originalUri,
+              slot,
+              item?.width,
+              item?.height,
+            );
+
+            if (compressedUri) {
+              finalUri = compressedUri;
+
+              wasCompressed = compressedUri !== originalUri;
+            }
+          } catch (error) {
+            console.error("Image compression failed:", error);
+          }
+        }
+
+        const finalMimeType = wasCompressed
+          ? "image/jpeg"
+          : sourceMimeType.startsWith("image/")
+            ? sourceMimeType
+            : "image/jpeg";
+
+        const extension = wasCompressed
+          ? "jpg"
+          : finalMimeType.includes("png")
+            ? "png"
+            : finalMimeType.includes("heic") || finalMimeType.includes("heif")
+              ? "heic"
+              : "jpg";
+
+        return {
+          uri: finalUri,
+
+          name: `photo_${Date.now()}_${index}.${extension}`,
+
+          type: finalMimeType,
+
+          mimeType: finalMimeType,
+
+          mediaType: "image",
+
+          originalUri,
+
+          compressed: wasCompressed,
+        } as AssetMediaInput;
+      },
+    );
+
+    return results.filter((item): item is AssetMediaInput => Boolean(item));
   };
-
   const mainAssetImageUri =
     draft.images?.main?.uri || draft.images?.main?.url || null;
 

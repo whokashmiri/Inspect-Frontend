@@ -11,56 +11,87 @@ type ImageSlot =
 const IMAGE_CONFIG: Record<
   ImageSlot,
   {
-    maxWidth: number;
+    maxDimension: number;
     quality: number;
   }
 > = {
-    main: {
-    maxWidth: 1800,
+  main: {
+    maxDimension: 1800,
     quality: 0.85,
   },
   plate: {
-    maxWidth: 1800,
+    maxDimension: 1800,
     quality: 0.85,
   },
   odometer: {
-    maxWidth: 1800,
+    maxDimension: 1800,
     quality: 0.85,
   },
   details: {
-    maxWidth: 1600,
+    maxDimension: 1600,
     quality: 0.78,
   },
   brand: {
-    maxWidth: 1600,
+    maxDimension: 1600,
     quality: 0.8,
   },
   other: {
-    maxWidth: 1400,
-    quality: 0.75,
+    maxDimension: 1000,
+    quality: 0.70,
   },
 };
 
 export async function compressAssetImage(
   uri: string,
-  slot: ImageSlot
+  slot: ImageSlot,
+  width?: number,
+  height?: number,
 ): Promise<string> {
   const config = IMAGE_CONFIG[slot];
 
-  const result = await ImageManipulator.manipulateAsync(
-    uri,
-    [
-      {
-        resize: {
-          width: config.maxWidth,
-        },
-      },
-    ],
-    {
-      compress: config.quality,
-      format: ImageManipulator.SaveFormat.JPEG,
+  const hasDimensions =
+    typeof width === "number" &&
+    width > 0 &&
+    typeof height === "number" &&
+    height > 0;
+
+  if (hasDimensions) {
+    const largestSide = Math.max(width, height);
+
+    // Already small enough: do nothing.
+    if (largestSide <= config.maxDimension) {
+      return uri;
     }
-  );
+  }
+
+  let resize:
+    | { width: number }
+    | { height: number };
+
+  if (hasDimensions && height > width) {
+    resize = {
+      height: config.maxDimension,
+    };
+  } else {
+    resize = {
+      width: config.maxDimension,
+    };
+  }
+
+  const result =
+    await ImageManipulator.manipulateAsync(
+      uri,
+      [
+        {
+          resize,
+        },
+      ],
+      {
+        compress: config.quality,
+        format:
+          ImageManipulator.SaveFormat.JPEG,
+      },
+    );
 
   return result.uri;
 }
