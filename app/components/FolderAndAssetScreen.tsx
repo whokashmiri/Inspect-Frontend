@@ -1120,6 +1120,9 @@ export default function FolderAndAssetScreen({ route }: Props) {
       autoEnterAdminRootFolder();
       return;
     }
+    if (searchQuery.trim() || selectedRawDataFilters.length > 0) {
+      return;
+    }
 
     loadContents(currentFolderId);
   }, [
@@ -1129,6 +1132,7 @@ export default function FolderAndAssetScreen({ route }: Props) {
     currentFolderId,
     filter,
     searchQuery,
+    selectedRawDataFilters.length,
     downloadedOffline,
     isOnline,
   ]);
@@ -2225,17 +2229,29 @@ export default function FolderAndAssetScreen({ route }: Props) {
 
   const filteredAssets = useMemo(() => {
     let filtered = assets;
-    if (filter === "done") filtered = filtered.filter((a) => a.isDone);
-    else if (filter === "incomplete")
+
+    if (filter === "done") {
+      filtered = filtered.filter((a) => a.isDone);
+    } else if (filter === "incomplete") {
       filtered = filtered.filter((a) => !a.isDone);
-    else if (filter === "not_present") {
+    } else if (filter === "not_present") {
       filtered = filtered.filter((a) => a.isPresent === false);
     }
-    if (searchQuery.trim()) {
-      const query = searchQuery.trim().toLowerCase();
-      filtered = filtered.filter((a) => a.name.toLowerCase().includes(query));
-    }
-    return filtered;
+
+    const query = searchQuery.trim().toLowerCase();
+
+    if (!query) return filtered;
+
+    return filtered.filter((asset) => {
+      const name = String(asset.name ?? "").toLowerCase();
+      const code = String(asset.code ?? "").toLowerCase();
+
+      return (
+        name.includes(query) ||
+        code.includes(query) ||
+        rawDataValueMatches(asset.rawData, query)
+      );
+    });
   }, [assets, filter, searchQuery]);
 
   const saveAndEditNextAsset = async (
@@ -3111,7 +3127,10 @@ export default function FolderAndAssetScreen({ route }: Props) {
                               style={styles.searchResultTitle}
                               numberOfLines={1}
                             >
-                              {item.name}
+                              {item.name ||
+                                item.rawData?.["الصنف"] ||
+                                item.rawData?.["الوصف"] ||
+                                "Unnamed Asset"}
                             </Text>
                             <Text
                               style={styles.searchResultLocation}

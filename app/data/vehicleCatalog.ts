@@ -603,7 +603,6 @@ export const vehicleCatalog: VehicleCatalogItem[] = [
 {
   brand: "BMW - بي إم دبليو",
   models: [
-    // Sedans
     "1 Series - الفئة الأولى",
     "2 Series Gran Coupe - الفئة الثانية جران كوبيه",
     "3 Series - الفئة الثالثة",
@@ -613,7 +612,6 @@ export const vehicleCatalog: VehicleCatalogItem[] = [
     "7 Series - الفئة السابعة",
     "8 Series Gran Coupe - الفئة الثامنة جران كوبيه",
 
-    // Coupes & Convertibles
     "2 Series Coupe - الفئة الثانية كوبيه",
     "2 Series Convertible - الفئة الثانية كشف",
     "4 Series Coupe - الفئة الرابعة كوبيه",
@@ -621,8 +619,6 @@ export const vehicleCatalog: VehicleCatalogItem[] = [
     "8 Series Coupe - الفئة الثامنة كوبيه",
     "8 Series Convertible - الفئة الثامنة كشف",
     "Z4 - زد 4",
-
-    // SUVs & Crossovers
     "X1 - إكس 1",
     "X2 - إكس 2",
     "X3 - إكس 3",
@@ -631,8 +627,6 @@ export const vehicleCatalog: VehicleCatalogItem[] = [
     "X6 - إكس 6",
     "X7 - إكس 7",
     "XM - إكس إم",
-
-    // Electric
     "i3 - آي 3",
     "i4 - آي 4",
     "i5 - آي 5",
@@ -641,8 +635,6 @@ export const vehicleCatalog: VehicleCatalogItem[] = [
     "iX1 - آي إكس 1",
     "iX2 - آي إكس 2",
     "iX3 - آي إكس 3",
-
-    // Performance (M Models)
     "M2 - إم 2",
     "M3 - إم 3",
     "M4 - إم 4",
@@ -653,15 +645,11 @@ export const vehicleCatalog: VehicleCatalogItem[] = [
     "X5 M - إكس 5 إم",
     "X6 M - إكس 6 إم",
     "XM Label - إكس إم ليبل",
-
-    // Hybrids
     "330e - 330e",
     "530e - 530e",
     "750e - 750e",
     "X3 xDrive30e - إكس 3 xDrive30e",
     "X5 xDrive50e - إكس 5 xDrive50e",
-
-    // Classic / Discontinued
     "Z3 - زد 3",
     "Z8 - زد 8",
     "6 Series Coupe - الفئة السادسة كوبيه",
