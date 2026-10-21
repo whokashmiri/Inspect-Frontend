@@ -398,7 +398,8 @@
     "photosProcessedSuccessfully": "تمت معالجة {{count}} صورة بنجاح",
     "couldNotProcessCapturedPhotos": "تعذر معالجة الصور الملتقطة",
     "noValidPhotosCaptured": "لم يتم التقاط أي صور صالحة",
-    "conditionExample": "مثال: يحتاج إلى إصلاح"
+    "conditionExample": "مثال: يحتاج إلى إصلاح",
+    "mainPhoto":"صوره رئيسيه "
   },
   "camera": {
     "close": "إغلاق",

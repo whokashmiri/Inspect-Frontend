@@ -402,7 +402,8 @@
     "photosProcessedSuccessfully": "{{count}} photos processed successfully",
     "couldNotProcessCapturedPhotos": "Could not process the captured photos",
     "noValidPhotosCaptured": "No valid photos were captured",
-     "conditionExample": "e.g. Needs Repair"
+     "conditionExample": "e.g. Needs Repair",
+     "mainPhoto":"Main photo"
 
 },
   "camera": {
