@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "ValueTech",
-    "slug": "batchcam",
+    "slug": "valuetech",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
@@ -14,9 +14,10 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.anonymous.valuetech",
       "infoPlist": {
-        "NSCameraUsageDescription": "ValueTech needs camera access to capture photos",
+        "NSCameraUsageDescription": "ValueTech needs camera access to capture photos and videos.",
         "NSPhotoLibraryAddUsageDescription": "ValueTech needs access to save photos to your library.",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSMicrophoneUsageDescription": "ValueTech needs microphone access to record audio with videos."
       }
     },
     "android": {
@@ -27,11 +28,11 @@
       },
       "usesCleartextTraffic": true,
       "infoPlist": {
-  "NSCameraUsageDescription": "ValueTech needs camera access to capture photos and videos.",
-  "NSMicrophoneUsageDescription": "ValueTech needs microphone access to record audio with videos.",
-  "NSPhotoLibraryAddUsageDescription": "ValueTech needs access to save photos to your library.",
-  "ITSAppUsesNonExemptEncryption": false
-},
+        "NSCameraUsageDescription": "ValueTech needs camera access to capture photos and videos.",
+        "NSMicrophoneUsageDescription": "ValueTech needs microphone access to record audio with videos.",
+        "NSPhotoLibraryAddUsageDescription": "ValueTech needs access to save photos to your library.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_MEDIA_IMAGES",
@@ -43,42 +44,41 @@
         "android.permission.READ_MEDIA_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ],
-      "package": "com.anonymous.batchcam"
+      "package": "com.valuetech.app"
     },
     "plugins": [
       [
         "expo-camera",
         {
-          "cameraPermission": "BatchCam needs camera access to take photos in batches."
+          "cameraPermission": "ValueTech needs camera access to take photos in batches."
         }
       ],
       [
         "react-native-vision-camera",
         {
-          
           "cameraPermissionText": "ValueTech needs camera access to capture photos and videos.",
-    "enableMicrophonePermission": true,
-    "microphonePermissionText": "ValueTech needs microphone access to record audio with videos."
+          "enableMicrophonePermission": true,
+          "microphonePermissionText": "ValueTech needs microphone access to record audio with videos."
         }
       ],
       [
-  "expo-location",
-  {
-    "locationWhenInUsePermission": "Allow this app to use your location during inspections."
-    
-  }
-],
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow this app to use your location during inspections."
+        }
+      ],
       [
         "expo-media-library",
         {
-          "photosPermission": "BatchCam needs access to save photos to your library.",
-          "savePhotosPermission": "BatchCam needs access to save photos to your library.",
+          "photosPermission": "ValueTech needs access to save photos to your library.",
+          "savePhotosPermission": "ValueTech needs access to save photos to your library.",
           "isAccessMediaLocationEnabled": false
         }
       ],
-     
       "expo-secure-store",
       "expo-font",
       "expo-sqlite",
@@ -91,7 +91,16 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "427a0f48-8299-47a2-8452-068726cbd2a2"
+        "projectId": "5cc6594c-613d-4012-abc7-d6e80424d990"
+      },
+      "router": {}
+    },
+    "owner": "aasimqureshitrue"
+  },
+    "build": {
+    "production": {
+      "android": {
+        "buildType": "app-bundle"
       }
     }
   }
