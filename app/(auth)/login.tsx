@@ -51,28 +51,19 @@ export default function LoginScreen() {
 
     const phone = `+966${username.trim()}`;
 
-    console.log("[LOGIN] starting", {
-      phone,
-    });
+  
 
     setLoading(true);
 
     try {
-      console.log("[LOGIN] calling AuthContext.login");
+     
 
       await login(phone, password);
 
-      console.log("[LOGIN] success");
+      
     } catch (err: any) {
       console.error("[LOGIN] failed:", err);
 
-      console.error("[LOGIN] details:", {
-        name: err?.name,
-        message: err?.message,
-        status: err?.status,
-        response: err?.response,
-        stack: err?.stack,
-      });
 
       const msg =
         err instanceof ApiError
