@@ -1299,14 +1299,19 @@ const styles = StyleSheet.create({
   },
 
   recordingTimerBadge: {
-    marginTop: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
+  position: "absolute",
+  top: Platform.OS === "android" ? 105 : 115,
+  alignSelf: "center",
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 8,
+  paddingHorizontal: 14,
+  paddingVertical: 9,
+  borderRadius: 20,
+  backgroundColor: "rgba(0,0,0,0.75)",
+  zIndex: 30,
+  elevation: 10,
+},
 
   recordingDot: {
     width: 7,
