@@ -12,7 +12,6 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.anonymous.valuetech",
       "infoPlist": {
         "NSCameraUsageDescription": "ValueTech needs camera access to capture photos and videos.",
         "NSPhotoLibraryAddUsageDescription": "ValueTech needs access to save photos to your library.",
@@ -21,6 +20,9 @@
       }
     },
     "android": {
+      
+       "package": "com.valuetech.app",
+
       "adaptiveIcon": {
         "foregroundImage": "./assets/Logo.png",
         "backgroundColor": "#ffffff",
@@ -47,8 +49,7 @@
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION"
-      ],
-      "package": "com.valuetech.app"
+      ]
     },
     "plugins": [
       [
@@ -96,12 +97,5 @@
       "router": {}
     },
     "owner": "aasimqureshitrue"
-  },
-    "build": {
-    "production": {
-      "android": {
-        "buildType": "app-bundle"
-      }
-    }
   }
 }
