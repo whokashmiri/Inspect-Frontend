@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+
+# Expo cache and output
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Environment files
+.env
+.env*.local
+
+# Sensitive credentials
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+
+# Native temporary files
+.kotlin/
+*.orig.*
+
+# Metro
+.metro-health-check*
+
+# Logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+
+# TypeScript
+*.tsbuildinfo
+
+# Generated iOS project
+/ios
+
+# Local diagnostic files
+/eas-debug-archive/
+/bundletool.jar
+/*.aab
+
+# IMPORTANT: Include production configuration
+!app.json
+!eas.json
+
+# IMPORTANT: Include the native Android project
+!/android/

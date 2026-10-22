@@ -20,9 +20,7 @@
       }
     },
     "android": {
-      
-       "package": "com.valuetech.app",
-
+      "package": "com.valuetech.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/Logo.png",
         "backgroundColor": "#ffffff",
@@ -91,11 +89,11 @@
       "@react-native-community/datetimepicker"
     ],
     "extra": {
+      "router": {},
       "eas": {
-        "projectId": "5cc6594c-613d-4012-abc7-d6e80424d990"
-      },
-      "router": {}
+        "projectId": "af0236df-4fa9-4707-8e30-2523797422f2"
+      }
     },
-    "owner": "aasimqureshitrue"
+    "owner": "sparkvisionsa"
   }
 }
