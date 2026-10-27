@@ -86,7 +86,7 @@ export const formStyles = StyleSheet.create({
   },
 
   quantityControl: {
-    height: 38,
+    height: 42,
     width: "100%",
     flexDirection: "row",
     alignItems: "center",
