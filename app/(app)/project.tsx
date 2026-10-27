@@ -190,6 +190,13 @@ export default function ProjectScreen() {
   const { user, isOnline } = useAuth();
 
   const [projects, setProjects] = useState<Project[]>([]);
+
+  const [searchText, setSearchText] = useState("");
+const [debouncedSearch, setDebouncedSearch] = useState("");
+const [searchLoading, setSearchLoading] = useState(false);
+
+const searchRequestRef = React.useRef(0);
+
   const [filter, setFilter] = useState<FilterType>("new");
   const [loading, setLoading] = useState(true);
   const [refreshingProjects, setRefreshingProjects] = useState(false);
@@ -301,9 +308,102 @@ export default function ProjectScreen() {
     );
   }, [selectedCompanyFilterId]);
 
-  useEffect(() => {
-    fetchProjects(selectedCompanyFilterId);
-  }, [isOnline, selectedCompanyFilterId]);
+useEffect(() => {
+  const timer = setTimeout(() => {
+    setDebouncedSearch(searchText.trim());
+  }, 450);
+
+  return () => clearTimeout(timer);
+}, [searchText]);
+
+useEffect(() => {
+  const requestId = ++searchRequestRef.current;
+  let active = true;
+
+  const load = async () => {
+    const searching = debouncedSearch.length > 0;
+
+    try {
+      if (searching) {
+        setSearchLoading(true);
+      } else {
+        setLoading(true);
+      }
+
+      setGlobalError(null);
+
+      if (isOnline) {
+        const res = await projectApi.list(
+          selectedCompanyFilterId || undefined,
+          debouncedSearch || undefined,
+        );
+
+        if (!active || requestId !== searchRequestRef.current) return;
+
+        setProjects(Array.isArray(res.projects) ? res.projects : []);
+
+        // A searched response can contain only matching companies.
+        // Preserve company selector options during searches.
+        if (!searching) {
+          setCompanies(Array.isArray(res.companies) ? res.companies : []);
+        }
+      } else {
+        const offlineProjects = selectedCompanyFilterId
+          ? await getDownloadedProjectsByCompany(selectedCompanyFilterId)
+          : await getAllDownloadedProjects();
+
+        if (!active || requestId !== searchRequestRef.current) return;
+
+        const term = debouncedSearch.toLocaleLowerCase();
+
+        setProjects(
+          term
+            ? offlineProjects.filter((project) =>
+                project.name.toLocaleLowerCase().includes(term),
+              )
+            : offlineProjects,
+        );
+
+        if (!searching) {
+          const offlineCompaniesMap = new Map<
+            string,
+            { id: string; name: string }
+          >();
+
+          offlineProjects.forEach((project) => {
+            if (!project.companyId) return;
+
+            offlineCompaniesMap.set(String(project.companyId), {
+              id: String(project.companyId),
+              name: project.company?.name || "Unknown Company",
+            });
+          });
+
+          setCompanies(Array.from(offlineCompaniesMap.values()));
+        }
+      }
+    } catch (error) {
+      if (!active || requestId !== searchRequestRef.current) return;
+
+      setGlobalError(
+        error instanceof ApiError
+          ? error.message
+          : t("projectScreen.errors.loadFailed"),
+      );
+    } finally {
+      if (active && requestId === searchRequestRef.current) {
+        setLoading(false);
+        setSearchLoading(false);
+      }
+    }
+  };
+
+  void load();
+
+  return () => {
+    active = false;
+  };
+}, [isOnline, selectedCompanyFilterId, debouncedSearch]);
 
   useEffect(() => {
     const autoRefreshDownloadedProjects = async () => {
@@ -364,42 +464,65 @@ export default function ProjectScreen() {
     return () => clearInterval(interval);
   }, [refreshPendingProjects, refreshDownloadedProjects]);
 
-  async function handleRefreshProjects() {
-    if (refreshingProjects) return;
+async function handleRefreshProjects() {
+  if (refreshingProjects) return;
 
-    try {
-      setRefreshingProjects(true);
-      setGlobalError(null);
+  const requestId = ++searchRequestRef.current;
 
-      if (isOnline) {
-        const res = await projectApi.list(selectedCompanyFilterId || undefined);
+  try {
+    setRefreshingProjects(true);
+    setGlobalError(null);
 
-        setProjects(Array.isArray(res.projects) ? res.projects : []);
+    // Refresh using the current input, not the previous debounce value
+    const currentSearch = searchText.trim();
 
+    if (isOnline) {
+      const res = await projectApi.list(
+        selectedCompanyFilterId || undefined,
+        currentSearch || undefined,
+      );
+
+      if (requestId !== searchRequestRef.current) return;
+
+      setProjects(Array.isArray(res.projects) ? res.projects : []);
+
+      if (!currentSearch) {
         setCompanies(Array.isArray(res.companies) ? res.companies : []);
-      } else {
-        const offlineProjects = selectedCompanyFilterId
-          ? await getDownloadedProjectsByCompany(selectedCompanyFilterId)
-          : await getAllDownloadedProjects();
-
-        setProjects(offlineProjects);
       }
+    } else {
+      const offlineProjects = selectedCompanyFilterId
+        ? await getDownloadedProjectsByCompany(selectedCompanyFilterId)
+        : await getAllDownloadedProjects();
 
-      await Promise.all([
-        refreshPendingProjects(),
-        refreshDownloadedProjects(),
-      ]);
-    } catch (err) {
-      const message =
-        err instanceof ApiError
-          ? err.message
-          : t("projectScreen.errors.loadFailed");
+      if (requestId !== searchRequestRef.current) return;
 
-      setGlobalError(message);
-    } finally {
-      setRefreshingProjects(false);
+      const term = currentSearch.toLocaleLowerCase();
+
+      setProjects(
+        term
+          ? offlineProjects.filter((project) =>
+              project.name.toLocaleLowerCase().includes(term),
+            )
+          : offlineProjects,
+      );
     }
+
+    await Promise.all([
+      refreshPendingProjects(),
+      refreshDownloadedProjects(),
+    ]);
+  } catch (err) {
+    if (requestId !== searchRequestRef.current) return;
+
+    setGlobalError(
+      err instanceof ApiError
+        ? err.message
+        : t("projectScreen.errors.loadFailed"),
+    );
+  } finally {
+    setRefreshingProjects(false);
   }
+}
 
   async function fetchProjects(companyId?: string | null) {
     setLoading(true);
@@ -1367,6 +1490,43 @@ export default function ProjectScreen() {
             </Text>
           </Pressable>
         </View>
+
+        
+{/* Project Search */}
+<View style={styles.projectSearchContainer}>
+  <Ionicons
+    name="search-outline"
+    size={20}
+    color={MUTED}
+  />
+
+  <TextInput
+    style={styles.projectSearchInput}
+    placeholder="Search projects by name..."
+    placeholderTextColor={MUTED}
+    value={searchText}
+    onChangeText={setSearchText}
+    autoCorrect={false}
+    autoCapitalize="none"
+    returnKeyType="search"
+    maxLength={100}
+    accessibilityLabel="Search projects by name"
+  />
+
+  {(searchLoading || (searchText.trim() !== debouncedSearch)) ? (
+    <ActivityIndicator size="small" color={ACC} />
+  ) : searchText.length > 0 ? (
+    <Pressable
+      onPress={() => setSearchText("")}
+      accessibilityRole="button"
+      accessibilityLabel="Clear project search"
+      hitSlop={10}
+    >
+      <Ionicons name="close-circle" size={20} color={MUTED} />
+    </Pressable>
+  ) : null}
+</View>
+
 
         {/* ── Filter row ── */}
         <View style={styles.filterRow}>
@@ -3271,4 +3431,26 @@ const styles = StyleSheet.create({
     fontSize: 7,
     fontFamily: fonts.inter.semiBold as unknown as string,
   },
+
+  projectSearchContainer: {
+  flexDirection: "row",
+  alignItems: "center",
+  borderWidth: 1,
+  borderColor: BORDER,
+  borderRadius: 12,
+  backgroundColor: "#F8F9FC",
+  paddingHorizontal: 14,
+  minHeight: 48,
+  marginTop: 10,
+  marginBottom: 12,
+  gap: 10,
+},
+
+projectSearchInput: {
+  flex: 1,
+  color: TEXT,
+  fontSize: 13,
+  // fontFamily: fonts.inter.regular as unknown as string,
+  paddingVertical: 10,
+},
 });
