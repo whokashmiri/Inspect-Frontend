@@ -27,6 +27,7 @@
     "company": "Company: {{name}}",
     "availableOffline": "Available Offline",
     "pendingSync": "Pending Sync: {{count}}",
+    "findProjects":"Search projects by name...",
     "errors": {
       "nameRequired": "Project name is required.",
       "createFailed": "Failed to create project.",

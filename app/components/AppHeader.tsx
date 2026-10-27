@@ -106,7 +106,7 @@ const SAUDI_CITIES = [
 function AppHeaderComponent({
   isAuthenticated = false,
   user = null,
-  title = "ValueTech",
+  title = "VT",
   onLogout,
   onCompleteProfile,
 }: AppHeaderProps) {

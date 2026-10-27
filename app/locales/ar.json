@@ -27,6 +27,7 @@
     "company": "الشركة: {{name}}",
     "availableOffline": "متاح بدون اتصال",
     "pendingSync": "بانتظار المزامنة: {{count}}",
+     "findProjects": "البحث عن المشاريع حسب الاسم...",
     "errors": {
       "nameRequired": "اسم المشروع مطلوب.",
       "createFailed": "فشل إنشاء المشروع.",

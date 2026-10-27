@@ -4,9 +4,9 @@ import * as SecureStore from "expo-secure-store";
 import { File as ExpoFile, Paths as ExpoPaths } from "expo-file-system";
 
 // ─── Config ────────────────────────────────────────────────────────────────
-// export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://api.167.71.231.64.nip.io/api/v1";
+export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://api.167.71.231.64.nip.io/api/v1";
 
-export const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
+// export const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
 // console.log("[API BASE URL]", BASE_URL);
 

@@ -1515,7 +1515,7 @@ const combinedProjects = useMemo(() => {
 
   <TextInput
     style={styles.projectSearchInput}
-    placeholder="Search projects by name..."
+    placeholder={t("projectScreen.findProjects")}
     placeholderTextColor={MUTED}
     value={searchText}
     onChangeText={setSearchText}
