@@ -4,9 +4,9 @@ import * as SecureStore from "expo-secure-store";
 import { File as ExpoFile, Paths as ExpoPaths } from "expo-file-system";
 
 // ─── Config ────────────────────────────────────────────────────────────────
-export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://api.167.71.231.64.nip.io/api/v1";
+// export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://api.167.71.231.64.nip.io/api/v1";
 
-// export const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
+export const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
 // console.log("[API BASE URL]", BASE_URL);
 
@@ -1427,15 +1427,28 @@ export const projectApi = {
       body: payload,
     }),
 
-  list: (companyId?: string) =>
-    request<ListProjectsResponse>(
-      companyId
-        ? `/projects?companyId=${encodeURIComponent(companyId)}`
-        : "/projects",
-      {
-        method: "GET",
-      },
-    ),
+
+list: (companyId?: string, search?: string) => {
+  const params = new URLSearchParams();
+
+  if (companyId?.trim()) {
+    params.set("companyId", companyId.trim());
+  }
+
+  if (search?.trim()) {
+    params.set("search", search.trim());
+  }
+
+  const queryString = params.toString();
+
+  return request<ListProjectsResponse>(
+    `/projects${queryString ? `?${queryString}` : ""}`,
+    {
+      method: "GET",
+    },
+  );
+},
+
 
   offlineManifest: (projectId: string) =>
     request<OfflineManifestResponse>(
