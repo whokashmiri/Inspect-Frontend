@@ -652,9 +652,17 @@ async function handleRefreshProjects() {
     });
   }, [pendingProjects, user, t]);
 
-  const combinedProjects = useMemo(() => {
-    return [...offlineProjectEntries, ...projects];
-  }, [offlineProjectEntries, projects]);
+const combinedProjects = useMemo(() => {
+  const term = searchText.trim().toLocaleLowerCase();
+
+  const matchingPending = term
+    ? offlineProjectEntries.filter((project) =>
+        project.name.toLocaleLowerCase().includes(term),
+      )
+    : offlineProjectEntries;
+
+  return [...matchingPending, ...projects];
+}, [offlineProjectEntries, projects, searchText]);
 
   const [projectVideoListVisible, setProjectVideoListVisible] = useState(false);
 
@@ -686,8 +694,13 @@ async function handleRefreshProjects() {
   };
 
   const filteredProjects = useMemo(() => {
-    const safeProjects = combinedProjects.filter(Boolean) as Project[];
+     const term = searchText.trim().toLocaleLowerCase();
 
+  const safeProjects = combinedProjects
+    .filter(Boolean)
+    .filter((project) =>
+      !term || project.name.toLocaleLowerCase().includes(term),
+    ) as Project[];
     if (filter === "new") {
       return safeProjects.filter(
         (p) =>
