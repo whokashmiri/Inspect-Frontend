@@ -1509,7 +1509,7 @@ const combinedProjects = useMemo(() => {
 <View style={styles.projectSearchContainer}>
   <Ionicons
     name="search-outline"
-    size={20}
+    size={17}
     color={MUTED}
   />
 
@@ -2667,13 +2667,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderBottomWidth: 1,
     borderBottomColor: "#E5E7EB",
-    marginBottom: 14,
-    paddingHorizontal: 4,
+    marginBottom: 10,
+    paddingHorizontal: 2,
   },
 
   filterTab: {
-    paddingHorizontal: 18,
-    paddingVertical: 12,
+    paddingHorizontal: 15,
+    paddingVertical: 7,
     marginRight: 12,
     position: "relative",
     alignItems: "center",
@@ -2877,14 +2877,14 @@ const styles = StyleSheet.create({
   },
 
   projectList: {
-    gap: 12,
+    gap: 6,
   },
   projectCard: {
     // backgroundColor: SURFACE,
     borderWidth: 2,
     borderColor: BORDER,
     borderRadius: 14,
-    padding: 16,
+    padding: 7,
   },
   projectCardTop: {
     flexDirection: "row",
@@ -3453,9 +3453,9 @@ const styles = StyleSheet.create({
   borderRadius: 12,
   backgroundColor: "#F8F9FC",
   paddingHorizontal: 14,
-  minHeight: 48,
-  marginTop: 10,
-  marginBottom: 12,
+  minHeight: 40,
+  marginTop: 5,
+  marginBottom: 5,
   gap: 10,
 },
 
